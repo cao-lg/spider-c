@@ -1,0 +1,18 @@
+---
+interface Props {
+  title?: string;
+  code?: string;
+  readonly?: boolean;
+}
+
+const { title = 'Python 示例', code, readonly = false } = Astro.props;
+---
+
+<py-runner data-title={title} data-readonly={String(readonly)}>
+  {code !== undefined && <pre class="py-runner-source" hidden>{code}</pre>}
+  <slot />
+</py-runner>
+
+<script>
+  import '../components/runner-client';
+</script>

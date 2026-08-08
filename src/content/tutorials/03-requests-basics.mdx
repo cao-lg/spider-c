@@ -15,7 +15,20 @@ skillDomain:
   - 请求
 ---
 
-本章节内容建设中,将覆盖:
+import CodeRunner from '../../components/CodeRunner.astro';
+
+
+本章内容建设中。先通过下面这个可运行示例体验一下 **Pyodide 浏览器运行器**:
+
+- 点击「运行」,代码会在浏览器里用真实的 CPython(WASM)执行
+- 已预装 `requests`、`BeautifulSoup`、`lxml`,与本地环境写法完全一致
+- 变量会跨多次运行保留(方便分步演示)
+
+<CodeRunner title="解析一个 HTML 片段" code={'from bs4 import BeautifulSoup\n\nhtml = """\n<div class="book">\n  <span class="title">Python 爬虫入门</span>\n  <span class="price">59</span>\n</div>\n"""\n\nsoup = BeautifulSoup(html, "html.parser")\ntitle = soup.select_one(".title").get_text()\nprice = soup.select_one(".price").get_text()\nprint(f"书名: {title}, 价格: {price} 元")'} />
+
+试试把它改成你自己的 HTML,或者导入 `requests` 发起一个 GET 请求。
+
+## 后续将覆盖
 
 - `requests.get()` 与 `requests.post()`
 - 查询参数与请求头
