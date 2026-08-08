@@ -1,0 +1,83 @@
+---
+import '../styles/global.css';
+import { siteName, siteTagline, units, lessons } from '../data/course';
+
+interface Props {
+  title?: string;
+  description?: string;
+  sidebar?: boolean;
+  activeUnitId?: string;
+  activeLessonId?: string;
+}
+
+const { title, description, sidebar = false, activeUnitId, activeLessonId } = Astro.props;
+const pageTitle = title ? `${title} · ${siteName}` : `${siteName} · ${siteTagline}`;
+const path = Astro.url.pathname;
+
+function navActive(prefix: string): boolean {
+  return path === prefix || path.startsWith(prefix + '/');
+}
+---
+
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="generator" content={Astro.generator} />
+    <meta name="description" content={description ?? siteTagline} />
+    <title>{pageTitle}</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="header-inner">
+        <a class="brand" href="/">
+          <span class="brand-badge">爬</span>
+          <span>{siteName}</span>
+        </a>
+        <nav class="main-nav">
+          <a href="/" class={navActive('/') && path === '/' ? 'active' : ''}>首页</a>
+          <a href="/tutorials/" class={navActive('/tutorials') ? 'active' : ''}>课程目录</a>
+          <a href="/practice/" class={navActive('/practice') ? 'active' : ''}>靶站</a>
+          <a href="/report/" class={navActive('/report') ? 'active' : ''}>学习中心</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class={sidebar ? 'layout' : 'layout single'}>
+      {sidebar && (
+        <aside class="sidebar">
+          <div class="sidebar-section">
+            <p class="sidebar-title">课程目录</p>
+            {units.map((unit) => (
+              <div key={unit.id}>
+                {lessons
+                  .filter((l) => l.unitId === unit.id)
+                  .map((lesson) => (
+                    <a
+                      class={`sidebar-item${activeLessonId === lesson.id ? ' active' : ''}`}
+                      href={`/tutorials/${lesson.slug}/`}
+                    >
+                      <span class="unit-label">{String(unit.number).padStart(2, '0')}.{lesson.order}</span>
+                      {lesson.title}
+                    </a>
+                  ))}
+              </div>
+            ))}
+          </div>
+        </aside>
+      )}
+      <article class="content">
+        <slot />
+      </article>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-inner">
+        <span>© 2026 {siteName} · 仅供学习,请遵守 robots.txt 与相关法律法规</span>
+        <span>学习数据仅保存在你的浏览器本地,可随时导出备份</span>
+      </div>
+    </footer>
+  </body>
+</html>

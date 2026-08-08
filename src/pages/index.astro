@@ -1,0 +1,63 @@
+---
+import Site from '../layouts/Site.astro';
+import { siteName, siteTagline, units, lessons, unitTests, totalLessons, totalMinutes, lessonsOfUnit } from '../data/course';
+---
+
+<Site title="首页" description={siteTagline}>
+  <section class="hero">
+    <h1>用 Python 爬虫,从入门到实战</h1>
+    <p>
+      {siteTagline}。每节课包含概念讲解、可运行的 Python 示例、靶向网站实战练习与测验。
+      全部学习数据保存在浏览器本地,支持导出与导入。
+    </p>
+    <div class="stats-row">
+      <div>
+        <div class="stat-num">{totalLessons}</div>
+        <div class="stat-label">课时</div>
+      </div>
+      <div>
+        <div class="stat-num">{units.length}</div>
+        <div class="stat-label">单元</div>
+      </div>
+      <div>
+        <div class="stat-num">{unitTests.length}</div>
+        <div class="stat-label">综合测试</div>
+      </div>
+      <div>
+        <div class="stat-num">{totalMinutes}</div>
+        <div class="stat-label">预计总分钟</div>
+      </div>
+    </div>
+    <p style="margin-top: 1.6rem">
+      <a class="btn primary" href="/tutorials/">开始学习 →</a>
+      &nbsp;
+      <a class="btn" href="/practice/">进入靶站</a>
+    </p>
+  </section>
+
+  <h2>课程结构</h2>
+  {units.map((unit) => (
+    <div class="unit-card">
+      <div class="unit-card-head">
+        <h2>单元 {unit.number} · {unit.title}</h2>
+        <span class="unit-chip">{lessonsOfUnit(unit.id).length} 节课</span>
+      </div>
+      <p style="color: var(--text-2); font-size: 0.92rem">{unit.description}</p>
+      {lessonsOfUnit(unit.id).map((lesson) => (
+        <div class="lesson-row">
+          <span class="lesson-num">{String(unit.number)}.{lesson.order}</span>
+          <a href={`/tutorials/${lesson.slug}/`}>{lesson.title}</a>
+          <span class="lesson-meta">{lesson.duration} 分钟</span>
+        </div>
+      ))}
+      <p style="margin-top: 0.8rem">
+        <a class="btn sm" href={`/tests/${unit.id}/`}>单元综合测试 →</a>
+      </p>
+    </div>
+  ))}
+
+  <div class="callout info">
+    <strong>关于数据隐私:</strong>本站无后端服务器,你的学习进度、练习与测验成绩都只保存在当前浏览器的 localStorage 中。
+    换设备或清缓存前,请前往 <a href="/report/">学习中心</a> 导出备份。
+  </div>
+</Site>

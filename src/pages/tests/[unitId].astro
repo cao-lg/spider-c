@@ -1,0 +1,22 @@
+---
+import Site from '../../layouts/Site.astro';
+import { getUnitTestByUnitId, getUnit } from '../../data/course';
+
+export function getStaticPaths() {
+  return import('../../data/course').then((m) =>
+    m.units.map((unit) => ({ params: { unitId: unit.id } })),
+  );
+}
+
+const { unitId } = Astro.params;
+const test = getUnitTestByUnitId(unitId!)!;
+const unit = getUnit(unitId!);
+---
+
+<Site title={`${test.title}`}>
+  <h1>{test.title}</h1>
+  <p style="color: var(--text-2)">
+    属于{unit.title}单元,共 10 题,考试模式限时 {test.minutes} 分钟。
+  </p>
+  <div class="callout info">综合测试组件建设中(M4)。</div>
+</Site>

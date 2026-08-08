@@ -1,0 +1,52 @@
+---
+import Site from '../../layouts/Site.astro';
+import { getCollection } from 'astro:content';
+import { units, lessons, lessonsOfUnit, getUnit, getUnitTestByUnitId } from '../../data/course';
+
+const allLessons = await getCollection('tutorials');
+const byId = new Map(allLessons.map((l) => [l.data.id, l]));
+---
+
+<Site title="课程目录" sidebar>
+  <h1>课程目录</h1>
+  <p style="color: var(--text-2)">
+    共 {lessons.length} 节课,分 {units.length} 个单元。按顺序学习效果最佳,每单元末尾附综合测试。
+  </p>
+
+  {units.map((unit) => {
+    const unitLessons = lessonsOfUnit(unit.id);
+    return (
+      <div class="unit-card">
+        <div class="unit-card-head">
+          <h2>单元 {unit.number} · {unit.title}</h2>
+          <span class="unit-chip">{unitLessons.length} 节</span>
+        </div>
+        <p style="color: var(--text-2); font-size: 0.92rem">{unit.description}</p>
+        {unitLessons.map((lesson) => {
+          const post = byId.get(lesson.id);
+          const done = post !== undefined;
+          return (
+            <div class="lesson-row">
+              <span class="lesson-num">{String(unit.number)}.{lesson.order}</span>
+              <a href={`/tutorials/${lesson.slug}/`}>{lesson.title}</a>
+              <span class="lesson-meta">{done ? `${lesson.duration} 分钟` : '待发布'}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  })}
+
+  <h2>综合测试</h2>
+  <div class="grid">
+    {units.map((unit) => {
+      const t = getUnitTestByUnitId(unit.id)!;
+      return (
+        <a class="card" href={`/tests/${unit.id}/`} style="color: inherit">
+          <h3>单元 {unit.number} 综合测试</h3>
+          <p>{t.title.replace('综合测试 · ', '')} · 限时 {t.minutes} 分钟</p>
+        </a>
+      );
+    })}
+  </div>
+</Site>

@@ -1,0 +1,74 @@
+---
+import Site from '../../layouts/Site.astro';
+import { getCollection, render } from 'astro:content';
+import { getUnit, lessons, unitIndexOfLesson, getLessonById } from '../../data/course';
+
+export async function getStaticPaths() {
+  const posts = await getCollection('tutorials');
+  return posts.map((post) => ({
+    params: { slug: post.id },
+    props: { post },
+  }));
+}
+
+const { post } = Astro.props;
+const { Content } = await render(post);
+const meta = post.data;
+const unit = getUnit(meta.unitId);
+const idx = unitIndexOfLesson(meta.id);
+const prev = idx > 0 ? lessons[idx - 1] : undefined;
+const next = idx < lessons.length - 1 ? lessons[idx + 1] : undefined;
+---
+
+<Site
+  title={`${meta.title} · 单元 ${unit.number}`}
+  description={meta.summary}
+  sidebar
+  activeUnitId={unit.id}
+  activeLessonId={meta.id}
+>
+  <p style="margin: 0 0 0.4rem; color: var(--text-3); font-size: 0.85rem">
+    单元 {unit.number} · {unit.title} — 预计 {meta.duration} 分钟
+  </p>
+  <h1>{meta.title}</h1>
+
+  {meta.goals.length > 0 && (
+    <div class="callout info">
+      <strong>本课目标:</strong>
+      <ul style="margin: 0.4em 0 0">
+        {meta.goals.map((g) => (
+          <li>{g}</li>
+        ))}
+      </ul>
+    </div>
+  )}
+
+  <Content />
+
+  {meta.practiceTarget && (
+    <div class="callout tip">
+      <strong>靶站实战:</strong>前往{' '}
+      <a href={meta.practiceTarget} target="_blank" rel="noopener">{meta.practiceTarget}</a>{' '}
+      动手练习本课内容。
+    </div>
+  )}
+
+  <div class="pager">
+    {prev ? (
+      <a href={`/tutorials/${prev.slug}/`}>
+        <span class="pager-label">← 上一课</span>
+        <span class="pager-title">{prev.title}</span>
+      </a>
+    ) : (
+      <span />
+    )}
+    {next ? (
+      <a class="next" href={`/tutorials/${next.slug}/`}>
+        <span class="pager-label">下一课 →</span>
+        <span class="pager-title">{next.title}</span>
+      </a>
+    ) : (
+      <span />
+    )}
+  </div>
+</Site>

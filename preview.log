@@ -1,0 +1,7 @@
+
+> crawler-course@0.0.1 preview
+> astro preview --port 4321
+
+[42m[1m astro [22m[49m [32mv7.2.0[39m [2mready in[22m 60 [2mms[22m
+[2m┃[22m Local    [36mhttp://localhost:4321/[39m
+[2m┃[22m Network  [2muse --host to expose[22m
