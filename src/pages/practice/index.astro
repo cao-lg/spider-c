@@ -1,11 +1,78 @@
 ---
 import Site from '../../layouts/Site.astro';
+import CodeRunner from '../../components/CodeRunner.astro';
+
+const levels = [
+  {
+    id: 'level1-books',
+    name: 'Level 1 · 单页表格',
+    desc: '一个静态页面,24 本书的热销榜单。适合 requests + BeautifulSoup 入门练习。',
+    lesson: '第 06 课',
+    href: '/practice/level1-books/',
+  },
+  {
+    id: 'level2-pagination',
+    name: 'Level 2 · 路径分页',
+    desc: '10 页 × 10 本图书,URL 按 page/1.html … page/10.html 递增。',
+    lesson: '第 07 课',
+    href: '/practice/level2-pagination/',
+  },
+  {
+    id: 'level3-detail',
+    name: 'Level 3 · 列表 + 详情',
+    desc: '列表页链接到 20 个独立详情页,练习两级页面爬取。',
+    lesson: '第 08 课',
+    href: '/practice/level3-detail/books.html',
+  },
+  {
+    id: 'level4-json-api',
+    name: 'Level 4 · JSON 接口',
+    desc: '分页 JSON 接口,练习直接请求 API 与解析 JSON。',
+    lesson: '第 09 课',
+    href: '/practice/level4-json-api/',
+  },
+  {
+    id: 'level5-dynamic',
+    name: 'Level 5 · 动态渲染',
+    desc: '数据由 JavaScript 动态加载,练习 Playwright 或查找底层接口。',
+    lesson: '第 10 课',
+    href: '/practice/level5-dynamic/',
+  },
+];
 ---
 
 <Site title="靶向练习站">
   <h1>靶向练习站</h1>
-  <p style="color: var(--text-2)">
-    这里是课程专用的"待爬取"目标网站(M3 建设),分 5 个难度等级,供你使用本地 Python 或浏览器内运行区实战爬取。
+  <p style="color: var(--text-2); max-width: 60em">
+    这是课程专用的「待爬取」目标网站,按难度分 5 个等级,全部部署在本站的 <code>/practice/</code> 目录下。
+    你可以用本地 Python,也可以直接在本页下面的浏览器运行区里用 <code>requests</code> 抓取——
+    因为同源,浏览器运行器可以直接请求这些页面。
   </p>
-  <div class="callout info">靶站建设中,敬请期待。</div>
+
+  {levels.map((lv) => (
+    <div class="unit-card">
+      <div class="unit-card-head">
+        <h2>{lv.name}</h2>
+        <span class="unit-chip">{lv.lesson}</span>
+      </div>
+      <p style="color: var(--text-2); font-size: 0.92rem">{lv.desc}</p>
+      <p style="margin: 0.6rem 0 0">
+        <a class="btn sm" href={lv.href} target="_blank" rel="noopener">打开靶站 →</a>
+      </p>
+    </div>
+  ))}
+
+  <div class="callout warning">
+    <strong>伦理提醒:</strong>本站所有靶站均为教学用虚构数据。练习真实网站前,请务必阅读其
+    <code>robots.txt</code>,控制请求频率,遵守相关法律法规。
+  </div>
+
+  <h2 style="margin-top: 2rem">就地练习</h2>
+  <p style="color: var(--text-2)">
+    直接抓取 Level 1 靶站试试(同源请求,浏览器运行器即可完成):
+  </p>
+  <CodeRunner
+    title="实战:抓取 Level 1 图书榜"
+    code={'import requests\nfrom bs4 import BeautifulSoup\n\nurl = "/practice/level1-books/"\nr = requests.get(url, timeout=10)\nr.encoding = "utf-8"  # 无 charset 时 requests 可能误判编码\nsoup = BeautifulSoup(r.text, "html.parser")\nrows = soup.select("tbody tr")\nprint("状态码:", r.status_code)\nprint("抓到图书数:", len(rows))\nfor row in rows[:5]:\n    tds = row.select("td")\n    print(tds[1].get_text(), "|", tds[2].get_text(), "|", tds[4].get_text())'}
+  />
 </Site>

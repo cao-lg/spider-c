@@ -1,0 +1,20 @@
+/*
+  X-Content-Type-Options: nosniff
+
+/practice/*
+  Content-Type: text/html; charset=utf-8
+
+/practice/level4-json-api/api/*
+  Content-Type: application/json; charset=utf-8
+
+/practice/level5-dynamic/api/*
+  Content-Type: application/json; charset=utf-8
+
+/pyodide/*.wasm
+  Content-Type: application/wasm
+
+/pyodide/*.js
+  Content-Type: application/javascript
+
+/pyodide/*.mjs
+  Content-Type: application/javascript
