@@ -27,6 +27,7 @@ const totalPoints = tasks.reduce((s, t) => s + t.maxScore, 0);
       <CodeExercise
         id={task.id}
         title={`${task.title}(${task.maxScore} 分)`}
+        question={task.question ?? ''}
         starter={task.starter}
         check={task.check}
         hint={task.hint ?? ''}

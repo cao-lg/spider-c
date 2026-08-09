@@ -13,6 +13,8 @@ const FAIL_MARK = '__GRADE__FAIL:';
 class PyCodeExercise extends HTMLElement {
   private id = '';
   private title = '代码练习';
+  /** 完整题干(HTML,显示在代码区外,不含参考答案) */
+  private question = '';
   private starter = '';
   private check = '';
   private hint = '';
@@ -43,6 +45,7 @@ class PyCodeExercise extends HTMLElement {
     const attr = (k: string) => this.getAttribute(k) ?? '';
     this.id = attr('data-id');
     this.title = attr('data-title') || '代码练习';
+    this.question = this.decode(attr('data-question'));
     this.starter = this.decode(attr('data-starter'));
     this.check = this.decode(attr('data-check'));
     this.hint = this.decode(attr('data-hint'));
@@ -89,6 +92,14 @@ class PyCodeExercise extends HTMLElement {
     scoreTag.textContent = `通过得 ${this.maxScore} 分`;
     head.appendChild(scoreTag);
     root.appendChild(head);
+
+    // 题干区(代码区外,完整题目说明;不包含答案)
+    if (this.question) {
+      const q = document.createElement('div');
+      q.className = 'ce-question';
+      q.innerHTML = this.question;
+      root.appendChild(q);
+    }
 
     // 任务前提示:刻意练习引导
     if (this.starterTodoCount > 0) {

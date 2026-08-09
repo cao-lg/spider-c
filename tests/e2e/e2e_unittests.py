@@ -17,7 +17,7 @@ ANSWERS = {
     ],
     "unit-test-2": [
         'books = [(row.select("td")[1].get_text().strip(), row.select("td")[5].get_text().strip()) for row in soup.select("tbody tr")]\nprint("条数:", len(books))',
-        'titles = doc.xpath("//tbody/tr/td[2]/text()")\nprint("书名数:", len(titles))',
+        'titles = [t.strip() for t in doc.xpath("//tbody/tr/td[2]/text()")]\nprint("书名数:", len(titles))',
         'links = [a.get("href") for a in soup.select("tbody tr td:first-child a")]\nprint("详情链接数:", len(links))',
         'authors = [row.select("td")[2].get_text().strip() for row in rows]\nprint("作者数:", len(authors))',
         'records = [(row.select("td")[1].get_text().strip(), row.select("td")[2].get_text().strip(), row.select("td")[5].get_text().strip()) for row in rows]\nprint("记录数:", len(records))',

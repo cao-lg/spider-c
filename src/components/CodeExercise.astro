@@ -4,6 +4,8 @@ import type { RecordKind } from '../lib/types';
 interface Props {
   id: string;
   title?: string;
+  /** 完整题干(HTML),显示在代码区外 */
+  question?: string;
   starter?: string;
   check: string;
   hint?: string;
@@ -18,6 +20,7 @@ interface Props {
 const {
   id,
   title = '代码练习',
+  question = '',
   starter = '',
   check,
   hint = '',
@@ -33,6 +36,7 @@ const {
 <py-code-exercise
   data-id={id}
   data-title={title}
+  data-question={JSON.stringify(question)}
   data-starter={JSON.stringify(starter)}
   data-check={JSON.stringify(check)}
   data-hint={JSON.stringify(hint)}

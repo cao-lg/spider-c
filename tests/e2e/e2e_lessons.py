@@ -52,7 +52,7 @@ from lxml import html
 r = requests.get(SITE_BASE + "/practice/level1-books/", timeout=10)
 r.encoding = "utf-8"
 doc = html.fromstring(r.text)
-titles = doc.xpath("//tbody/tr/td[2]/text()")
+titles = [t.strip() for t in doc.xpath("//tbody/tr/td[2]/text()")]
 """,
     "06-single-page": """import requests
 from bs4 import BeautifulSoup

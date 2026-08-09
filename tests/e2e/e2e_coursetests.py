@@ -102,6 +102,31 @@ def main():
                     bad.append(f"{cid}{suffix}:{e}")
         record("T-043 30 个靶站资源可达", len(bad) == 0, " | ".join(bad[:5]))
 
+        # T-044 题干显示在代码区外(.ce-question 存在且代码区不含题干)
+        page.goto(BASE + "/tests/course/01/", wait_until="networkidle")
+        ex = page.locator("py-code-exercise").first
+        q_visible = ex.locator(".ce-question").count() > 0
+        q_has_title = "任务" in ex.locator(".ce-question").inner_text() if q_visible else False
+        code_has_question = "判分器会" in ex.locator(".py-runner-editor").first.inner_text()
+        record("T-044 题干在代码区外显示", q_visible and q_has_title and not code_has_question,
+               f"question={q_visible},code_clean={not code_has_question}")
+
+        # T-045 伪造数据无法通过(测试用例式判定):填 rows=[None]*24 应 FAIL
+        page.goto(BASE + "/tests/course/01/", wait_until="networkidle")
+        ex = page.locator("py-code-exercise").first
+        inject_code(ex, """import requests
+from bs4 import BeautifulSoup
+
+r = requests.get(SITE_BASE + "/practice/course-test-01/", timeout=10)
+r.encoding = "utf-8"
+soup = BeautifulSoup(r.text, "html.parser")
+rows = [None] * 24
+print("抓到行数:", len(rows))""")
+        st = run_runner(ex)
+        # hasattr(None, "select") 为 False → 断言失败 → FAIL
+        fake_blocked = "未通过" in st or "不一致" in st or "解析" in st
+        record("T-045 伪造数据被判定拦截", fake_blocked, f"st={st[:80]}")
+
         record("T-033 无 pageerror(综合测试页)", len(errors) == 0, " | ".join(errors[:3]))
     finally:
         browser.close()

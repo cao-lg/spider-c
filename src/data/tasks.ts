@@ -4,6 +4,8 @@
 export interface TaskDef {
   id: string;
   title: string;
+  /** 完整题干(HTML),显示在代码区外,不含参考答案 */
+  question?: string;
   starter: string;
   check: string;
   hint?: string;
@@ -18,6 +20,7 @@ export interface TaskDef {
 export const lessonTasks: Record<string, TaskDef> = {
   '01-environment': {
     id: 'ex-01-environment',
+      question: `<h4>任务:验证环境就绪</h4><p>确认 <code>requests</code> 与 <code>BeautifulSoup</code> 已经加载到 Pyodide 中。</p><p><strong>要点:</strong></p><ul><li>第三方库通常暴露 <code>__version__</code> 属性</li><li>用 <code>bool()</code> 判断导入名是否可用</li></ul><p class="ce-q-spec">判定标准:两个库都正确导入并通过断言。</p>`,
     title: '实战:验证环境',
     skills: [],
     maxScore: 5,
@@ -41,6 +44,7 @@ print("环境验证通过")`,
   },
   '02-http-basics': {
     id: 'ex-02-http',
+      question: `<h4>任务:发起第一个 HTTP 请求</h4><p>向 Level 1 靶站发起 GET 请求,把<strong>状态码</strong>保存到变量 <code>status</code>。</p><p><strong>要点:</strong></p><ul><li><code>requests.get(url, timeout=N)</code> 返回响应对象</li><li>状态码属性是 <code>r.status_code</code></li></ul><p class="ce-q-spec">判定标准:真实请求后状态码为 200,响应体非空。</p>`,
     title: '实战:发起第一个请求',
     skills: ['请求'],
     maxScore: 10,
@@ -66,6 +70,7 @@ assert len(r.text) > 0, "响应体为空"`,
   },
   '03-requests-basics': {
     id: 'ex-03-requests',
+      question: `<h4>任务:完整请求(UA + 编码 + 解析)</h4><p>完成一个生产级单页请求:</p><ul><li>设置自定义 <code>User-Agent</code> 请求头</li><li>请求 Level 1 靶站,修正编码 <code>r.encoding = "utf-8"</code></li><li>用 BeautifulSoup 解析,把表格行存入变量 <code>rows</code></li></ul><p class="ce-q-spec">判定标准:判分器会独立重新抓取靶站,比对 rows 是否与真实表格行一致(24 行)。</p>`,
     title: '实战:requests 完整请求',
     skills: ['请求'],
     maxScore: 10,
@@ -86,9 +91,18 @@ from bs4 import BeautifulSoup
 # TODO 4: 用 BeautifulSoup 解析 r.text,定位所有 "tbody tr" 存入变量 rows
 # soup = ...
 # rows = ...`,
-    check: `assert r.status_code == 200, "请求失败"
+    check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/level1-books/", timeout=10)
+_src.encoding = "utf-8"
+_soup = _bs(_src.text, "html.parser")
+_expect = [_tr.select("td")[1].get_text().strip() for _tr in _soup.select("tbody tr")]
+assert r.status_code == 200, "请求失败"
 assert 'python-requests' not in r.request.headers.get('User-Agent', ''), "请设置自定义 User-Agent"
-assert 'rows' in globals() and len(rows) == 24, f"应抓到 24 行,实际 {len(rows)}"`,
+assert 'rows' in globals() and isinstance(rows, list), "请把表格行存入变量 rows"
+assert len(rows) == len(_expect), f"应抓到 {len(_expect)} 行,实际 {len(rows)}"
+_got = [row.select("td")[1].get_text().strip() for row in rows]
+assert _got == _expect, "提取的行与靶站真实数据不一致,请检查解析逻辑" `,
     hintSteps: [
       '为什么要改 User-Agent?某些站点看到 "python-requests" 默认 UA 会直接拒绝。',
       'r.encoding 这个属性的作用是什么?如果响应里没有声明 charset,requests 会按什么猜?',
@@ -99,6 +113,7 @@ assert 'rows' in globals() and len(rows) == 24, f"应抓到 24 行,实际 {len(r
   },
   '04-beautifulsoup': {
     id: 'ex-04-level1',
+      question: `<h4>任务:BeautifulSoup 提取书名</h4><p>请求 Level 1 靶站,用 CSS 选择器提取所有书名,存入变量 <code>titles</code>。</p><p><strong>要点:</strong></p><ul><li>组合选择器 <code>tbody tr td:nth-child(2)</code></li><li>用 <code>.get_text().strip()</code> 取文本并去空白</li></ul><p class="ce-q-spec">判定标准:判分器独立抓取靶站,比对 titles 与真实 24 个书名完全一致。</p>`,
     title: '实战:BeautifulSoup 提取书名',
     skills: ['解析'],
     maxScore: 10,
@@ -112,8 +127,15 @@ soup = BeautifulSoup(r.text, "html.parser")
 # TODO: 用 CSS 选择器提取所有书名(每行第 2 个 td),存入变量 titles
 # 提示: 组合选择器 "tbody tr td:nth-child(2)",遍历 .get_text().strip()
 # titles = ...`,
-    check: `assert 'titles' in globals() and len(titles) == 24, f"应提取 24 个书名,实际 {len(titles)}"
-assert titles[0].startswith("Java"), "第 1 个书名提取有误"`,
+    check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/level1-books/", timeout=10)
+_src.encoding = "utf-8"
+_soup = _bs(_src.text, "html.parser")
+_expect = [_tr.select("td")[1].get_text().strip() for _tr in _soup.select("tbody tr")]
+assert 'titles' in globals() and isinstance(titles, list), "请把书名存入变量 titles"
+assert len(titles) == len(_expect), f"应提取 {len(_expect)} 个书名,实际 {len(titles)}"
+assert titles == _expect, "书名与靶站真实数据不一致,请检查选择器与去空白" `,
     hintSteps: [
       '列表推导式 [td.get_text() for td in soup.select(...)] 是最干净的写法。',
       'CSS 伪类 :nth-child(2) 表示"作为父元素第 2 个孩子的 td"。每行 tr 的第 2 个 td 是什么字段?',
@@ -123,6 +145,7 @@ assert titles[0].startswith("Java"), "第 1 个书名提取有误"`,
   },
   '05-xpath': {
     id: 'ex-05-xpath',
+      question: `<h4>任务:XPath 提取书名</h4><p>请求 Level 1 靶站,用 lxml XPath 提取所有书名,存入变量 <code>titles</code>。</p><p><strong>要点:</strong></p><ul><li><code>doc.xpath("//tbody/tr/td[2]/text()")</code></li><li>XPath 返回字符串列表</li></ul><p class="ce-q-spec">判定标准:与真实 24 个书名一致。</p>`,
     title: '实战:XPath 提取书名',
     skills: ['解析'],
     maxScore: 10,
@@ -136,8 +159,15 @@ doc = html.fromstring(r.text)
 # TODO: 用 XPath 表达式提取所有书名(每行第 2 个 td),存入变量 titles
 # 提示:XPath 中 td[2] 表示"td 且作为父的第 2 个孩子",/text() 拿到文本节点
 # titles = ...`,
-    check: `assert 'titles' in globals() and len(titles) == 24, f"XPath 应提取 24 个书名,实际 {len(titles)}"
-assert all(t.strip() for t in titles), "存在空白书名"`,
+    check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/level1-books/", timeout=10)
+_src.encoding = "utf-8"
+_soup = _bs(_src.text, "html.parser")
+_expect = [_tr.select("td")[1].get_text().strip() for _tr in _soup.select("tbody tr")]
+assert 'titles' in globals() and isinstance(titles, list), "请把书名存入变量 titles"
+assert len(titles) == len(_expect), f"XPath 应提取 {len(_expect)} 个书名,实际 {len(titles)}"
+assert titles == _expect, "XPath 提取的书名与靶站真实数据不一致" `,
     hintSteps: [
       'XPath 里 td[2] 等价于 CSS 里的 td:nth-child(2)。两套语法,同一个语义。',
       'doc.xpath("...") 返回的是文本节点列表,每个元素是 string 而不是 Tag。',
@@ -147,6 +177,7 @@ assert all(t.strip() for t in titles), "存在空白书名"`,
   },
   '06-single-page': {
     id: 'ex-06-level1',
+      question: `<h4>任务:单页完整抓取</h4><p>请求 Level 1 图书榜,把表格行存入变量 <code>rows</code>,并验证每行结构与真实数据一致。</p><p><strong>要点:</strong></p><ul><li>每行 7 个 td:编号/书名/作者/出版社/日期/价格/评分</li><li>第一本书应为主题相关图书,价格列含 <code>¥</code></li></ul><p class="ce-q-spec">判定标准:判分器独立抓取,比对行数与首行字段。</p>`,
     title: '实战:抓取 Level 1 图书榜',
     skills: ['解析'],
     maxScore: 10,
@@ -183,6 +214,7 @@ assert price.startswith("¥"), "价格列提取有误,请确认第 6 个 td(价�
   },
   '07-pagination': {
     id: 'ex-07-level2',
+      question: `<h4>任务:翻遍 10 页榜单</h4><p>写循环遍历 <code>page/1.html</code> ~ <code>page/10.html</code>,累计 100 本书。</p><p><strong>要点:</strong></p><ul><li>URL 模板:<code>f"{SITE_BASE}/practice/level2-pagination/page/{page}.html"</code></li><li><code>all_titles</code> 收集全部书名,<code>total</code> 累加行数</li></ul><p class="ce-q-spec">判定标准:判分器独立翻页,比对 total=100 且书名与真实数据一致。</p>`,
     title: '实战:翻遍 10 页榜单',
     skills: ['分页'],
     maxScore: 10,
@@ -196,9 +228,19 @@ total = 0
 # 每个 page 拼出 URL = f"{SITE_BASE}/practice/level2-pagination/page/{page}.html"
 # 请求、解析、统计每页行数累加到 total,所有书名追加到 all_titles
 # (提示:之前 ex-04 已经写过单页解析,这里只需套进循环)`,
-    check: `assert 'total' in globals() and total == 100, f"应累计 100 本,实际 {total}"
-assert len(all_titles) == 100, "书名收集不完整"
-assert len(set(all_titles)) == 100, "书名存在重复"`,
+    check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_expect = []
+for _p in range(1, 11):
+    _src = _rq.get(f"{SITE_BASE}/practice/level2-pagination/page/{_p}.html", timeout=10)
+    _src.encoding = "utf-8"
+    for _tr in _bs(_src.text, "html.parser").select("tbody tr"):
+        _expect.append(_tr.select("td")[1].get_text().strip())
+assert 'total' in globals() and total == 100, f"应累计 100 本,实际 {total}"
+assert 'all_titles' in globals() and isinstance(all_titles, list), "请把书名收集到变量 all_titles"
+assert len(all_titles) == len(_expect), f"应收集 {len(_expect)} 本,实际 {len(all_titles)}"
+assert all_titles == _expect, "书名序列与靶站真实数据不一致"
+assert len(set(all_titles)) == 100, "书名存在重复" `,
     hintSteps: [
       'range(1, 11) 还是 range(1, 10)?翻页通常第一页是 1,共 10 页,所以 range(1, 11)。',
       'for 循环里需要 4 行:拼 URL、发请求、解析、累加。建议每行加注释,便于复盘。',
@@ -208,6 +250,7 @@ assert len(set(all_titles)) == 100, "书名存在重复"`,
   },
   '08-multi-level': {
     id: 'ex-08-level3',
+      question: `<h4>任务:列表页 + 详情页两级抓取</h4><p>从 Level 3 列表页提取 20 个详情链接,再逐个请求详情页,提取书名与价格。</p><p><strong>要点:</strong></p><ul><li>链接:<code>tbody tr td:first-child a</code> 的 href</li><li>详情页:<code>h2</code> 标题与 <code>td.price</code> 价格</li></ul><p class="ce-q-spec">判定标准:判分器独立抓取,比对 20 条详情与真实数据一致。</p>`,
     title: '实战:列表页 + 详情页',
     skills: ['分页', '请求'],
     maxScore: 15,
@@ -231,9 +274,17 @@ details = []
 
 print("详情页数量:", len(details))
 print("样例:", details[0] if details else None)`,
-    check: `assert 'links' in globals() and len(links) == 20, f"应提取 20 个详情链接,实际 {len(links)}"
+    check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/level3-detail/" + "books.html", timeout=10)
+_src.encoding = "utf-8"
+_soup = _bs(_src.text, "html.parser")
+_expect = [a.get("href") for a in _soup.select("tbody tr td:first-child a")]
+assert 'links' in globals() and isinstance(links, list), "请把详情链接存入变量 links"
+assert len(links) == len(_expect), f"应提取 {len(_expect)} 个详情链接,实际 {len(links)}"
+assert links == _expect, "详情链接与靶站真实数据不一致"
 assert 'details' in globals() and len(details) == 20, f"应抓取 20 个详情页,实际 {len(details)}"
-assert all(d["书名"] and d["价格"].startswith("¥") for d in details), "详情字段提取有误"`,
+assert all(d["书名"] and d["价格"].startswith("¥") for d in details), "详情字段提取有误" `,
     hintSteps: [
       '第一个 TODO:列表推导式 [a.get("href") for a in soup.select("tbody tr td:first-child a")]。',
       '第二个 TODO 是循环 + 重复 ex-04 的单页解析套路。注意变量名不要冲突:循环外用 r,循环内建议用 r2。',
@@ -243,6 +294,7 @@ assert all(d["书名"] and d["价格"].startswith("¥") for d in details), "详�
   },
   '09-json-and-storage': {
     id: 'ex-09-level4',
+      question: `<h4>任务:直连 JSON 接口</h4><p>请求 Level 4 分页 JSON 接口(10 页 × 20 条),收集全部 200 本图书。</p><p><strong>要点:</strong></p><ul><li>URL:<code>api/books/page-{page}.json</code></li><li>结构:<code>data["data"]["list"]</code></li></ul><p class="ce-q-spec">判定标准:判分器独立请求接口,比对 books 与真实 200 条一致。</p>`,
     title: '实战:直连 JSON 接口',
     skills: ['存储', '请求'],
     maxScore: 15,
@@ -256,8 +308,14 @@ total = 0
 # 请求 → .json() 直接拿到 dict → data["data"]["list"] 是本页的图书列表
 # 累加 total,所有图书追加到 books
 # (提示:.json() 比 .text + json.loads() 更省事,自动按响应头解析)`,
-    check: `assert 'books' in globals() and len(books) == 200, f"应收集 200 本,实际 {len(books)}"
-assert 'title' in books[0], "JSON 结构解析有误"`,
+    check: `import requests as _rq
+_expect = []
+for _p in range(1, 11):
+    _exp = _rq.get(f"{SITE_BASE}/practice/level4-json-api/api/books/page-{_p}.json", timeout=10).json()
+    _expect.extend(_exp["data"]["list"])
+assert 'books' in globals() and isinstance(books, list), "请把图书列表存入变量 books"
+assert len(books) == len(_expect), f"应收集 {len(_expect)} 本,实际 {len(books)}"
+assert books == _expect, "图书数据与接口真实返回不一致" `,
     hintSteps: [
       '查看靶站 Network 面板,找带 ?page=N 或 /page-N.json 之类的请求——这就是"接口"。',
       'data = r.json() 自动把 JSON 字符串转 dict,你不需要 import json。',
@@ -267,6 +325,7 @@ assert 'title' in books[0], "JSON 结构解析有误"`,
   },
   '10-dynamic-pages': {
     id: 'ex-10-level5',
+      question: `<h4>任务:看穿动态渲染</h4><p>Level 5 页面数据由 JS 加载:验证源码无数据(<code>in_html == 0</code>),并直连底层 JSON 接口拿 56 本。</p><p><strong>要点:</strong></p><ul><li>先请求页面源码统计 <code>#book-list li</code> 数量</li><li>再请求 <code>api/books.json</code>,取 <code>data</code> 存入 <code>books</code></li></ul><p class="ce-q-spec">判定标准:判分器独立请求,比对接口返回 56 条。</p>`,
     title: '实战:看穿动态页面',
     skills: ['反爬', '请求'],
     maxScore: 10,
@@ -284,8 +343,13 @@ from bs4 import BeautifulSoup
 # books = ...
 
 print("HTML 中书籍数:", in_html, "| 接口返回:", len(books))`,
-    check: `assert in_html == 0, "页面源码里不应直接包含书籍数据(动态渲染)"
-assert 'books' in globals() and len(books) == 56, f"接口应返回 56 本,实际 {len(books)}"`,
+    check: `import requests as _rq
+_exp = _rq.get(SITE_BASE + "/practice/level5-dynamic/api/books.json", timeout=10).json()
+_expect = _exp["data"]
+assert in_html == 0, "页面源码里不应直接包含书籍数据(动态渲染)"
+assert 'books' in globals() and isinstance(books, list), "请把接口数据存入变量 books"
+assert len(books) == len(_expect), f"接口应返回 {len(_expect)} 本,实际 {len(books)}"
+assert books == _expect, "接口数据与真实返回不一致" `,
     hintSteps: [
       '右键 → 查看网页源代码,搜 "书名"、"Java" 这种字眼——如果搜不到,说明数据不是 HTML 直接给的。',
       'F12 → Network 面板,刷新页面,观察哪些请求返回 JSON。接口路径通常藏在 .js 文件里。',
@@ -295,6 +359,7 @@ assert 'books' in globals() and len(books) == 56, f"接口应返回 56 本,实�
   },
   '11-anti-crawling': {
     id: 'ex-11-anti',
+      question: `<h4>任务:伪装浏览器 UA</h4><p>构造浏览器风格的 <code>User-Agent</code> 请求头并发起请求,验证请求头确实被发送。</p><p><strong>要点:</strong></p><ul><li>UA 应含 <code>Mozilla</code>,不含 <code>python-requests</code></li><li>检查 <code>r.request.headers</code>(发送的)而非 <code>r.headers</code>(返回的)</li></ul><p class="ce-q-spec">判定标准:状态码 200 且 UA 已伪装。</p>`,
     title: '实战:伪装浏览器 UA',
     skills: ['反爬'],
     maxScore: 10,
@@ -323,6 +388,7 @@ assert 'Mozilla' in ua, "UA 应形如浏览器(包含 Mozilla)"`,
   },
   '12-ethics': {
     id: 'ex-12-robots',
+      question: `<h4>任务:读懂 robots.txt</h4><p>抓取 <code>/robots.txt</code>,用 <code>RobotFileParser</code> 判断哪些路径允许抓取。</p><p><strong>要点:</strong></p><ul><li><code>rp.parse(text.splitlines())</code> 加载规则</li><li><code>rp.can_fetch(ua, url)</code> 判断单条路径</li></ul><p class="ce-q-spec">判定标准:/practice/ 允许,/private/ 禁止。</p>`,
     title: '实战:读懂 robots.txt',
     skills: [],
     maxScore: 10,
@@ -354,6 +420,7 @@ assert not rp.can_fetch("Crawler", SITE_BASE + "/private/"), "应禁止抓取 /p
   },
   '13-final-project': {
     id: 'ex-13-project',
+      question: `<h4>任务:全量抓取并导出 CSV</h4><p>翻遍 Level 2 的 10 页,抓取 100 条记录,用 <code>csv</code> 模块导出。</p><p><strong>要点:</strong></p><ul><li>每条 dict:<code>{"编号","书名","价格"}</code></li><li><code>csv.DictWriter</code> 先 <code>writeheader()</code> 再 <code>writerows()</code></li></ul><p class="ce-q-spec">判定标准:100 条记录,CSV 1 行表头 + 100 行数据。</p>`,
     title: '综合实战:全量抓取并导出 CSV',
     skills: ['请求', '解析', '分页', '反爬', '存储'],
     maxScore: 20,
@@ -396,6 +463,7 @@ export const unitTestTasks: Record<string, TaskDef[]> = {
   'unit-test-1': [
     {
       id: 'unit-test-1-t1',
+      question: `<h4>任务:记录状态码与行数</h4><p>请求 Level 1 靶站,把状态码存入变量 <code>status</code>,把表格行存入 <code>rows</code>。</p><p class="ce-q-spec">判定标准:判分器独立抓取,比对 status=200、rows 与真实行数一致。</p>`,
       title: '实操题 1:记录状态码与行数',
       skills: ['请求'],
       maxScore: 10,
@@ -413,6 +481,7 @@ assert len(rows) == 24, f"应抓到 24 行,实际 {len(rows)}"`,
     },
     {
       id: 'unit-test-1-t2',
+      question: `<h4>任务:自定义请求头 + 提取书名</h4><p>带上自定义 UA 请求,把 24 个书名提取到变量 <code>titles</code>。</p><p class="ce-q-spec">判定标准:UA 已伪装,书名与真实数据一致。</p>`,
       title: '实操题 2:自定义请求头提取书名',
       skills: ['请求', '解析'],
       maxScore: 10,
@@ -424,13 +493,22 @@ r = requests.get(SITE_BASE + "/practice/level1-books/", headers=headers, timeout
 r.encoding = "utf-8"
 soup = BeautifulSoup(r.text, "html.parser")
 # === TODO 补全 ===`,
-      check: `assert len(titles) == 24, f"应提取 24 个书名,实际 {len(titles)}"
-assert 'python-requests' not in r.request.headers.get('User-Agent', ''), "请设置自定义 User-Agent"`,
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/level1-books/", timeout=10)
+_src.encoding = "utf-8"
+_soup = _bs(_src.text, "html.parser")
+_expect = [_tr.select("td")[1].get_text().strip() for _tr in _soup.select("tbody tr")]
+assert 'python-requests' not in r.request.headers.get('User-Agent', ''), "请设置自定义 User-Agent"
+assert 'titles' in globals() and isinstance(titles, list), "请把书名存入变量 titles"
+assert len(titles) == len(_expect), f"应提取 {len(_expect)} 个书名,实际 {len(titles)}"
+assert titles == _expect, "书名与靶站真实数据不一致" `,
       hint: '用 soup.select("tbody tr td:nth-child(2)") 提取书名存入变量 titles。',
       explanation: '单元一实操 2 完成:请求头 + CSS 选择器提取。',
     },
     {
       id: 'unit-test-1-t3',
+      question: `<h4>任务:提取价格列</h4><p>取前 5 行的价格(第 6 个 td),存入变量 <code>prices</code>。</p><p class="ce-q-spec">判定标准:与真实价格一致,均以 ¥ 开头。</p>`,
       title: '实操题 3:提取价格列',
       skills: ['解析'],
       maxScore: 10,
@@ -441,12 +519,21 @@ r = requests.get(SITE_BASE + "/practice/level1-books/", timeout=10)
 r.encoding = "utf-8"
 rows = BeautifulSoup(r.text, "html.parser").select("tbody tr")
 # === TODO 补全 ===`,
-      check: `assert len(prices) == 5 and all(p.startswith("¥") for p in prices), "价格列提取有误(应为第 6 个 td)"`,
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/level1-books/", timeout=10)
+_src.encoding = "utf-8"
+_soup = _bs(_src.text, "html.parser")
+_expect = [_tr.select("td")[5].get_text().strip() for _tr in _soup.select("tbody tr")][:5]
+assert 'prices' in globals() and isinstance(prices, list), "请把价格存入变量 prices"
+assert len(prices) == 5, f"应取前 5 行价格,实际 {len(prices)} 条"
+assert prices == _expect, "价格与靶站真实数据不一致" `,
       hint: '价格是每行第 6 个 td(下标 5),取前 5 行存入变量 prices。',
       explanation: '单元一实操 3 完成:单元格定位与切片。',
     },
     {
       id: 'unit-test-1-t4',
+      question: `<h4>任务:筛选高价图书</h4><p>提取价格并筛选高于 60 的,存入变量 <code>expensive</code>(float 列表)。</p><p class="ce-q-spec">判定标准:与真实数据一致。</p>`,
       title: '实操题 4:筛选价格高于 60 的书',
       skills: ['请求', '解析'],
       maxScore: 10,
@@ -465,6 +552,7 @@ assert all(p > 60 for p in expensive), "expensive 中应全部是高于 60 的�
     },
     {
       id: 'unit-test-1-t5',
+      question: `<h4>任务:提取去重出版社</h4><p>提取出版社(第 4 个 td)并去重,存入变量 <code>pubs</code>。</p><p class="ce-q-spec">判定标准:与真实出版社集合一致。</p>`,
       title: '实操题 5:提取去重出版社',
       skills: ['请求', '解析'],
       maxScore: 10,
@@ -475,8 +563,15 @@ r = requests.get(SITE_BASE + "/practice/level1-books/", timeout=10)
 r.encoding = "utf-8"
 rows = BeautifulSoup(r.text, "html.parser").select("tbody tr")
 # === TODO 补全 ===`,
-      check: `assert isinstance(pubs, list) and len(pubs) >= 3, "变量 pubs 应为去重后的出版社列表"
-assert len(pubs) == len(set(pubs)), "pubs 应无重复"`,
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/level1-books/", timeout=10)
+_src.encoding = "utf-8"
+_soup = _bs(_src.text, "html.parser")
+_expect = list({_tr.select("td")[3].get_text().strip() for _tr in _soup.select("tbody tr")})
+assert 'pubs' in globals() and isinstance(pubs, list), "请把出版社存入变量 pubs"
+assert set(pubs) == set(_expect), "出版社集合与靶站真实数据不一致"
+assert len(pubs) == len(set(pubs)), "pubs 应无重复" `,
       hint: '出版社是每行第 4 个 td(下标 3),提取文本后用 set() 去重,再转回 list 存入变量 pubs。',
       explanation: '单元一实操 5 完成:字段提取与去重。',
     },
@@ -484,6 +579,7 @@ assert len(pubs) == len(set(pubs)), "pubs 应无重复"`,
   'unit-test-2': [
     {
       id: 'unit-test-2-t1',
+      question: `<h4>任务:书名与价格成对提取</h4><p>遍历行,把 (书名, 价格) 元组存入变量 <code>books</code>。</p><p class="ce-q-spec">判定标准:与真实数据完全一致。</p>`,
       title: '实操题 1:书名与价格成对提取',
       skills: ['解析'],
       maxScore: 10,
@@ -501,6 +597,7 @@ assert all(t and p.startswith("¥") for t, p in books), "书名或价格提取�
     },
     {
       id: 'unit-test-2-t2',
+      question: `<h4>任务:XPath 取书名</h4><p>用 lxml XPath 提取 24 个书名到变量 <code>titles</code>。</p><p class="ce-q-spec">判定标准:与真实数据一致。</p>`,
       title: '实操题 2:XPath 取书名',
       skills: ['解析'],
       maxScore: 10,
@@ -511,13 +608,21 @@ r = requests.get(SITE_BASE + "/practice/level1-books/", timeout=10)
 r.encoding = "utf-8"
 doc = html.fromstring(r.text)
 # === TODO 补全 ===`,
-      check: `assert len(titles) == 24, f"XPath 应提取 24 个书名,实际 {len(titles)}"
-assert all(t.strip() for t in titles), "存在空白书名"`,
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/level1-books/", timeout=10)
+_src.encoding = "utf-8"
+_soup = _bs(_src.text, "html.parser")
+_expect = [_tr.select("td")[1].get_text().strip() for _tr in _soup.select("tbody tr")]
+assert 'titles' in globals() and isinstance(titles, list), "请把书名存入变量 titles"
+assert len(titles) == len(_expect), f"应提取 {len(_expect)} 个书名,实际 {len(titles)}"
+assert titles == _expect, "XPath 书名与靶站真实数据不一致" `,
       hint: '用 doc.xpath("//tbody/tr/td[2]/text()") 提取书名存入变量 titles。',
       explanation: '单元二实操 2 完成:XPath 表达式。',
     },
     {
       id: 'unit-test-2-t3',
+      question: `<h4>任务:提取详情页链接</h4><p>从 Level 3 列表页提取 20 个详情链接,存入变量 <code>links</code>。</p><p class="ce-q-spec">判定标准:与真实链接一致。</p>`,
       title: '实操题 3:提取详情页链接',
       skills: ['解析'],
       maxScore: 10,
@@ -528,13 +633,21 @@ r = requests.get(SITE_BASE + "/practice/level3-detail/books.html", timeout=10)
 r.encoding = "utf-8"
 soup = BeautifulSoup(r.text, "html.parser")
 # === TODO 补全 ===`,
-      check: `assert len(links) == 20, f"应提取 20 个详情链接,实际 {len(links)}"
-assert all(h and h.endswith(".html") for h in links), "链接提取有误"`,
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/level3-detail/" + "books.html", timeout=10)
+_src.encoding = "utf-8"
+_soup = _bs(_src.text, "html.parser")
+_expect = [a.get("href") for a in _soup.select("tbody tr td:first-child a")]
+assert 'links' in globals() and isinstance(links, list), "请把详情链接存入变量 links"
+assert len(links) == len(_expect), f"应提取 {len(_expect)} 个链接,实际 {len(links)}"
+assert links == _expect, "详情链接与靶站真实数据不一致" `,
       hint: '链接在 tbody tr td:first-child a 的 href 属性里,用 get("href") 提取并存入 links。',
       explanation: '单元二实操 3 完成:属性提取。',
     },
     {
       id: 'unit-test-2-t4',
+      question: `<h4>任务:提取作者列表</h4><p>提取 24 个作者(第 3 个 td)到变量 <code>authors</code>。</p><p class="ce-q-spec">判定标准:与真实数据一致。</p>`,
       title: '实操题 4:提取作者列表',
       skills: ['请求', '解析'],
       maxScore: 10,
@@ -546,13 +659,21 @@ r.encoding = "utf-8"
 soup = BeautifulSoup(r.text, "html.parser")
 rows = soup.select("tbody tr")
 # === TODO 补全 ===`,
-      check: `assert isinstance(authors, list) and len(authors) == 24, f"应提取 24 个作者,实际 {len(authors)}"
-assert all(a.strip() for a in authors), "存在空白作者"`,
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/level1-books/", timeout=10)
+_src.encoding = "utf-8"
+_soup = _bs(_src.text, "html.parser")
+_expect = [_tr.select("td")[2].get_text().strip() for _tr in _soup.select("tbody tr")]
+assert 'authors' in globals() and isinstance(authors, list), "请把作者存入变量 authors"
+assert len(authors) == len(_expect), f"应提取 {len(_expect)} 个作者,实际 {len(authors)}"
+assert authors == _expect, "作者与靶站真实数据不一致" `,
       hint: '作者是每行第 3 个 td(下标 2),用 row.select("td")[2].get_text().strip() 提取,存入变量 authors。',
       explanation: '单元二实操 4 完成:多列定位练习。',
     },
     {
       id: 'unit-test-2-t5',
+      question: `<h4>任务:三元组综合提取</h4><p>提取 (书名, 作者, 价格) 三元组存入变量 <code>records</code>。</p><p class="ce-q-spec">判定标准:与真实数据一致。</p>`,
       title: '实操题 5:三元组综合提取',
       skills: ['请求', '解析'],
       maxScore: 10,
@@ -574,6 +695,7 @@ assert isinstance(t, str) and isinstance(a, str) and p.startswith("¥"), "每条
   'unit-test-3': [
     {
       id: 'unit-test-3-t1',
+      question: `<h4>任务:翻页累计 100 本</h4><p>翻遍 Level 2 的 10 页,累计行数存入变量 <code>total</code>。</p><p class="ce-q-spec">判定标准:判分器独立翻页,比对 total=100。</p>`,
       title: '实操题 1:翻页累计 100 本',
       skills: ['分页'],
       maxScore: 10,
@@ -593,6 +715,7 @@ for page in range(1, 11):
     },
     {
       id: 'unit-test-3-t2',
+      question: `<h4>任务:两级页面抓取</h4><p>抓取 Level 3 的 20 个详情页标题,存入变量 <code>details</code>。</p><p class="ce-q-spec">判定标准:与真实 20 条一致。</p>`,
       title: '实操题 2:两级页面抓取',
       skills: ['分页', '请求'],
       maxScore: 15,
@@ -617,6 +740,7 @@ assert all(d for d in details), "存在空标题"`,
     },
     {
       id: 'unit-test-3-t3',
+      question: `<h4>任务:JSON 接口全量</h4><p>请求 Level 4 的 10 页 JSON,收集 200 本到变量 <code>books</code>。</p><p class="ce-q-spec">判定标准:与真实数据一致。</p>`,
       title: '实操题 3:JSON 接口全量',
       skills: ['存储', '请求'],
       maxScore: 15,
@@ -634,6 +758,7 @@ assert 'title' in books[0], "JSON 结构解析有误"`,
     },
     {
       id: 'unit-test-3-t4',
+      question: `<h4>任务:详情页书名 + 评分</h4><p>抓取 20 个详情页的 (书名, 评分) 存入变量 <code>scores</code>。</p><p class="ce-q-spec">判定标准:与真实数据一致。</p>`,
       title: '实操题 4:详情页书名+评分',
       skills: ['请求', '解析'],
       maxScore: 15,
@@ -645,13 +770,27 @@ r = requests.get(base + "books.html", timeout=10)
 r.encoding = "utf-8"
 links = [a.get("href") for a in BeautifulSoup(r.text, "html.parser").select("tbody tr td:first-child a")]
 # === TODO 补全 ===`,
-      check: `assert isinstance(scores, list) and len(scores) == 20, f"应抓取 20 条,实际 {len(scores)}"
-assert all(s.startswith("B") for s in scores), "评分应取自详情页 rating 单元格"`,
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/level3-detail/" + "books.html", timeout=10)
+_src.encoding = "utf-8"
+_soup = _bs(_src.text, "html.parser")
+_links = [a.get("href") for a in _soup.select("tbody tr td:first-child a")]
+_expect = []
+for _href in _links:
+    _d = _rq.get(SITE_BASE + "/practice/level3-detail/" + _href, timeout=10)
+    _d.encoding = "utf-8"
+    _doc = _bs(_d.text, "html.parser")
+    _expect.append((_doc.select_one("h2").get_text().strip(), _doc.select_one("td.rating").get_text().strip()))
+assert 'scores' in globals() and isinstance(scores, list), "请把 (书名, 评分) 存入变量 scores"
+assert len(scores) == len(_expect), f"应抓取 {len(_expect)} 条,实际 {len(scores)}"
+assert scores == _expect, "(书名, 评分) 与靶站真实数据不一致" `,
       hint: '遍历 links 请求详情页,用 doc.select_one("td.rating").get_text() 取评分,按 (书名, 评分) 存入变量 scores。',
       explanation: '单元三实操 4 完成:详情页多字段提取。',
     },
     {
       id: 'unit-test-3-t5',
+      question: `<h4>任务:翻页收集评分</h4><p>翻遍 10 页收集 100 个评分(第 7 个 td)到变量 <code>ratings</code>。</p><p class="ce-q-spec">判定标准:与真实数据一致。</p>`,
       title: '实操题 5:翻页收集评分',
       skills: ['请求', '解析', '分页'],
       maxScore: 15,
@@ -674,6 +813,7 @@ assert all(3.0 <= float(x) <= 5.0 for x in ratings), "评分应在 3.0~5.0 之�
   'unit-test-4': [
     {
       id: 'unit-test-4-t1',
+      question: `<h4>任务:识别动态渲染</h4><p>验证 Level 5 源码无数据(<code>in_html == 0</code>),直连接口拿 56 本到 <code>books</code>。</p><p class="ce-q-spec">判定标准:与真实数据一致。</p>`,
       title: '实操题 1:识别动态渲染',
       skills: ['反爬', '请求'],
       maxScore: 10,
@@ -690,6 +830,7 @@ assert len(books) == 56, f"接口应返回 56 本,实际 {len(books)}"`,
     },
     {
       id: 'unit-test-4-t2',
+      question: `<h4>任务:UA 伪装</h4><p>带浏览器 UA 请求,验证状态码与请求头。</p><p class="ce-q-spec">判定标准:状态码 200,UA 不含 python-requests。</p>`,
       title: '实操题 2:UA 伪装',
       skills: ['反爬'],
       maxScore: 10,
@@ -707,6 +848,7 @@ assert 'Mozilla' in ua, "UA 应包含 Mozilla"`,
     },
     {
       id: 'unit-test-4-t3',
+      question: `<h4>任务:异常与状态码</h4><p>请求不存在的路径,验证返回 404,存入变量 <code>not_found</code>。</p><p class="ce-q-spec">判定标准:not_found == 404。</p>`,
       title: '实操题 3:异常与状态码',
       skills: ['请求'],
       maxScore: 10,
@@ -724,6 +866,7 @@ except requests.exceptions.RequestException as e:
     },
     {
       id: 'unit-test-4-t4',
+      question: `<h4>任务:JSON 元数据</h4><p>请求 Level 4 第一页,把 <code>total</code> 与 <code>total_pages</code> 存入变量。</p><p class="ce-q-spec">判定标准:total=200,totalPages=10。</p>`,
       title: '实操题 4:JSON 接口取总页数',
       skills: ['请求', '存储'],
       maxScore: 10,
@@ -738,6 +881,7 @@ assert 'total_pages' in globals() and total_pages == 10, f"totalPages 应为 10,
     },
     {
       id: 'unit-test-4-t5',
+      question: `<h4>任务:JSON 书名收集</h4><p>翻遍 10 页 JSON,收集 200 个书名到变量 <code>titles</code>。</p><p class="ce-q-spec">判定标准:与真实数据一致。</p>`,
       title: '实操题 5:JSON 书名收集',
       skills: ['请求', '存储'],
       maxScore: 15,
@@ -757,6 +901,7 @@ assert all(t for t in titles), "存在空书名"`,
   'unit-test-5': [
     {
       id: 'unit-test-5-t1',
+      question: `<h4>任务:解析 robots.txt</h4><p>读取 robots.txt 并判断 /practice/ 与 /private/ 的抓取许可。</p><p class="ce-q-spec">判定标准:允许 /practice/,禁止 /private/。</p>`,
       title: '实操题 1:解析 robots.txt',
       skills: [],
       maxScore: 10,
@@ -775,6 +920,7 @@ assert not rp.can_fetch("Crawler", SITE_BASE + "/private/"), "应禁止 /private
     },
     {
       id: 'unit-test-5-t2',
+      question: `<h4>任务:全量抓取 + 去重</h4><p>翻遍 10 页收集 100 个书名到 <code>books</code>,并用 set 去重。</p><p class="ce-q-spec">判定标准:100 条,无重复。</p>`,
       title: '实操题 2:全量抓取与去重',
       skills: ['请求', '解析', '分页'],
       maxScore: 15,
@@ -796,6 +942,7 @@ assert len(set(books)) == 100, "书名存在重复,需要去重"`,
     },
     {
       id: 'unit-test-5-t3',
+      question: `<h4>任务:JSON 全量导出 CSV</h4><p>从 JSON 接口收集 200 本,导出 CSV 文本到变量 <code>csv_text</code>。</p><p class="ce-q-spec">判定标准:201 行(表头 + 200)。</p>`,
       title: '实操题 3:JSON 全量导出 CSV',
       skills: ['请求', '存储'],
       maxScore: 15,
@@ -822,6 +969,7 @@ assert len(csv_text.strip().splitlines()) == 201, "CSV 应为 1 行表头 + 200 
     },
     {
       id: 'unit-test-5-t4',
+      question: `<h4>任务:价格区间统计</h4><p>翻遍 10 页收集 100 个价格(转 float)到变量 <code>prices</code>。</p><p class="ce-q-spec">判定标准:与真实数据一致。</p>`,
       title: '实操题 4:价格区间统计',
       skills: ['请求', '解析'],
       maxScore: 15,
@@ -842,6 +990,7 @@ assert all(30 <= float(p) <= 150 for p in prices), "价格应在 30~150 之间"`
     },
     {
       id: 'unit-test-5-t5',
+      question: `<h4>任务:JSON 评分聚合</h4><p>从 JSON 接口收集 200 个评分到变量 <code>ratings</code>。</p><p class="ce-q-spec">判定标准:与真实数据一致。</p>`,
       title: '实操题 5:JSON 全量+评分聚合',
       skills: ['请求', '存储'],
       maxScore: 15,
@@ -867,6 +1016,7 @@ export const courseTestTasks: Record<string, TaskDef[]> = {
       title: '实操题 1:抓取「城市气候观测」列表',
       skills: ["请求", "解析"],
       maxScore: 10,
+      question: `<h4>任务:抓取「城市气候观测」榜单</h4><p>请求 <code>SITE_BASE + "/practice/course-test-01/"</code>,用 Python 爬虫解析页面数据。</p><p><strong>要点:</strong></p><ul><li>靶站为静态 HTML 表格,数据为虚构教学数据</li><li>判分器会<strong>独立重新抓取靶站</strong>生成期望值,与你提交的结果<strong>逐项比对</strong>,无法靠数行数或伪造变量通过</li><li>注意编码:<code>r.encoding = "utf-8"</code> 避免中文乱码</li></ul><p><strong>要求:</strong>用 CSS 选择器提取表格中所有行,存入变量 <code>rows</code>。</p><p class="ce-q-spec">判定标准:rows 数量与顺序必须和靶站真实表格行完全一致(24 行);且每行必须是 BeautifulSoup 解析出的对象。</p>`,
       starter: `import requests
 from bs4 import BeautifulSoup
 
@@ -874,20 +1024,28 @@ r = requests.get(SITE_BASE + "/practice/course-test-01/", timeout=10)
 r.encoding = "utf-8"
 soup = BeautifulSoup(r.text, "html.parser")
 
-# TODO 1: 用 CSS 选择器提取所有表格行,存入变量 rows(提示:tbody tr)
-# rows = ...
-
-print("抓到行数:", len(rows))`,
-      check: `assert 'rows' in globals(), "未定义变量 rows,请先把表格行存入 rows"
-assert len(rows) == 24, f"应抓到 24 行,实际 {len(rows)}"`,
-      hintSteps: ["表格行在 <tbody> 里,每行是 <tr>。CSS 选择器怎么写?", "soup.select('tbody tr') 会返回所有表格行,直接赋给 rows 即可。", "运行后应看到 '抓到行数: 24'。"],
-      explanation: '「城市气候观测」列表页是单页表格,核心套路:requests 请求 → r.encoding 修正编码 → BeautifulSoup 定位 → select 提取。这是所有爬虫的第一步。',
+# TODO: 用 CSS 选择器把表格中所有行存入变量 rows(提示: tbody tr)
+# rows = ...`,
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/course-test-01/", timeout=10)
+_src.encoding = "utf-8"
+_soup = _bs(_src.text, "html.parser")
+_expect = [_tr.select("td")[1].get_text().strip() for _tr in _soup.select("tbody tr")]
+assert 'rows' in globals(), "未定义变量 rows,请先把表格行存入 rows"
+assert isinstance(rows, list) and len(rows) == len(_expect), f"行数应为 {len(_expect)},实际 {len(rows)}"
+assert hasattr(rows[0], "select"), "rows 元素应为 BeautifulSoup 解析出的行对象,请用 soup.select() 提取"
+_got = [row.select("td")[1].get_text().strip() for row in rows]
+assert _got == _expect, "提取的名称与靶站真实数据不一致,请检查选择器与下标" `,
+      hintSteps: ["表格行在 <tbody> 里,每行是 <tr>。soup.select('tbody tr') 是标准做法。", "判分器会重新抓靶站逐行比对——所以必须真实解析,不能伪造列表。", "运行后应看到 '抓到行数: 24'。"],
+      explanation: '「城市气候观测」列表页是单页表格。测试用例式判定要求你真正解析出与靶站一致的数据——这是爬虫的核心:让代码与页面结构精确对应。',
     },
     {
       id: 'course-test-01-t2',
       title: '实操题 2:提取「城市」名称与价格',
       skills: ["解析"],
       maxScore: 10,
+      question: `<h4>任务:抓取「城市气候观测」榜单</h4><p>请求 <code>SITE_BASE + "/practice/course-test-01/"</code>,用 Python 爬虫解析页面数据。</p><p><strong>要点:</strong></p><ul><li>靶站为静态 HTML 表格,数据为虚构教学数据</li><li>判分器会<strong>独立重新抓取靶站</strong>生成期望值,与你提交的结果<strong>逐项比对</strong>,无法靠数行数或伪造变量通过</li><li>注意编码:<code>r.encoding = "utf-8"</code> 避免中文乱码</li></ul><p><strong>要求:</strong>遍历表格行,把每行的<strong>名称</strong>(第 2 个 td)与<strong>价格</strong>(第 5 个 td)提取为元组,全部存入变量 <code>items</code>。</p><p class="ce-q-spec">判定标准:items 必须与靶站真实数据<strong>逐条完全一致</strong>(名称与价格,含顺序)。</p>`,
       starter: `import requests
 from bs4 import BeautifulSoup
 
@@ -896,40 +1054,50 @@ r.encoding = "utf-8"
 soup = BeautifulSoup(r.text, "html.parser")
 rows = soup.select("tbody tr")
 
-# TODO 1: 遍历 rows,把每行的第 2 个 td(名称)与第 5 个 td(价格)提取为元组
-# 全部存入变量 items(提示:row.select("td") 取该行的单元格)
+# TODO: 遍历 rows,提取每行的名称(td 第 2 列)与价格(td 第 5 列)为 (名称, 价格) 元组,
+# 全部存入变量 items(提示: row.select("td") 取该行单元格)
 # items = ...
 
 print("条目数:", len(items))
 print("样例:", items[0] if items else None)`,
-      check: `assert 'items' in globals() and isinstance(items, list), "请把提取结果存入变量 items"
-assert len(items) == 24, f"应提取 24 条,实际 {len(items)}"
-name, price = items[0]
-assert isinstance(name, str) and price.startswith("¥"), "第 1 条应为 (名称, 价格) 元组且价格以 ¥ 开头"`,
-      hintSteps: ["每行有 6 个 td:编号/名称/类别/品牌/价格/评分。名称是第 2 个(td[1]),价格是第 5 个(td[4])。", "列表推导式 [ (row.select('td')[1].get_text(), row.select('td')[4].get_text()) for row in rows ]。", "用 .strip() 去掉首尾空白,价格单元格里有 ¥ 前缀。"],
-      explanation: '字段提取的关键是定位列位置:城市名称在第 2 列、价格在第 5 列。列位置一变,选择器或下标就要跟着变——这是真实爬虫里最常见的坑。',
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/course-test-01/", timeout=10)
+_src.encoding = "utf-8"
+_soup = _bs(_src.text, "html.parser")
+_expect = [(_tr.select("td")[1].get_text().strip(), _tr.select("td")[4].get_text().strip())
+           for _tr in _soup.select("tbody tr")]
+assert 'items' in globals() and isinstance(items, list), "请把提取结果存入变量 items"
+assert len(items) == len(_expect), f"应提取 {len(_expect)} 条,实际 {len(items)}"
+assert items == _expect, "提取的 (名称, 价格) 与靶站真实数据不一致,请检查列下标与去空白" `,
+      hintSteps: ["每行有 6 个 td:编号/名称/类别/品牌/价格/评分。名称是第 2 个(td[1]),价格是第 5 个(td[4])。", "列表推导式 [ (row.select('td')[1].get_text().strip(), row.select('td')[4].get_text().strip()) for row in rows ]。", "用 .strip() 去掉首尾空白——判分器比对的是精确值,多余空格会导致不一致。"],
+      explanation: '字段提取的关键是列定位:名称第 2 列、价格第 5 列。判定器用靶站真实数据逐条比对,这正是生产环境校验爬虫输出的方式。',
     },
     {
       id: 'course-test-01-t3',
       title: '实操题 3:直连「城市气候观测」JSON 接口',
       skills: ["请求", "存储"],
       maxScore: 10,
+      question: `<h4>任务:直连「城市气候观测」JSON 接口</h4><p>请求 <code>/practice/course-test-01/api/items.json</code>,解析 JSON 数据。</p><p><strong>要求:</strong></p><ul><li>把 <code>data</code> 字段(条目列表)存入变量 <code>items</code></li><li>把 <code>total</code> 字段(总数)存入变量 <code>total</code></li></ul><p class="ce-q-spec">判定标准:items 必须与接口真实返回的 40 条数据完全一致;total == 40。判分器会独立请求接口比对。</p>`,
       starter: `import requests
 
-# TODO 1: 请求 JSON 接口(路径 /api/items.json,拼接在靶站 base 后),用 .json() 解析
-# 把 data 字段存入变量 items,把 total 字段存入变量 total
-# URL = SITE_BASE + "/practice/course-test-01/api/items.json"
-# data = ...
+# TODO: 请求 JSON 接口,用 .json() 解析
+# 把 data 字段(列表)存入变量 items,把 total 字段存入变量 total
+# data = requests.get(f"SITE_BASE/practice/course-test-01/api/items.json", timeout=10).json()
 # items = ...
 # total = ...
 
 print("total:", total)
 print("条目数:", len(items))`,
-      check: `assert 'items' in globals() and len(items) == 40, f"JSON 接口应返回 40 条,实际 {len(items)}"
-assert 'total' in globals() and total == 40, f"total 应为 40,实际 {total}"
-assert isinstance(items[0], dict) and 'name' in items[0], "条目应为字典且包含 name 字段"`,
-      hintSteps: ["JSON 接口返回结构: code / message / total / data[]。", "data = requests.get(url, timeout=10).json() 一步拿到整个字典。", "items = data['data'],total = data['total'],然后打印验证。"],
-      explanation: '直连 JSON 接口是效率最高的方式:返回结构即数据本身,无需解析 HTML。判断一个页面是静态还是动态,先在 Network 面板找 JSON 请求是最快的路径。',
+      check: `import requests as _rq
+_exp = _rq.get(SITE_BASE + "/practice/course-test-01/api/items.json", timeout=10).json()
+assert 'items' in globals() and isinstance(items, list), "请把 data 字段存入变量 items"
+assert 'total' in globals(), "请把 total 字段存入变量 total"
+assert total == _exp["total"], f"total 应为 {_exp['total']},实际 {total}"
+assert len(items) == len(_exp["data"]), f"应返回 {len(_exp['data'])} 条,实际 {len(items)}"
+assert items == _exp["data"], "items 与接口真实数据不一致,请检查取的是否为 data 字段" `,
+      hintSteps: ["JSON 接口返回结构: code / message / total / data[]。", "data = requests.get(url, timeout=10).json() 一步拿到整个字典。", "items = data['data']; total = data['total'],然后打印验证。"],
+      explanation: '直连 JSON 接口是效率最高的方式。判定器独立请求接口并逐条比对,确保你的解析与真实数据结构完全吻合。',
     }
   ],
   '02': [
@@ -938,6 +1106,7 @@ assert isinstance(items[0], dict) and 'name' in items[0], "条目应为字典且
       title: '实操题 1:抓取「数码配件行情」列表',
       skills: ["请求", "解析"],
       maxScore: 10,
+      question: `<h4>任务:抓取「数码配件行情」榜单</h4><p>请求 <code>SITE_BASE + "/practice/course-test-02/"</code>,用 Python 爬虫解析页面数据。</p><p><strong>要点:</strong></p><ul><li>靶站为静态 HTML 表格,数据为虚构教学数据</li><li>判分器会<strong>独立重新抓取靶站</strong>生成期望值,与你提交的结果<strong>逐项比对</strong>,无法靠数行数或伪造变量通过</li><li>注意编码:<code>r.encoding = "utf-8"</code> 避免中文乱码</li></ul><p><strong>要求:</strong>用 CSS 选择器提取表格中所有行,存入变量 <code>rows</code>。</p><p class="ce-q-spec">判定标准:rows 数量与顺序必须和靶站真实表格行完全一致(24 行);且每行必须是 BeautifulSoup 解析出的对象。</p>`,
       starter: `import requests
 from bs4 import BeautifulSoup
 
@@ -945,20 +1114,28 @@ r = requests.get(SITE_BASE + "/practice/course-test-02/", timeout=10)
 r.encoding = "utf-8"
 soup = BeautifulSoup(r.text, "html.parser")
 
-# TODO 1: 用 CSS 选择器提取所有表格行,存入变量 rows(提示:tbody tr)
-# rows = ...
-
-print("抓到行数:", len(rows))`,
-      check: `assert 'rows' in globals(), "未定义变量 rows,请先把表格行存入 rows"
-assert len(rows) == 24, f"应抓到 24 行,实际 {len(rows)}"`,
-      hintSteps: ["表格行在 <tbody> 里,每行是 <tr>。CSS 选择器怎么写?", "soup.select('tbody tr') 会返回所有表格行,直接赋给 rows 即可。", "运行后应看到 '抓到行数: 24'。"],
-      explanation: '「数码配件行情」列表页是单页表格,核心套路:requests 请求 → r.encoding 修正编码 → BeautifulSoup 定位 → select 提取。这是所有爬虫的第一步。',
+# TODO: 用 CSS 选择器把表格中所有行存入变量 rows(提示: tbody tr)
+# rows = ...`,
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/course-test-02/", timeout=10)
+_src.encoding = "utf-8"
+_soup = _bs(_src.text, "html.parser")
+_expect = [_tr.select("td")[1].get_text().strip() for _tr in _soup.select("tbody tr")]
+assert 'rows' in globals(), "未定义变量 rows,请先把表格行存入 rows"
+assert isinstance(rows, list) and len(rows) == len(_expect), f"行数应为 {len(_expect)},实际 {len(rows)}"
+assert hasattr(rows[0], "select"), "rows 元素应为 BeautifulSoup 解析出的行对象,请用 soup.select() 提取"
+_got = [row.select("td")[1].get_text().strip() for row in rows]
+assert _got == _expect, "提取的名称与靶站真实数据不一致,请检查选择器与下标" `,
+      hintSteps: ["表格行在 <tbody> 里,每行是 <tr>。soup.select('tbody tr') 是标准做法。", "判分器会重新抓靶站逐行比对——所以必须真实解析,不能伪造列表。", "运行后应看到 '抓到行数: 24'。"],
+      explanation: '「数码配件行情」列表页是单页表格。测试用例式判定要求你真正解析出与靶站一致的数据——这是爬虫的核心:让代码与页面结构精确对应。',
     },
     {
       id: 'course-test-02-t2',
       title: '实操题 2:提取「商品」名称与价格',
       skills: ["解析"],
       maxScore: 10,
+      question: `<h4>任务:抓取「数码配件行情」榜单</h4><p>请求 <code>SITE_BASE + "/practice/course-test-02/"</code>,用 Python 爬虫解析页面数据。</p><p><strong>要点:</strong></p><ul><li>靶站为静态 HTML 表格,数据为虚构教学数据</li><li>判分器会<strong>独立重新抓取靶站</strong>生成期望值,与你提交的结果<strong>逐项比对</strong>,无法靠数行数或伪造变量通过</li><li>注意编码:<code>r.encoding = "utf-8"</code> 避免中文乱码</li></ul><p><strong>要求:</strong>遍历表格行,把每行的<strong>名称</strong>(第 2 个 td)与<strong>价格</strong>(第 5 个 td)提取为元组,全部存入变量 <code>items</code>。</p><p class="ce-q-spec">判定标准:items 必须与靶站真实数据<strong>逐条完全一致</strong>(名称与价格,含顺序)。</p>`,
       starter: `import requests
 from bs4 import BeautifulSoup
 
@@ -967,40 +1144,50 @@ r.encoding = "utf-8"
 soup = BeautifulSoup(r.text, "html.parser")
 rows = soup.select("tbody tr")
 
-# TODO 1: 遍历 rows,把每行的第 2 个 td(名称)与第 5 个 td(价格)提取为元组
-# 全部存入变量 items(提示:row.select("td") 取该行的单元格)
+# TODO: 遍历 rows,提取每行的名称(td 第 2 列)与价格(td 第 5 列)为 (名称, 价格) 元组,
+# 全部存入变量 items(提示: row.select("td") 取该行单元格)
 # items = ...
 
 print("条目数:", len(items))
 print("样例:", items[0] if items else None)`,
-      check: `assert 'items' in globals() and isinstance(items, list), "请把提取结果存入变量 items"
-assert len(items) == 24, f"应提取 24 条,实际 {len(items)}"
-name, price = items[0]
-assert isinstance(name, str) and price.startswith("¥"), "第 1 条应为 (名称, 价格) 元组且价格以 ¥ 开头"`,
-      hintSteps: ["每行有 6 个 td:编号/名称/类别/品牌/价格/评分。名称是第 2 个(td[1]),价格是第 5 个(td[4])。", "列表推导式 [ (row.select('td')[1].get_text(), row.select('td')[4].get_text()) for row in rows ]。", "用 .strip() 去掉首尾空白,价格单元格里有 ¥ 前缀。"],
-      explanation: '字段提取的关键是定位列位置:商品名称在第 2 列、价格在第 5 列。列位置一变,选择器或下标就要跟着变——这是真实爬虫里最常见的坑。',
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/course-test-02/", timeout=10)
+_src.encoding = "utf-8"
+_soup = _bs(_src.text, "html.parser")
+_expect = [(_tr.select("td")[1].get_text().strip(), _tr.select("td")[4].get_text().strip())
+           for _tr in _soup.select("tbody tr")]
+assert 'items' in globals() and isinstance(items, list), "请把提取结果存入变量 items"
+assert len(items) == len(_expect), f"应提取 {len(_expect)} 条,实际 {len(items)}"
+assert items == _expect, "提取的 (名称, 价格) 与靶站真实数据不一致,请检查列下标与去空白" `,
+      hintSteps: ["每行有 6 个 td:编号/名称/类别/品牌/价格/评分。名称是第 2 个(td[1]),价格是第 5 个(td[4])。", "列表推导式 [ (row.select('td')[1].get_text().strip(), row.select('td')[4].get_text().strip()) for row in rows ]。", "用 .strip() 去掉首尾空白——判分器比对的是精确值,多余空格会导致不一致。"],
+      explanation: '字段提取的关键是列定位:名称第 2 列、价格第 5 列。判定器用靶站真实数据逐条比对,这正是生产环境校验爬虫输出的方式。',
     },
     {
       id: 'course-test-02-t3',
       title: '实操题 3:直连「数码配件行情」JSON 接口',
       skills: ["请求", "存储"],
       maxScore: 10,
+      question: `<h4>任务:直连「数码配件行情」JSON 接口</h4><p>请求 <code>/practice/course-test-02/api/items.json</code>,解析 JSON 数据。</p><p><strong>要求:</strong></p><ul><li>把 <code>data</code> 字段(条目列表)存入变量 <code>items</code></li><li>把 <code>total</code> 字段(总数)存入变量 <code>total</code></li></ul><p class="ce-q-spec">判定标准:items 必须与接口真实返回的 40 条数据完全一致;total == 40。判分器会独立请求接口比对。</p>`,
       starter: `import requests
 
-# TODO 1: 请求 JSON 接口(路径 /api/items.json,拼接在靶站 base 后),用 .json() 解析
-# 把 data 字段存入变量 items,把 total 字段存入变量 total
-# URL = SITE_BASE + "/practice/course-test-02/api/items.json"
-# data = ...
+# TODO: 请求 JSON 接口,用 .json() 解析
+# 把 data 字段(列表)存入变量 items,把 total 字段存入变量 total
+# data = requests.get(f"SITE_BASE/practice/course-test-02/api/items.json", timeout=10).json()
 # items = ...
 # total = ...
 
 print("total:", total)
 print("条目数:", len(items))`,
-      check: `assert 'items' in globals() and len(items) == 40, f"JSON 接口应返回 40 条,实际 {len(items)}"
-assert 'total' in globals() and total == 40, f"total 应为 40,实际 {total}"
-assert isinstance(items[0], dict) and 'name' in items[0], "条目应为字典且包含 name 字段"`,
-      hintSteps: ["JSON 接口返回结构: code / message / total / data[]。", "data = requests.get(url, timeout=10).json() 一步拿到整个字典。", "items = data['data'],total = data['total'],然后打印验证。"],
-      explanation: '直连 JSON 接口是效率最高的方式:返回结构即数据本身,无需解析 HTML。判断一个页面是静态还是动态,先在 Network 面板找 JSON 请求是最快的路径。',
+      check: `import requests as _rq
+_exp = _rq.get(SITE_BASE + "/practice/course-test-02/api/items.json", timeout=10).json()
+assert 'items' in globals() and isinstance(items, list), "请把 data 字段存入变量 items"
+assert 'total' in globals(), "请把 total 字段存入变量 total"
+assert total == _exp["total"], f"total 应为 {_exp['total']},实际 {total}"
+assert len(items) == len(_exp["data"]), f"应返回 {len(_exp['data'])} 条,实际 {len(items)}"
+assert items == _exp["data"], "items 与接口真实数据不一致,请检查取的是否为 data 字段" `,
+      hintSteps: ["JSON 接口返回结构: code / message / total / data[]。", "data = requests.get(url, timeout=10).json() 一步拿到整个字典。", "items = data['data']; total = data['total'],然后打印验证。"],
+      explanation: '直连 JSON 接口是效率最高的方式。判定器独立请求接口并逐条比对,确保你的解析与真实数据结构完全吻合。',
     }
   ],
   '03': [
@@ -1009,6 +1196,7 @@ assert isinstance(items[0], dict) and 'name' in items[0], "条目应为字典且
       title: '实操题 1:抓取「股票行情速览」列表',
       skills: ["请求", "解析"],
       maxScore: 10,
+      question: `<h4>任务:抓取「股票行情速览」榜单</h4><p>请求 <code>SITE_BASE + "/practice/course-test-03/"</code>,用 Python 爬虫解析页面数据。</p><p><strong>要点:</strong></p><ul><li>靶站为静态 HTML 表格,数据为虚构教学数据</li><li>判分器会<strong>独立重新抓取靶站</strong>生成期望值,与你提交的结果<strong>逐项比对</strong>,无法靠数行数或伪造变量通过</li><li>注意编码:<code>r.encoding = "utf-8"</code> 避免中文乱码</li></ul><p><strong>要求:</strong>用 CSS 选择器提取表格中所有行,存入变量 <code>rows</code>。</p><p class="ce-q-spec">判定标准:rows 数量与顺序必须和靶站真实表格行完全一致(24 行);且每行必须是 BeautifulSoup 解析出的对象。</p>`,
       starter: `import requests
 from bs4 import BeautifulSoup
 
@@ -1016,20 +1204,28 @@ r = requests.get(SITE_BASE + "/practice/course-test-03/", timeout=10)
 r.encoding = "utf-8"
 soup = BeautifulSoup(r.text, "html.parser")
 
-# TODO 1: 用 CSS 选择器提取所有表格行,存入变量 rows(提示:tbody tr)
-# rows = ...
-
-print("抓到行数:", len(rows))`,
-      check: `assert 'rows' in globals(), "未定义变量 rows,请先把表格行存入 rows"
-assert len(rows) == 24, f"应抓到 24 行,实际 {len(rows)}"`,
-      hintSteps: ["表格行在 <tbody> 里,每行是 <tr>。CSS 选择器怎么写?", "soup.select('tbody tr') 会返回所有表格行,直接赋给 rows 即可。", "运行后应看到 '抓到行数: 24'。"],
-      explanation: '「股票行情速览」列表页是单页表格,核心套路:requests 请求 → r.encoding 修正编码 → BeautifulSoup 定位 → select 提取。这是所有爬虫的第一步。',
+# TODO: 用 CSS 选择器把表格中所有行存入变量 rows(提示: tbody tr)
+# rows = ...`,
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/course-test-03/", timeout=10)
+_src.encoding = "utf-8"
+_soup = _bs(_src.text, "html.parser")
+_expect = [_tr.select("td")[1].get_text().strip() for _tr in _soup.select("tbody tr")]
+assert 'rows' in globals(), "未定义变量 rows,请先把表格行存入 rows"
+assert isinstance(rows, list) and len(rows) == len(_expect), f"行数应为 {len(_expect)},实际 {len(rows)}"
+assert hasattr(rows[0], "select"), "rows 元素应为 BeautifulSoup 解析出的行对象,请用 soup.select() 提取"
+_got = [row.select("td")[1].get_text().strip() for row in rows]
+assert _got == _expect, "提取的名称与靶站真实数据不一致,请检查选择器与下标" `,
+      hintSteps: ["表格行在 <tbody> 里,每行是 <tr>。soup.select('tbody tr') 是标准做法。", "判分器会重新抓靶站逐行比对——所以必须真实解析,不能伪造列表。", "运行后应看到 '抓到行数: 24'。"],
+      explanation: '「股票行情速览」列表页是单页表格。测试用例式判定要求你真正解析出与靶站一致的数据——这是爬虫的核心:让代码与页面结构精确对应。',
     },
     {
       id: 'course-test-03-t2',
       title: '实操题 2:提取「股票」名称与价格',
       skills: ["解析"],
       maxScore: 10,
+      question: `<h4>任务:抓取「股票行情速览」榜单</h4><p>请求 <code>SITE_BASE + "/practice/course-test-03/"</code>,用 Python 爬虫解析页面数据。</p><p><strong>要点:</strong></p><ul><li>靶站为静态 HTML 表格,数据为虚构教学数据</li><li>判分器会<strong>独立重新抓取靶站</strong>生成期望值,与你提交的结果<strong>逐项比对</strong>,无法靠数行数或伪造变量通过</li><li>注意编码:<code>r.encoding = "utf-8"</code> 避免中文乱码</li></ul><p><strong>要求:</strong>遍历表格行,把每行的<strong>名称</strong>(第 2 个 td)与<strong>价格</strong>(第 5 个 td)提取为元组,全部存入变量 <code>items</code>。</p><p class="ce-q-spec">判定标准:items 必须与靶站真实数据<strong>逐条完全一致</strong>(名称与价格,含顺序)。</p>`,
       starter: `import requests
 from bs4 import BeautifulSoup
 
@@ -1038,40 +1234,50 @@ r.encoding = "utf-8"
 soup = BeautifulSoup(r.text, "html.parser")
 rows = soup.select("tbody tr")
 
-# TODO 1: 遍历 rows,把每行的第 2 个 td(名称)与第 5 个 td(价格)提取为元组
-# 全部存入变量 items(提示:row.select("td") 取该行的单元格)
+# TODO: 遍历 rows,提取每行的名称(td 第 2 列)与价格(td 第 5 列)为 (名称, 价格) 元组,
+# 全部存入变量 items(提示: row.select("td") 取该行单元格)
 # items = ...
 
 print("条目数:", len(items))
 print("样例:", items[0] if items else None)`,
-      check: `assert 'items' in globals() and isinstance(items, list), "请把提取结果存入变量 items"
-assert len(items) == 24, f"应提取 24 条,实际 {len(items)}"
-name, price = items[0]
-assert isinstance(name, str) and price.startswith("¥"), "第 1 条应为 (名称, 价格) 元组且价格以 ¥ 开头"`,
-      hintSteps: ["每行有 6 个 td:编号/名称/类别/品牌/价格/评分。名称是第 2 个(td[1]),价格是第 5 个(td[4])。", "列表推导式 [ (row.select('td')[1].get_text(), row.select('td')[4].get_text()) for row in rows ]。", "用 .strip() 去掉首尾空白,价格单元格里有 ¥ 前缀。"],
-      explanation: '字段提取的关键是定位列位置:股票名称在第 2 列、价格在第 5 列。列位置一变,选择器或下标就要跟着变——这是真实爬虫里最常见的坑。',
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/course-test-03/", timeout=10)
+_src.encoding = "utf-8"
+_soup = _bs(_src.text, "html.parser")
+_expect = [(_tr.select("td")[1].get_text().strip(), _tr.select("td")[4].get_text().strip())
+           for _tr in _soup.select("tbody tr")]
+assert 'items' in globals() and isinstance(items, list), "请把提取结果存入变量 items"
+assert len(items) == len(_expect), f"应提取 {len(_expect)} 条,实际 {len(items)}"
+assert items == _expect, "提取的 (名称, 价格) 与靶站真实数据不一致,请检查列下标与去空白" `,
+      hintSteps: ["每行有 6 个 td:编号/名称/类别/品牌/价格/评分。名称是第 2 个(td[1]),价格是第 5 个(td[4])。", "列表推导式 [ (row.select('td')[1].get_text().strip(), row.select('td')[4].get_text().strip()) for row in rows ]。", "用 .strip() 去掉首尾空白——判分器比对的是精确值,多余空格会导致不一致。"],
+      explanation: '字段提取的关键是列定位:名称第 2 列、价格第 5 列。判定器用靶站真实数据逐条比对,这正是生产环境校验爬虫输出的方式。',
     },
     {
       id: 'course-test-03-t3',
       title: '实操题 3:直连「股票行情速览」JSON 接口',
       skills: ["请求", "存储"],
       maxScore: 10,
+      question: `<h4>任务:直连「股票行情速览」JSON 接口</h4><p>请求 <code>/practice/course-test-03/api/items.json</code>,解析 JSON 数据。</p><p><strong>要求:</strong></p><ul><li>把 <code>data</code> 字段(条目列表)存入变量 <code>items</code></li><li>把 <code>total</code> 字段(总数)存入变量 <code>total</code></li></ul><p class="ce-q-spec">判定标准:items 必须与接口真实返回的 40 条数据完全一致;total == 40。判分器会独立请求接口比对。</p>`,
       starter: `import requests
 
-# TODO 1: 请求 JSON 接口(路径 /api/items.json,拼接在靶站 base 后),用 .json() 解析
-# 把 data 字段存入变量 items,把 total 字段存入变量 total
-# URL = SITE_BASE + "/practice/course-test-03/api/items.json"
-# data = ...
+# TODO: 请求 JSON 接口,用 .json() 解析
+# 把 data 字段(列表)存入变量 items,把 total 字段存入变量 total
+# data = requests.get(f"SITE_BASE/practice/course-test-03/api/items.json", timeout=10).json()
 # items = ...
 # total = ...
 
 print("total:", total)
 print("条目数:", len(items))`,
-      check: `assert 'items' in globals() and len(items) == 40, f"JSON 接口应返回 40 条,实际 {len(items)}"
-assert 'total' in globals() and total == 40, f"total 应为 40,实际 {total}"
-assert isinstance(items[0], dict) and 'name' in items[0], "条目应为字典且包含 name 字段"`,
-      hintSteps: ["JSON 接口返回结构: code / message / total / data[]。", "data = requests.get(url, timeout=10).json() 一步拿到整个字典。", "items = data['data'],total = data['total'],然后打印验证。"],
-      explanation: '直连 JSON 接口是效率最高的方式:返回结构即数据本身,无需解析 HTML。判断一个页面是静态还是动态,先在 Network 面板找 JSON 请求是最快的路径。',
+      check: `import requests as _rq
+_exp = _rq.get(SITE_BASE + "/practice/course-test-03/api/items.json", timeout=10).json()
+assert 'items' in globals() and isinstance(items, list), "请把 data 字段存入变量 items"
+assert 'total' in globals(), "请把 total 字段存入变量 total"
+assert total == _exp["total"], f"total 应为 {_exp['total']},实际 {total}"
+assert len(items) == len(_exp["data"]), f"应返回 {len(_exp['data'])} 条,实际 {len(items)}"
+assert items == _exp["data"], "items 与接口真实数据不一致,请检查取的是否为 data 字段" `,
+      hintSteps: ["JSON 接口返回结构: code / message / total / data[]。", "data = requests.get(url, timeout=10).json() 一步拿到整个字典。", "items = data['data']; total = data['total'],然后打印验证。"],
+      explanation: '直连 JSON 接口是效率最高的方式。判定器独立请求接口并逐条比对,确保你的解析与真实数据结构完全吻合。',
     }
   ],
   '04': [
@@ -1080,6 +1286,7 @@ assert isinstance(items[0], dict) and 'name' in items[0], "条目应为字典且
       title: '实操题 1:抓取「经典影片榜单」列表',
       skills: ["请求", "解析"],
       maxScore: 10,
+      question: `<h4>任务:抓取「经典影片榜单」榜单</h4><p>请求 <code>SITE_BASE + "/practice/course-test-04/"</code>,用 Python 爬虫解析页面数据。</p><p><strong>要点:</strong></p><ul><li>靶站为静态 HTML 表格,数据为虚构教学数据</li><li>判分器会<strong>独立重新抓取靶站</strong>生成期望值,与你提交的结果<strong>逐项比对</strong>,无法靠数行数或伪造变量通过</li><li>注意编码:<code>r.encoding = "utf-8"</code> 避免中文乱码</li></ul><p><strong>要求:</strong>用 CSS 选择器提取表格中所有行,存入变量 <code>rows</code>。</p><p class="ce-q-spec">判定标准:rows 数量与顺序必须和靶站真实表格行完全一致(24 行);且每行必须是 BeautifulSoup 解析出的对象。</p>`,
       starter: `import requests
 from bs4 import BeautifulSoup
 
@@ -1087,20 +1294,28 @@ r = requests.get(SITE_BASE + "/practice/course-test-04/", timeout=10)
 r.encoding = "utf-8"
 soup = BeautifulSoup(r.text, "html.parser")
 
-# TODO 1: 用 CSS 选择器提取所有表格行,存入变量 rows(提示:tbody tr)
-# rows = ...
-
-print("抓到行数:", len(rows))`,
-      check: `assert 'rows' in globals(), "未定义变量 rows,请先把表格行存入 rows"
-assert len(rows) == 24, f"应抓到 24 行,实际 {len(rows)}"`,
-      hintSteps: ["表格行在 <tbody> 里,每行是 <tr>。CSS 选择器怎么写?", "soup.select('tbody tr') 会返回所有表格行,直接赋给 rows 即可。", "运行后应看到 '抓到行数: 24'。"],
-      explanation: '「经典影片榜单」列表页是单页表格,核心套路:requests 请求 → r.encoding 修正编码 → BeautifulSoup 定位 → select 提取。这是所有爬虫的第一步。',
+# TODO: 用 CSS 选择器把表格中所有行存入变量 rows(提示: tbody tr)
+# rows = ...`,
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/course-test-04/", timeout=10)
+_src.encoding = "utf-8"
+_soup = _bs(_src.text, "html.parser")
+_expect = [_tr.select("td")[1].get_text().strip() for _tr in _soup.select("tbody tr")]
+assert 'rows' in globals(), "未定义变量 rows,请先把表格行存入 rows"
+assert isinstance(rows, list) and len(rows) == len(_expect), f"行数应为 {len(_expect)},实际 {len(rows)}"
+assert hasattr(rows[0], "select"), "rows 元素应为 BeautifulSoup 解析出的行对象,请用 soup.select() 提取"
+_got = [row.select("td")[1].get_text().strip() for row in rows]
+assert _got == _expect, "提取的名称与靶站真实数据不一致,请检查选择器与下标" `,
+      hintSteps: ["表格行在 <tbody> 里,每行是 <tr>。soup.select('tbody tr') 是标准做法。", "判分器会重新抓靶站逐行比对——所以必须真实解析,不能伪造列表。", "运行后应看到 '抓到行数: 24'。"],
+      explanation: '「经典影片榜单」列表页是单页表格。测试用例式判定要求你真正解析出与靶站一致的数据——这是爬虫的核心:让代码与页面结构精确对应。',
     },
     {
       id: 'course-test-04-t2',
       title: '实操题 2:提取「电影」名称与价格',
       skills: ["解析"],
       maxScore: 10,
+      question: `<h4>任务:抓取「经典影片榜单」榜单</h4><p>请求 <code>SITE_BASE + "/practice/course-test-04/"</code>,用 Python 爬虫解析页面数据。</p><p><strong>要点:</strong></p><ul><li>靶站为静态 HTML 表格,数据为虚构教学数据</li><li>判分器会<strong>独立重新抓取靶站</strong>生成期望值,与你提交的结果<strong>逐项比对</strong>,无法靠数行数或伪造变量通过</li><li>注意编码:<code>r.encoding = "utf-8"</code> 避免中文乱码</li></ul><p><strong>要求:</strong>遍历表格行,把每行的<strong>名称</strong>(第 2 个 td)与<strong>价格</strong>(第 5 个 td)提取为元组,全部存入变量 <code>items</code>。</p><p class="ce-q-spec">判定标准:items 必须与靶站真实数据<strong>逐条完全一致</strong>(名称与价格,含顺序)。</p>`,
       starter: `import requests
 from bs4 import BeautifulSoup
 
@@ -1109,40 +1324,50 @@ r.encoding = "utf-8"
 soup = BeautifulSoup(r.text, "html.parser")
 rows = soup.select("tbody tr")
 
-# TODO 1: 遍历 rows,把每行的第 2 个 td(名称)与第 5 个 td(价格)提取为元组
-# 全部存入变量 items(提示:row.select("td") 取该行的单元格)
+# TODO: 遍历 rows,提取每行的名称(td 第 2 列)与价格(td 第 5 列)为 (名称, 价格) 元组,
+# 全部存入变量 items(提示: row.select("td") 取该行单元格)
 # items = ...
 
 print("条目数:", len(items))
 print("样例:", items[0] if items else None)`,
-      check: `assert 'items' in globals() and isinstance(items, list), "请把提取结果存入变量 items"
-assert len(items) == 24, f"应提取 24 条,实际 {len(items)}"
-name, price = items[0]
-assert isinstance(name, str) and price.startswith("¥"), "第 1 条应为 (名称, 价格) 元组且价格以 ¥ 开头"`,
-      hintSteps: ["每行有 6 个 td:编号/名称/类别/品牌/价格/评分。名称是第 2 个(td[1]),价格是第 5 个(td[4])。", "列表推导式 [ (row.select('td')[1].get_text(), row.select('td')[4].get_text()) for row in rows ]。", "用 .strip() 去掉首尾空白,价格单元格里有 ¥ 前缀。"],
-      explanation: '字段提取的关键是定位列位置:电影名称在第 2 列、价格在第 5 列。列位置一变,选择器或下标就要跟着变——这是真实爬虫里最常见的坑。',
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/course-test-04/", timeout=10)
+_src.encoding = "utf-8"
+_soup = _bs(_src.text, "html.parser")
+_expect = [(_tr.select("td")[1].get_text().strip(), _tr.select("td")[4].get_text().strip())
+           for _tr in _soup.select("tbody tr")]
+assert 'items' in globals() and isinstance(items, list), "请把提取结果存入变量 items"
+assert len(items) == len(_expect), f"应提取 {len(_expect)} 条,实际 {len(items)}"
+assert items == _expect, "提取的 (名称, 价格) 与靶站真实数据不一致,请检查列下标与去空白" `,
+      hintSteps: ["每行有 6 个 td:编号/名称/类别/品牌/价格/评分。名称是第 2 个(td[1]),价格是第 5 个(td[4])。", "列表推导式 [ (row.select('td')[1].get_text().strip(), row.select('td')[4].get_text().strip()) for row in rows ]。", "用 .strip() 去掉首尾空白——判分器比对的是精确值,多余空格会导致不一致。"],
+      explanation: '字段提取的关键是列定位:名称第 2 列、价格第 5 列。判定器用靶站真实数据逐条比对,这正是生产环境校验爬虫输出的方式。',
     },
     {
       id: 'course-test-04-t3',
       title: '实操题 3:直连「经典影片榜单」JSON 接口',
       skills: ["请求", "存储"],
       maxScore: 10,
+      question: `<h4>任务:直连「经典影片榜单」JSON 接口</h4><p>请求 <code>/practice/course-test-04/api/items.json</code>,解析 JSON 数据。</p><p><strong>要求:</strong></p><ul><li>把 <code>data</code> 字段(条目列表)存入变量 <code>items</code></li><li>把 <code>total</code> 字段(总数)存入变量 <code>total</code></li></ul><p class="ce-q-spec">判定标准:items 必须与接口真实返回的 40 条数据完全一致;total == 40。判分器会独立请求接口比对。</p>`,
       starter: `import requests
 
-# TODO 1: 请求 JSON 接口(路径 /api/items.json,拼接在靶站 base 后),用 .json() 解析
-# 把 data 字段存入变量 items,把 total 字段存入变量 total
-# URL = SITE_BASE + "/practice/course-test-04/api/items.json"
-# data = ...
+# TODO: 请求 JSON 接口,用 .json() 解析
+# 把 data 字段(列表)存入变量 items,把 total 字段存入变量 total
+# data = requests.get(f"SITE_BASE/practice/course-test-04/api/items.json", timeout=10).json()
 # items = ...
 # total = ...
 
 print("total:", total)
 print("条目数:", len(items))`,
-      check: `assert 'items' in globals() and len(items) == 40, f"JSON 接口应返回 40 条,实际 {len(items)}"
-assert 'total' in globals() and total == 40, f"total 应为 40,实际 {total}"
-assert isinstance(items[0], dict) and 'name' in items[0], "条目应为字典且包含 name 字段"`,
-      hintSteps: ["JSON 接口返回结构: code / message / total / data[]。", "data = requests.get(url, timeout=10).json() 一步拿到整个字典。", "items = data['data'],total = data['total'],然后打印验证。"],
-      explanation: '直连 JSON 接口是效率最高的方式:返回结构即数据本身,无需解析 HTML。判断一个页面是静态还是动态,先在 Network 面板找 JSON 请求是最快的路径。',
+      check: `import requests as _rq
+_exp = _rq.get(SITE_BASE + "/practice/course-test-04/api/items.json", timeout=10).json()
+assert 'items' in globals() and isinstance(items, list), "请把 data 字段存入变量 items"
+assert 'total' in globals(), "请把 total 字段存入变量 total"
+assert total == _exp["total"], f"total 应为 {_exp['total']},实际 {total}"
+assert len(items) == len(_exp["data"]), f"应返回 {len(_exp['data'])} 条,实际 {len(items)}"
+assert items == _exp["data"], "items 与接口真实数据不一致,请检查取的是否为 data 字段" `,
+      hintSteps: ["JSON 接口返回结构: code / message / total / data[]。", "data = requests.get(url, timeout=10).json() 一步拿到整个字典。", "items = data['data']; total = data['total'],然后打印验证。"],
+      explanation: '直连 JSON 接口是效率最高的方式。判定器独立请求接口并逐条比对,确保你的解析与真实数据结构完全吻合。',
     }
   ],
   '05': [
@@ -1151,6 +1376,7 @@ assert isinstance(items[0], dict) and 'name' in items[0], "条目应为字典且
       title: '实操题 1:抓取「人气餐厅推荐」列表',
       skills: ["请求", "解析"],
       maxScore: 10,
+      question: `<h4>任务:抓取「人气餐厅推荐」榜单</h4><p>请求 <code>SITE_BASE + "/practice/course-test-05/"</code>,用 Python 爬虫解析页面数据。</p><p><strong>要点:</strong></p><ul><li>靶站为静态 HTML 表格,数据为虚构教学数据</li><li>判分器会<strong>独立重新抓取靶站</strong>生成期望值,与你提交的结果<strong>逐项比对</strong>,无法靠数行数或伪造变量通过</li><li>注意编码:<code>r.encoding = "utf-8"</code> 避免中文乱码</li></ul><p><strong>要求:</strong>用 CSS 选择器提取表格中所有行,存入变量 <code>rows</code>。</p><p class="ce-q-spec">判定标准:rows 数量与顺序必须和靶站真实表格行完全一致(24 行);且每行必须是 BeautifulSoup 解析出的对象。</p>`,
       starter: `import requests
 from bs4 import BeautifulSoup
 
@@ -1158,20 +1384,28 @@ r = requests.get(SITE_BASE + "/practice/course-test-05/", timeout=10)
 r.encoding = "utf-8"
 soup = BeautifulSoup(r.text, "html.parser")
 
-# TODO 1: 用 CSS 选择器提取所有表格行,存入变量 rows(提示:tbody tr)
-# rows = ...
-
-print("抓到行数:", len(rows))`,
-      check: `assert 'rows' in globals(), "未定义变量 rows,请先把表格行存入 rows"
-assert len(rows) == 24, f"应抓到 24 行,实际 {len(rows)}"`,
-      hintSteps: ["表格行在 <tbody> 里,每行是 <tr>。CSS 选择器怎么写?", "soup.select('tbody tr') 会返回所有表格行,直接赋给 rows 即可。", "运行后应看到 '抓到行数: 24'。"],
-      explanation: '「人气餐厅推荐」列表页是单页表格,核心套路:requests 请求 → r.encoding 修正编码 → BeautifulSoup 定位 → select 提取。这是所有爬虫的第一步。',
+# TODO: 用 CSS 选择器把表格中所有行存入变量 rows(提示: tbody tr)
+# rows = ...`,
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/course-test-05/", timeout=10)
+_src.encoding = "utf-8"
+_soup = _bs(_src.text, "html.parser")
+_expect = [_tr.select("td")[1].get_text().strip() for _tr in _soup.select("tbody tr")]
+assert 'rows' in globals(), "未定义变量 rows,请先把表格行存入 rows"
+assert isinstance(rows, list) and len(rows) == len(_expect), f"行数应为 {len(_expect)},实际 {len(rows)}"
+assert hasattr(rows[0], "select"), "rows 元素应为 BeautifulSoup 解析出的行对象,请用 soup.select() 提取"
+_got = [row.select("td")[1].get_text().strip() for row in rows]
+assert _got == _expect, "提取的名称与靶站真实数据不一致,请检查选择器与下标" `,
+      hintSteps: ["表格行在 <tbody> 里,每行是 <tr>。soup.select('tbody tr') 是标准做法。", "判分器会重新抓靶站逐行比对——所以必须真实解析,不能伪造列表。", "运行后应看到 '抓到行数: 24'。"],
+      explanation: '「人气餐厅推荐」列表页是单页表格。测试用例式判定要求你真正解析出与靶站一致的数据——这是爬虫的核心:让代码与页面结构精确对应。',
     },
     {
       id: 'course-test-05-t2',
       title: '实操题 2:提取「餐厅」名称与价格',
       skills: ["解析"],
       maxScore: 10,
+      question: `<h4>任务:抓取「人气餐厅推荐」榜单</h4><p>请求 <code>SITE_BASE + "/practice/course-test-05/"</code>,用 Python 爬虫解析页面数据。</p><p><strong>要点:</strong></p><ul><li>靶站为静态 HTML 表格,数据为虚构教学数据</li><li>判分器会<strong>独立重新抓取靶站</strong>生成期望值,与你提交的结果<strong>逐项比对</strong>,无法靠数行数或伪造变量通过</li><li>注意编码:<code>r.encoding = "utf-8"</code> 避免中文乱码</li></ul><p><strong>要求:</strong>遍历表格行,把每行的<strong>名称</strong>(第 2 个 td)与<strong>价格</strong>(第 5 个 td)提取为元组,全部存入变量 <code>items</code>。</p><p class="ce-q-spec">判定标准:items 必须与靶站真实数据<strong>逐条完全一致</strong>(名称与价格,含顺序)。</p>`,
       starter: `import requests
 from bs4 import BeautifulSoup
 
@@ -1180,40 +1414,50 @@ r.encoding = "utf-8"
 soup = BeautifulSoup(r.text, "html.parser")
 rows = soup.select("tbody tr")
 
-# TODO 1: 遍历 rows,把每行的第 2 个 td(名称)与第 5 个 td(价格)提取为元组
-# 全部存入变量 items(提示:row.select("td") 取该行的单元格)
+# TODO: 遍历 rows,提取每行的名称(td 第 2 列)与价格(td 第 5 列)为 (名称, 价格) 元组,
+# 全部存入变量 items(提示: row.select("td") 取该行单元格)
 # items = ...
 
 print("条目数:", len(items))
 print("样例:", items[0] if items else None)`,
-      check: `assert 'items' in globals() and isinstance(items, list), "请把提取结果存入变量 items"
-assert len(items) == 24, f"应提取 24 条,实际 {len(items)}"
-name, price = items[0]
-assert isinstance(name, str) and price.startswith("¥"), "第 1 条应为 (名称, 价格) 元组且价格以 ¥ 开头"`,
-      hintSteps: ["每行有 6 个 td:编号/名称/类别/品牌/价格/评分。名称是第 2 个(td[1]),价格是第 5 个(td[4])。", "列表推导式 [ (row.select('td')[1].get_text(), row.select('td')[4].get_text()) for row in rows ]。", "用 .strip() 去掉首尾空白,价格单元格里有 ¥ 前缀。"],
-      explanation: '字段提取的关键是定位列位置:餐厅名称在第 2 列、价格在第 5 列。列位置一变,选择器或下标就要跟着变——这是真实爬虫里最常见的坑。',
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/course-test-05/", timeout=10)
+_src.encoding = "utf-8"
+_soup = _bs(_src.text, "html.parser")
+_expect = [(_tr.select("td")[1].get_text().strip(), _tr.select("td")[4].get_text().strip())
+           for _tr in _soup.select("tbody tr")]
+assert 'items' in globals() and isinstance(items, list), "请把提取结果存入变量 items"
+assert len(items) == len(_expect), f"应提取 {len(_expect)} 条,实际 {len(items)}"
+assert items == _expect, "提取的 (名称, 价格) 与靶站真实数据不一致,请检查列下标与去空白" `,
+      hintSteps: ["每行有 6 个 td:编号/名称/类别/品牌/价格/评分。名称是第 2 个(td[1]),价格是第 5 个(td[4])。", "列表推导式 [ (row.select('td')[1].get_text().strip(), row.select('td')[4].get_text().strip()) for row in rows ]。", "用 .strip() 去掉首尾空白——判分器比对的是精确值,多余空格会导致不一致。"],
+      explanation: '字段提取的关键是列定位:名称第 2 列、价格第 5 列。判定器用靶站真实数据逐条比对,这正是生产环境校验爬虫输出的方式。',
     },
     {
       id: 'course-test-05-t3',
       title: '实操题 3:直连「人气餐厅推荐」JSON 接口',
       skills: ["请求", "存储"],
       maxScore: 10,
+      question: `<h4>任务:直连「人气餐厅推荐」JSON 接口</h4><p>请求 <code>/practice/course-test-05/api/items.json</code>,解析 JSON 数据。</p><p><strong>要求:</strong></p><ul><li>把 <code>data</code> 字段(条目列表)存入变量 <code>items</code></li><li>把 <code>total</code> 字段(总数)存入变量 <code>total</code></li></ul><p class="ce-q-spec">判定标准:items 必须与接口真实返回的 40 条数据完全一致;total == 40。判分器会独立请求接口比对。</p>`,
       starter: `import requests
 
-# TODO 1: 请求 JSON 接口(路径 /api/items.json,拼接在靶站 base 后),用 .json() 解析
-# 把 data 字段存入变量 items,把 total 字段存入变量 total
-# URL = SITE_BASE + "/practice/course-test-05/api/items.json"
-# data = ...
+# TODO: 请求 JSON 接口,用 .json() 解析
+# 把 data 字段(列表)存入变量 items,把 total 字段存入变量 total
+# data = requests.get(f"SITE_BASE/practice/course-test-05/api/items.json", timeout=10).json()
 # items = ...
 # total = ...
 
 print("total:", total)
 print("条目数:", len(items))`,
-      check: `assert 'items' in globals() and len(items) == 40, f"JSON 接口应返回 40 条,实际 {len(items)}"
-assert 'total' in globals() and total == 40, f"total 应为 40,实际 {total}"
-assert isinstance(items[0], dict) and 'name' in items[0], "条目应为字典且包含 name 字段"`,
-      hintSteps: ["JSON 接口返回结构: code / message / total / data[]。", "data = requests.get(url, timeout=10).json() 一步拿到整个字典。", "items = data['data'],total = data['total'],然后打印验证。"],
-      explanation: '直连 JSON 接口是效率最高的方式:返回结构即数据本身,无需解析 HTML。判断一个页面是静态还是动态,先在 Network 面板找 JSON 请求是最快的路径。',
+      check: `import requests as _rq
+_exp = _rq.get(SITE_BASE + "/practice/course-test-05/api/items.json", timeout=10).json()
+assert 'items' in globals() and isinstance(items, list), "请把 data 字段存入变量 items"
+assert 'total' in globals(), "请把 total 字段存入变量 total"
+assert total == _exp["total"], f"total 应为 {_exp['total']},实际 {total}"
+assert len(items) == len(_exp["data"]), f"应返回 {len(_exp['data'])} 条,实际 {len(items)}"
+assert items == _exp["data"], "items 与接口真实数据不一致,请检查取的是否为 data 字段" `,
+      hintSteps: ["JSON 接口返回结构: code / message / total / data[]。", "data = requests.get(url, timeout=10).json() 一步拿到整个字典。", "items = data['data']; total = data['total'],然后打印验证。"],
+      explanation: '直连 JSON 接口是效率最高的方式。判定器独立请求接口并逐条比对,确保你的解析与真实数据结构完全吻合。',
     }
   ],
   '06': [
@@ -1222,6 +1466,7 @@ assert isinstance(items[0], dict) and 'name' in items[0], "条目应为字典且
       title: '实操题 1:抓取「健身器材精选」列表',
       skills: ["请求", "解析"],
       maxScore: 10,
+      question: `<h4>任务:抓取「健身器材精选」榜单</h4><p>请求 <code>SITE_BASE + "/practice/course-test-06/"</code>,用 Python 爬虫解析页面数据。</p><p><strong>要点:</strong></p><ul><li>靶站为静态 HTML 表格,数据为虚构教学数据</li><li>判分器会<strong>独立重新抓取靶站</strong>生成期望值,与你提交的结果<strong>逐项比对</strong>,无法靠数行数或伪造变量通过</li><li>注意编码:<code>r.encoding = "utf-8"</code> 避免中文乱码</li></ul><p><strong>要求:</strong>用 CSS 选择器提取表格中所有行,存入变量 <code>rows</code>。</p><p class="ce-q-spec">判定标准:rows 数量与顺序必须和靶站真实表格行完全一致(24 行);且每行必须是 BeautifulSoup 解析出的对象。</p>`,
       starter: `import requests
 from bs4 import BeautifulSoup
 
@@ -1229,20 +1474,28 @@ r = requests.get(SITE_BASE + "/practice/course-test-06/", timeout=10)
 r.encoding = "utf-8"
 soup = BeautifulSoup(r.text, "html.parser")
 
-# TODO 1: 用 CSS 选择器提取所有表格行,存入变量 rows(提示:tbody tr)
-# rows = ...
-
-print("抓到行数:", len(rows))`,
-      check: `assert 'rows' in globals(), "未定义变量 rows,请先把表格行存入 rows"
-assert len(rows) == 24, f"应抓到 24 行,实际 {len(rows)}"`,
-      hintSteps: ["表格行在 <tbody> 里,每行是 <tr>。CSS 选择器怎么写?", "soup.select('tbody tr') 会返回所有表格行,直接赋给 rows 即可。", "运行后应看到 '抓到行数: 24'。"],
-      explanation: '「健身器材精选」列表页是单页表格,核心套路:requests 请求 → r.encoding 修正编码 → BeautifulSoup 定位 → select 提取。这是所有爬虫的第一步。',
+# TODO: 用 CSS 选择器把表格中所有行存入变量 rows(提示: tbody tr)
+# rows = ...`,
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/course-test-06/", timeout=10)
+_src.encoding = "utf-8"
+_soup = _bs(_src.text, "html.parser")
+_expect = [_tr.select("td")[1].get_text().strip() for _tr in _soup.select("tbody tr")]
+assert 'rows' in globals(), "未定义变量 rows,请先把表格行存入 rows"
+assert isinstance(rows, list) and len(rows) == len(_expect), f"行数应为 {len(_expect)},实际 {len(rows)}"
+assert hasattr(rows[0], "select"), "rows 元素应为 BeautifulSoup 解析出的行对象,请用 soup.select() 提取"
+_got = [row.select("td")[1].get_text().strip() for row in rows]
+assert _got == _expect, "提取的名称与靶站真实数据不一致,请检查选择器与下标" `,
+      hintSteps: ["表格行在 <tbody> 里,每行是 <tr>。soup.select('tbody tr') 是标准做法。", "判分器会重新抓靶站逐行比对——所以必须真实解析,不能伪造列表。", "运行后应看到 '抓到行数: 24'。"],
+      explanation: '「健身器材精选」列表页是单页表格。测试用例式判定要求你真正解析出与靶站一致的数据——这是爬虫的核心:让代码与页面结构精确对应。',
     },
     {
       id: 'course-test-06-t2',
       title: '实操题 2:提取「器材」名称与价格',
       skills: ["解析"],
       maxScore: 10,
+      question: `<h4>任务:抓取「健身器材精选」榜单</h4><p>请求 <code>SITE_BASE + "/practice/course-test-06/"</code>,用 Python 爬虫解析页面数据。</p><p><strong>要点:</strong></p><ul><li>靶站为静态 HTML 表格,数据为虚构教学数据</li><li>判分器会<strong>独立重新抓取靶站</strong>生成期望值,与你提交的结果<strong>逐项比对</strong>,无法靠数行数或伪造变量通过</li><li>注意编码:<code>r.encoding = "utf-8"</code> 避免中文乱码</li></ul><p><strong>要求:</strong>遍历表格行,把每行的<strong>名称</strong>(第 2 个 td)与<strong>价格</strong>(第 5 个 td)提取为元组,全部存入变量 <code>items</code>。</p><p class="ce-q-spec">判定标准:items 必须与靶站真实数据<strong>逐条完全一致</strong>(名称与价格,含顺序)。</p>`,
       starter: `import requests
 from bs4 import BeautifulSoup
 
@@ -1251,40 +1504,50 @@ r.encoding = "utf-8"
 soup = BeautifulSoup(r.text, "html.parser")
 rows = soup.select("tbody tr")
 
-# TODO 1: 遍历 rows,把每行的第 2 个 td(名称)与第 5 个 td(价格)提取为元组
-# 全部存入变量 items(提示:row.select("td") 取该行的单元格)
+# TODO: 遍历 rows,提取每行的名称(td 第 2 列)与价格(td 第 5 列)为 (名称, 价格) 元组,
+# 全部存入变量 items(提示: row.select("td") 取该行单元格)
 # items = ...
 
 print("条目数:", len(items))
 print("样例:", items[0] if items else None)`,
-      check: `assert 'items' in globals() and isinstance(items, list), "请把提取结果存入变量 items"
-assert len(items) == 24, f"应提取 24 条,实际 {len(items)}"
-name, price = items[0]
-assert isinstance(name, str) and price.startswith("¥"), "第 1 条应为 (名称, 价格) 元组且价格以 ¥ 开头"`,
-      hintSteps: ["每行有 6 个 td:编号/名称/类别/品牌/价格/评分。名称是第 2 个(td[1]),价格是第 5 个(td[4])。", "列表推导式 [ (row.select('td')[1].get_text(), row.select('td')[4].get_text()) for row in rows ]。", "用 .strip() 去掉首尾空白,价格单元格里有 ¥ 前缀。"],
-      explanation: '字段提取的关键是定位列位置:器材名称在第 2 列、价格在第 5 列。列位置一变,选择器或下标就要跟着变——这是真实爬虫里最常见的坑。',
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/course-test-06/", timeout=10)
+_src.encoding = "utf-8"
+_soup = _bs(_src.text, "html.parser")
+_expect = [(_tr.select("td")[1].get_text().strip(), _tr.select("td")[4].get_text().strip())
+           for _tr in _soup.select("tbody tr")]
+assert 'items' in globals() and isinstance(items, list), "请把提取结果存入变量 items"
+assert len(items) == len(_expect), f"应提取 {len(_expect)} 条,实际 {len(items)}"
+assert items == _expect, "提取的 (名称, 价格) 与靶站真实数据不一致,请检查列下标与去空白" `,
+      hintSteps: ["每行有 6 个 td:编号/名称/类别/品牌/价格/评分。名称是第 2 个(td[1]),价格是第 5 个(td[4])。", "列表推导式 [ (row.select('td')[1].get_text().strip(), row.select('td')[4].get_text().strip()) for row in rows ]。", "用 .strip() 去掉首尾空白——判分器比对的是精确值,多余空格会导致不一致。"],
+      explanation: '字段提取的关键是列定位:名称第 2 列、价格第 5 列。判定器用靶站真实数据逐条比对,这正是生产环境校验爬虫输出的方式。',
     },
     {
       id: 'course-test-06-t3',
       title: '实操题 3:直连「健身器材精选」JSON 接口',
       skills: ["请求", "存储"],
       maxScore: 10,
+      question: `<h4>任务:直连「健身器材精选」JSON 接口</h4><p>请求 <code>/practice/course-test-06/api/items.json</code>,解析 JSON 数据。</p><p><strong>要求:</strong></p><ul><li>把 <code>data</code> 字段(条目列表)存入变量 <code>items</code></li><li>把 <code>total</code> 字段(总数)存入变量 <code>total</code></li></ul><p class="ce-q-spec">判定标准:items 必须与接口真实返回的 40 条数据完全一致;total == 40。判分器会独立请求接口比对。</p>`,
       starter: `import requests
 
-# TODO 1: 请求 JSON 接口(路径 /api/items.json,拼接在靶站 base 后),用 .json() 解析
-# 把 data 字段存入变量 items,把 total 字段存入变量 total
-# URL = SITE_BASE + "/practice/course-test-06/api/items.json"
-# data = ...
+# TODO: 请求 JSON 接口,用 .json() 解析
+# 把 data 字段(列表)存入变量 items,把 total 字段存入变量 total
+# data = requests.get(f"SITE_BASE/practice/course-test-06/api/items.json", timeout=10).json()
 # items = ...
 # total = ...
 
 print("total:", total)
 print("条目数:", len(items))`,
-      check: `assert 'items' in globals() and len(items) == 40, f"JSON 接口应返回 40 条,实际 {len(items)}"
-assert 'total' in globals() and total == 40, f"total 应为 40,实际 {total}"
-assert isinstance(items[0], dict) and 'name' in items[0], "条目应为字典且包含 name 字段"`,
-      hintSteps: ["JSON 接口返回结构: code / message / total / data[]。", "data = requests.get(url, timeout=10).json() 一步拿到整个字典。", "items = data['data'],total = data['total'],然后打印验证。"],
-      explanation: '直连 JSON 接口是效率最高的方式:返回结构即数据本身,无需解析 HTML。判断一个页面是静态还是动态,先在 Network 面板找 JSON 请求是最快的路径。',
+      check: `import requests as _rq
+_exp = _rq.get(SITE_BASE + "/practice/course-test-06/api/items.json", timeout=10).json()
+assert 'items' in globals() and isinstance(items, list), "请把 data 字段存入变量 items"
+assert 'total' in globals(), "请把 total 字段存入变量 total"
+assert total == _exp["total"], f"total 应为 {_exp['total']},实际 {total}"
+assert len(items) == len(_exp["data"]), f"应返回 {len(_exp['data'])} 条,实际 {len(items)}"
+assert items == _exp["data"], "items 与接口真实数据不一致,请检查取的是否为 data 字段" `,
+      hintSteps: ["JSON 接口返回结构: code / message / total / data[]。", "data = requests.get(url, timeout=10).json() 一步拿到整个字典。", "items = data['data']; total = data['total'],然后打印验证。"],
+      explanation: '直连 JSON 接口是效率最高的方式。判定器独立请求接口并逐条比对,确保你的解析与真实数据结构完全吻合。',
     }
   ],
   '07': [
@@ -1293,6 +1556,7 @@ assert isinstance(items[0], dict) and 'name' in items[0], "条目应为字典且
       title: '实操题 1:抓取「热门景点排行」列表',
       skills: ["请求", "解析"],
       maxScore: 10,
+      question: `<h4>任务:抓取「热门景点排行」榜单</h4><p>请求 <code>SITE_BASE + "/practice/course-test-07/"</code>,用 Python 爬虫解析页面数据。</p><p><strong>要点:</strong></p><ul><li>靶站为静态 HTML 表格,数据为虚构教学数据</li><li>判分器会<strong>独立重新抓取靶站</strong>生成期望值,与你提交的结果<strong>逐项比对</strong>,无法靠数行数或伪造变量通过</li><li>注意编码:<code>r.encoding = "utf-8"</code> 避免中文乱码</li></ul><p><strong>要求:</strong>用 CSS 选择器提取表格中所有行,存入变量 <code>rows</code>。</p><p class="ce-q-spec">判定标准:rows 数量与顺序必须和靶站真实表格行完全一致(24 行);且每行必须是 BeautifulSoup 解析出的对象。</p>`,
       starter: `import requests
 from bs4 import BeautifulSoup
 
@@ -1300,20 +1564,28 @@ r = requests.get(SITE_BASE + "/practice/course-test-07/", timeout=10)
 r.encoding = "utf-8"
 soup = BeautifulSoup(r.text, "html.parser")
 
-# TODO 1: 用 CSS 选择器提取所有表格行,存入变量 rows(提示:tbody tr)
-# rows = ...
-
-print("抓到行数:", len(rows))`,
-      check: `assert 'rows' in globals(), "未定义变量 rows,请先把表格行存入 rows"
-assert len(rows) == 24, f"应抓到 24 行,实际 {len(rows)}"`,
-      hintSteps: ["表格行在 <tbody> 里,每行是 <tr>。CSS 选择器怎么写?", "soup.select('tbody tr') 会返回所有表格行,直接赋给 rows 即可。", "运行后应看到 '抓到行数: 24'。"],
-      explanation: '「热门景点排行」列表页是单页表格,核心套路:requests 请求 → r.encoding 修正编码 → BeautifulSoup 定位 → select 提取。这是所有爬虫的第一步。',
+# TODO: 用 CSS 选择器把表格中所有行存入变量 rows(提示: tbody tr)
+# rows = ...`,
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/course-test-07/", timeout=10)
+_src.encoding = "utf-8"
+_soup = _bs(_src.text, "html.parser")
+_expect = [_tr.select("td")[1].get_text().strip() for _tr in _soup.select("tbody tr")]
+assert 'rows' in globals(), "未定义变量 rows,请先把表格行存入 rows"
+assert isinstance(rows, list) and len(rows) == len(_expect), f"行数应为 {len(_expect)},实际 {len(rows)}"
+assert hasattr(rows[0], "select"), "rows 元素应为 BeautifulSoup 解析出的行对象,请用 soup.select() 提取"
+_got = [row.select("td")[1].get_text().strip() for row in rows]
+assert _got == _expect, "提取的名称与靶站真实数据不一致,请检查选择器与下标" `,
+      hintSteps: ["表格行在 <tbody> 里,每行是 <tr>。soup.select('tbody tr') 是标准做法。", "判分器会重新抓靶站逐行比对——所以必须真实解析,不能伪造列表。", "运行后应看到 '抓到行数: 24'。"],
+      explanation: '「热门景点排行」列表页是单页表格。测试用例式判定要求你真正解析出与靶站一致的数据——这是爬虫的核心:让代码与页面结构精确对应。',
     },
     {
       id: 'course-test-07-t2',
       title: '实操题 2:提取「景点」名称与价格',
       skills: ["解析"],
       maxScore: 10,
+      question: `<h4>任务:抓取「热门景点排行」榜单</h4><p>请求 <code>SITE_BASE + "/practice/course-test-07/"</code>,用 Python 爬虫解析页面数据。</p><p><strong>要点:</strong></p><ul><li>靶站为静态 HTML 表格,数据为虚构教学数据</li><li>判分器会<strong>独立重新抓取靶站</strong>生成期望值,与你提交的结果<strong>逐项比对</strong>,无法靠数行数或伪造变量通过</li><li>注意编码:<code>r.encoding = "utf-8"</code> 避免中文乱码</li></ul><p><strong>要求:</strong>遍历表格行,把每行的<strong>名称</strong>(第 2 个 td)与<strong>价格</strong>(第 5 个 td)提取为元组,全部存入变量 <code>items</code>。</p><p class="ce-q-spec">判定标准:items 必须与靶站真实数据<strong>逐条完全一致</strong>(名称与价格,含顺序)。</p>`,
       starter: `import requests
 from bs4 import BeautifulSoup
 
@@ -1322,40 +1594,50 @@ r.encoding = "utf-8"
 soup = BeautifulSoup(r.text, "html.parser")
 rows = soup.select("tbody tr")
 
-# TODO 1: 遍历 rows,把每行的第 2 个 td(名称)与第 5 个 td(价格)提取为元组
-# 全部存入变量 items(提示:row.select("td") 取该行的单元格)
+# TODO: 遍历 rows,提取每行的名称(td 第 2 列)与价格(td 第 5 列)为 (名称, 价格) 元组,
+# 全部存入变量 items(提示: row.select("td") 取该行单元格)
 # items = ...
 
 print("条目数:", len(items))
 print("样例:", items[0] if items else None)`,
-      check: `assert 'items' in globals() and isinstance(items, list), "请把提取结果存入变量 items"
-assert len(items) == 24, f"应提取 24 条,实际 {len(items)}"
-name, price = items[0]
-assert isinstance(name, str) and price.startswith("¥"), "第 1 条应为 (名称, 价格) 元组且价格以 ¥ 开头"`,
-      hintSteps: ["每行有 6 个 td:编号/名称/类别/品牌/价格/评分。名称是第 2 个(td[1]),价格是第 5 个(td[4])。", "列表推导式 [ (row.select('td')[1].get_text(), row.select('td')[4].get_text()) for row in rows ]。", "用 .strip() 去掉首尾空白,价格单元格里有 ¥ 前缀。"],
-      explanation: '字段提取的关键是定位列位置:景点名称在第 2 列、价格在第 5 列。列位置一变,选择器或下标就要跟着变——这是真实爬虫里最常见的坑。',
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/course-test-07/", timeout=10)
+_src.encoding = "utf-8"
+_soup = _bs(_src.text, "html.parser")
+_expect = [(_tr.select("td")[1].get_text().strip(), _tr.select("td")[4].get_text().strip())
+           for _tr in _soup.select("tbody tr")]
+assert 'items' in globals() and isinstance(items, list), "请把提取结果存入变量 items"
+assert len(items) == len(_expect), f"应提取 {len(_expect)} 条,实际 {len(items)}"
+assert items == _expect, "提取的 (名称, 价格) 与靶站真实数据不一致,请检查列下标与去空白" `,
+      hintSteps: ["每行有 6 个 td:编号/名称/类别/品牌/价格/评分。名称是第 2 个(td[1]),价格是第 5 个(td[4])。", "列表推导式 [ (row.select('td')[1].get_text().strip(), row.select('td')[4].get_text().strip()) for row in rows ]。", "用 .strip() 去掉首尾空白——判分器比对的是精确值,多余空格会导致不一致。"],
+      explanation: '字段提取的关键是列定位:名称第 2 列、价格第 5 列。判定器用靶站真实数据逐条比对,这正是生产环境校验爬虫输出的方式。',
     },
     {
       id: 'course-test-07-t3',
       title: '实操题 3:直连「热门景点排行」JSON 接口',
       skills: ["请求", "存储"],
       maxScore: 10,
+      question: `<h4>任务:直连「热门景点排行」JSON 接口</h4><p>请求 <code>/practice/course-test-07/api/items.json</code>,解析 JSON 数据。</p><p><strong>要求:</strong></p><ul><li>把 <code>data</code> 字段(条目列表)存入变量 <code>items</code></li><li>把 <code>total</code> 字段(总数)存入变量 <code>total</code></li></ul><p class="ce-q-spec">判定标准:items 必须与接口真实返回的 40 条数据完全一致;total == 40。判分器会独立请求接口比对。</p>`,
       starter: `import requests
 
-# TODO 1: 请求 JSON 接口(路径 /api/items.json,拼接在靶站 base 后),用 .json() 解析
-# 把 data 字段存入变量 items,把 total 字段存入变量 total
-# URL = SITE_BASE + "/practice/course-test-07/api/items.json"
-# data = ...
+# TODO: 请求 JSON 接口,用 .json() 解析
+# 把 data 字段(列表)存入变量 items,把 total 字段存入变量 total
+# data = requests.get(f"SITE_BASE/practice/course-test-07/api/items.json", timeout=10).json()
 # items = ...
 # total = ...
 
 print("total:", total)
 print("条目数:", len(items))`,
-      check: `assert 'items' in globals() and len(items) == 40, f"JSON 接口应返回 40 条,实际 {len(items)}"
-assert 'total' in globals() and total == 40, f"total 应为 40,实际 {total}"
-assert isinstance(items[0], dict) and 'name' in items[0], "条目应为字典且包含 name 字段"`,
-      hintSteps: ["JSON 接口返回结构: code / message / total / data[]。", "data = requests.get(url, timeout=10).json() 一步拿到整个字典。", "items = data['data'],total = data['total'],然后打印验证。"],
-      explanation: '直连 JSON 接口是效率最高的方式:返回结构即数据本身,无需解析 HTML。判断一个页面是静态还是动态,先在 Network 面板找 JSON 请求是最快的路径。',
+      check: `import requests as _rq
+_exp = _rq.get(SITE_BASE + "/practice/course-test-07/api/items.json", timeout=10).json()
+assert 'items' in globals() and isinstance(items, list), "请把 data 字段存入变量 items"
+assert 'total' in globals(), "请把 total 字段存入变量 total"
+assert total == _exp["total"], f"total 应为 {_exp['total']},实际 {total}"
+assert len(items) == len(_exp["data"]), f"应返回 {len(_exp['data'])} 条,实际 {len(items)}"
+assert items == _exp["data"], "items 与接口真实数据不一致,请检查取的是否为 data 字段" `,
+      hintSteps: ["JSON 接口返回结构: code / message / total / data[]。", "data = requests.get(url, timeout=10).json() 一步拿到整个字典。", "items = data['data']; total = data['total'],然后打印验证。"],
+      explanation: '直连 JSON 接口是效率最高的方式。判定器独立请求接口并逐条比对,确保你的解析与真实数据结构完全吻合。',
     }
   ],
   '08': [
@@ -1364,6 +1646,7 @@ assert isinstance(items[0], dict) and 'name' in items[0], "条目应为字典且
       title: '实操题 1:抓取「宠物好物推荐」列表',
       skills: ["请求", "解析"],
       maxScore: 10,
+      question: `<h4>任务:抓取「宠物好物推荐」榜单</h4><p>请求 <code>SITE_BASE + "/practice/course-test-08/"</code>,用 Python 爬虫解析页面数据。</p><p><strong>要点:</strong></p><ul><li>靶站为静态 HTML 表格,数据为虚构教学数据</li><li>判分器会<strong>独立重新抓取靶站</strong>生成期望值,与你提交的结果<strong>逐项比对</strong>,无法靠数行数或伪造变量通过</li><li>注意编码:<code>r.encoding = "utf-8"</code> 避免中文乱码</li></ul><p><strong>要求:</strong>用 CSS 选择器提取表格中所有行,存入变量 <code>rows</code>。</p><p class="ce-q-spec">判定标准:rows 数量与顺序必须和靶站真实表格行完全一致(24 行);且每行必须是 BeautifulSoup 解析出的对象。</p>`,
       starter: `import requests
 from bs4 import BeautifulSoup
 
@@ -1371,20 +1654,28 @@ r = requests.get(SITE_BASE + "/practice/course-test-08/", timeout=10)
 r.encoding = "utf-8"
 soup = BeautifulSoup(r.text, "html.parser")
 
-# TODO 1: 用 CSS 选择器提取所有表格行,存入变量 rows(提示:tbody tr)
-# rows = ...
-
-print("抓到行数:", len(rows))`,
-      check: `assert 'rows' in globals(), "未定义变量 rows,请先把表格行存入 rows"
-assert len(rows) == 24, f"应抓到 24 行,实际 {len(rows)}"`,
-      hintSteps: ["表格行在 <tbody> 里,每行是 <tr>。CSS 选择器怎么写?", "soup.select('tbody tr') 会返回所有表格行,直接赋给 rows 即可。", "运行后应看到 '抓到行数: 24'。"],
-      explanation: '「宠物好物推荐」列表页是单页表格,核心套路:requests 请求 → r.encoding 修正编码 → BeautifulSoup 定位 → select 提取。这是所有爬虫的第一步。',
+# TODO: 用 CSS 选择器把表格中所有行存入变量 rows(提示: tbody tr)
+# rows = ...`,
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/course-test-08/", timeout=10)
+_src.encoding = "utf-8"
+_soup = _bs(_src.text, "html.parser")
+_expect = [_tr.select("td")[1].get_text().strip() for _tr in _soup.select("tbody tr")]
+assert 'rows' in globals(), "未定义变量 rows,请先把表格行存入 rows"
+assert isinstance(rows, list) and len(rows) == len(_expect), f"行数应为 {len(_expect)},实际 {len(rows)}"
+assert hasattr(rows[0], "select"), "rows 元素应为 BeautifulSoup 解析出的行对象,请用 soup.select() 提取"
+_got = [row.select("td")[1].get_text().strip() for row in rows]
+assert _got == _expect, "提取的名称与靶站真实数据不一致,请检查选择器与下标" `,
+      hintSteps: ["表格行在 <tbody> 里,每行是 <tr>。soup.select('tbody tr') 是标准做法。", "判分器会重新抓靶站逐行比对——所以必须真实解析,不能伪造列表。", "运行后应看到 '抓到行数: 24'。"],
+      explanation: '「宠物好物推荐」列表页是单页表格。测试用例式判定要求你真正解析出与靶站一致的数据——这是爬虫的核心:让代码与页面结构精确对应。',
     },
     {
       id: 'course-test-08-t2',
       title: '实操题 2:提取「商品」名称与价格',
       skills: ["解析"],
       maxScore: 10,
+      question: `<h4>任务:抓取「宠物好物推荐」榜单</h4><p>请求 <code>SITE_BASE + "/practice/course-test-08/"</code>,用 Python 爬虫解析页面数据。</p><p><strong>要点:</strong></p><ul><li>靶站为静态 HTML 表格,数据为虚构教学数据</li><li>判分器会<strong>独立重新抓取靶站</strong>生成期望值,与你提交的结果<strong>逐项比对</strong>,无法靠数行数或伪造变量通过</li><li>注意编码:<code>r.encoding = "utf-8"</code> 避免中文乱码</li></ul><p><strong>要求:</strong>遍历表格行,把每行的<strong>名称</strong>(第 2 个 td)与<strong>价格</strong>(第 5 个 td)提取为元组,全部存入变量 <code>items</code>。</p><p class="ce-q-spec">判定标准:items 必须与靶站真实数据<strong>逐条完全一致</strong>(名称与价格,含顺序)。</p>`,
       starter: `import requests
 from bs4 import BeautifulSoup
 
@@ -1393,40 +1684,50 @@ r.encoding = "utf-8"
 soup = BeautifulSoup(r.text, "html.parser")
 rows = soup.select("tbody tr")
 
-# TODO 1: 遍历 rows,把每行的第 2 个 td(名称)与第 5 个 td(价格)提取为元组
-# 全部存入变量 items(提示:row.select("td") 取该行的单元格)
+# TODO: 遍历 rows,提取每行的名称(td 第 2 列)与价格(td 第 5 列)为 (名称, 价格) 元组,
+# 全部存入变量 items(提示: row.select("td") 取该行单元格)
 # items = ...
 
 print("条目数:", len(items))
 print("样例:", items[0] if items else None)`,
-      check: `assert 'items' in globals() and isinstance(items, list), "请把提取结果存入变量 items"
-assert len(items) == 24, f"应提取 24 条,实际 {len(items)}"
-name, price = items[0]
-assert isinstance(name, str) and price.startswith("¥"), "第 1 条应为 (名称, 价格) 元组且价格以 ¥ 开头"`,
-      hintSteps: ["每行有 6 个 td:编号/名称/类别/品牌/价格/评分。名称是第 2 个(td[1]),价格是第 5 个(td[4])。", "列表推导式 [ (row.select('td')[1].get_text(), row.select('td')[4].get_text()) for row in rows ]。", "用 .strip() 去掉首尾空白,价格单元格里有 ¥ 前缀。"],
-      explanation: '字段提取的关键是定位列位置:商品名称在第 2 列、价格在第 5 列。列位置一变,选择器或下标就要跟着变——这是真实爬虫里最常见的坑。',
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/course-test-08/", timeout=10)
+_src.encoding = "utf-8"
+_soup = _bs(_src.text, "html.parser")
+_expect = [(_tr.select("td")[1].get_text().strip(), _tr.select("td")[4].get_text().strip())
+           for _tr in _soup.select("tbody tr")]
+assert 'items' in globals() and isinstance(items, list), "请把提取结果存入变量 items"
+assert len(items) == len(_expect), f"应提取 {len(_expect)} 条,实际 {len(items)}"
+assert items == _expect, "提取的 (名称, 价格) 与靶站真实数据不一致,请检查列下标与去空白" `,
+      hintSteps: ["每行有 6 个 td:编号/名称/类别/品牌/价格/评分。名称是第 2 个(td[1]),价格是第 5 个(td[4])。", "列表推导式 [ (row.select('td')[1].get_text().strip(), row.select('td')[4].get_text().strip()) for row in rows ]。", "用 .strip() 去掉首尾空白——判分器比对的是精确值,多余空格会导致不一致。"],
+      explanation: '字段提取的关键是列定位:名称第 2 列、价格第 5 列。判定器用靶站真实数据逐条比对,这正是生产环境校验爬虫输出的方式。',
     },
     {
       id: 'course-test-08-t3',
       title: '实操题 3:直连「宠物好物推荐」JSON 接口',
       skills: ["请求", "存储"],
       maxScore: 10,
+      question: `<h4>任务:直连「宠物好物推荐」JSON 接口</h4><p>请求 <code>/practice/course-test-08/api/items.json</code>,解析 JSON 数据。</p><p><strong>要求:</strong></p><ul><li>把 <code>data</code> 字段(条目列表)存入变量 <code>items</code></li><li>把 <code>total</code> 字段(总数)存入变量 <code>total</code></li></ul><p class="ce-q-spec">判定标准:items 必须与接口真实返回的 40 条数据完全一致;total == 40。判分器会独立请求接口比对。</p>`,
       starter: `import requests
 
-# TODO 1: 请求 JSON 接口(路径 /api/items.json,拼接在靶站 base 后),用 .json() 解析
-# 把 data 字段存入变量 items,把 total 字段存入变量 total
-# URL = SITE_BASE + "/practice/course-test-08/api/items.json"
-# data = ...
+# TODO: 请求 JSON 接口,用 .json() 解析
+# 把 data 字段(列表)存入变量 items,把 total 字段存入变量 total
+# data = requests.get(f"SITE_BASE/practice/course-test-08/api/items.json", timeout=10).json()
 # items = ...
 # total = ...
 
 print("total:", total)
 print("条目数:", len(items))`,
-      check: `assert 'items' in globals() and len(items) == 40, f"JSON 接口应返回 40 条,实际 {len(items)}"
-assert 'total' in globals() and total == 40, f"total 应为 40,实际 {total}"
-assert isinstance(items[0], dict) and 'name' in items[0], "条目应为字典且包含 name 字段"`,
-      hintSteps: ["JSON 接口返回结构: code / message / total / data[]。", "data = requests.get(url, timeout=10).json() 一步拿到整个字典。", "items = data['data'],total = data['total'],然后打印验证。"],
-      explanation: '直连 JSON 接口是效率最高的方式:返回结构即数据本身,无需解析 HTML。判断一个页面是静态还是动态,先在 Network 面板找 JSON 请求是最快的路径。',
+      check: `import requests as _rq
+_exp = _rq.get(SITE_BASE + "/practice/course-test-08/api/items.json", timeout=10).json()
+assert 'items' in globals() and isinstance(items, list), "请把 data 字段存入变量 items"
+assert 'total' in globals(), "请把 total 字段存入变量 total"
+assert total == _exp["total"], f"total 应为 {_exp['total']},实际 {total}"
+assert len(items) == len(_exp["data"]), f"应返回 {len(_exp['data'])} 条,实际 {len(items)}"
+assert items == _exp["data"], "items 与接口真实数据不一致,请检查取的是否为 data 字段" `,
+      hintSteps: ["JSON 接口返回结构: code / message / total / data[]。", "data = requests.get(url, timeout=10).json() 一步拿到整个字典。", "items = data['data']; total = data['total'],然后打印验证。"],
+      explanation: '直连 JSON 接口是效率最高的方式。判定器独立请求接口并逐条比对,确保你的解析与真实数据结构完全吻合。',
     }
   ],
   '09': [
@@ -1435,6 +1736,7 @@ assert isinstance(items[0], dict) and 'name' in items[0], "条目应为字典且
       title: '实操题 1:抓取「专辑热度榜」列表',
       skills: ["请求", "解析"],
       maxScore: 10,
+      question: `<h4>任务:抓取「专辑热度榜」榜单</h4><p>请求 <code>SITE_BASE + "/practice/course-test-09/"</code>,用 Python 爬虫解析页面数据。</p><p><strong>要点:</strong></p><ul><li>靶站为静态 HTML 表格,数据为虚构教学数据</li><li>判分器会<strong>独立重新抓取靶站</strong>生成期望值,与你提交的结果<strong>逐项比对</strong>,无法靠数行数或伪造变量通过</li><li>注意编码:<code>r.encoding = "utf-8"</code> 避免中文乱码</li></ul><p><strong>要求:</strong>用 CSS 选择器提取表格中所有行,存入变量 <code>rows</code>。</p><p class="ce-q-spec">判定标准:rows 数量与顺序必须和靶站真实表格行完全一致(24 行);且每行必须是 BeautifulSoup 解析出的对象。</p>`,
       starter: `import requests
 from bs4 import BeautifulSoup
 
@@ -1442,20 +1744,28 @@ r = requests.get(SITE_BASE + "/practice/course-test-09/", timeout=10)
 r.encoding = "utf-8"
 soup = BeautifulSoup(r.text, "html.parser")
 
-# TODO 1: 用 CSS 选择器提取所有表格行,存入变量 rows(提示:tbody tr)
-# rows = ...
-
-print("抓到行数:", len(rows))`,
-      check: `assert 'rows' in globals(), "未定义变量 rows,请先把表格行存入 rows"
-assert len(rows) == 24, f"应抓到 24 行,实际 {len(rows)}"`,
-      hintSteps: ["表格行在 <tbody> 里,每行是 <tr>。CSS 选择器怎么写?", "soup.select('tbody tr') 会返回所有表格行,直接赋给 rows 即可。", "运行后应看到 '抓到行数: 24'。"],
-      explanation: '「专辑热度榜」列表页是单页表格,核心套路:requests 请求 → r.encoding 修正编码 → BeautifulSoup 定位 → select 提取。这是所有爬虫的第一步。',
+# TODO: 用 CSS 选择器把表格中所有行存入变量 rows(提示: tbody tr)
+# rows = ...`,
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/course-test-09/", timeout=10)
+_src.encoding = "utf-8"
+_soup = _bs(_src.text, "html.parser")
+_expect = [_tr.select("td")[1].get_text().strip() for _tr in _soup.select("tbody tr")]
+assert 'rows' in globals(), "未定义变量 rows,请先把表格行存入 rows"
+assert isinstance(rows, list) and len(rows) == len(_expect), f"行数应为 {len(_expect)},实际 {len(rows)}"
+assert hasattr(rows[0], "select"), "rows 元素应为 BeautifulSoup 解析出的行对象,请用 soup.select() 提取"
+_got = [row.select("td")[1].get_text().strip() for row in rows]
+assert _got == _expect, "提取的名称与靶站真实数据不一致,请检查选择器与下标" `,
+      hintSteps: ["表格行在 <tbody> 里,每行是 <tr>。soup.select('tbody tr') 是标准做法。", "判分器会重新抓靶站逐行比对——所以必须真实解析,不能伪造列表。", "运行后应看到 '抓到行数: 24'。"],
+      explanation: '「专辑热度榜」列表页是单页表格。测试用例式判定要求你真正解析出与靶站一致的数据——这是爬虫的核心:让代码与页面结构精确对应。',
     },
     {
       id: 'course-test-09-t2',
       title: '实操题 2:提取「专辑」名称与价格',
       skills: ["解析"],
       maxScore: 10,
+      question: `<h4>任务:抓取「专辑热度榜」榜单</h4><p>请求 <code>SITE_BASE + "/practice/course-test-09/"</code>,用 Python 爬虫解析页面数据。</p><p><strong>要点:</strong></p><ul><li>靶站为静态 HTML 表格,数据为虚构教学数据</li><li>判分器会<strong>独立重新抓取靶站</strong>生成期望值,与你提交的结果<strong>逐项比对</strong>,无法靠数行数或伪造变量通过</li><li>注意编码:<code>r.encoding = "utf-8"</code> 避免中文乱码</li></ul><p><strong>要求:</strong>遍历表格行,把每行的<strong>名称</strong>(第 2 个 td)与<strong>价格</strong>(第 5 个 td)提取为元组,全部存入变量 <code>items</code>。</p><p class="ce-q-spec">判定标准:items 必须与靶站真实数据<strong>逐条完全一致</strong>(名称与价格,含顺序)。</p>`,
       starter: `import requests
 from bs4 import BeautifulSoup
 
@@ -1464,40 +1774,50 @@ r.encoding = "utf-8"
 soup = BeautifulSoup(r.text, "html.parser")
 rows = soup.select("tbody tr")
 
-# TODO 1: 遍历 rows,把每行的第 2 个 td(名称)与第 5 个 td(价格)提取为元组
-# 全部存入变量 items(提示:row.select("td") 取该行的单元格)
+# TODO: 遍历 rows,提取每行的名称(td 第 2 列)与价格(td 第 5 列)为 (名称, 价格) 元组,
+# 全部存入变量 items(提示: row.select("td") 取该行单元格)
 # items = ...
 
 print("条目数:", len(items))
 print("样例:", items[0] if items else None)`,
-      check: `assert 'items' in globals() and isinstance(items, list), "请把提取结果存入变量 items"
-assert len(items) == 24, f"应提取 24 条,实际 {len(items)}"
-name, price = items[0]
-assert isinstance(name, str) and price.startswith("¥"), "第 1 条应为 (名称, 价格) 元组且价格以 ¥ 开头"`,
-      hintSteps: ["每行有 6 个 td:编号/名称/类别/品牌/价格/评分。名称是第 2 个(td[1]),价格是第 5 个(td[4])。", "列表推导式 [ (row.select('td')[1].get_text(), row.select('td')[4].get_text()) for row in rows ]。", "用 .strip() 去掉首尾空白,价格单元格里有 ¥ 前缀。"],
-      explanation: '字段提取的关键是定位列位置:专辑名称在第 2 列、价格在第 5 列。列位置一变,选择器或下标就要跟着变——这是真实爬虫里最常见的坑。',
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/course-test-09/", timeout=10)
+_src.encoding = "utf-8"
+_soup = _bs(_src.text, "html.parser")
+_expect = [(_tr.select("td")[1].get_text().strip(), _tr.select("td")[4].get_text().strip())
+           for _tr in _soup.select("tbody tr")]
+assert 'items' in globals() and isinstance(items, list), "请把提取结果存入变量 items"
+assert len(items) == len(_expect), f"应提取 {len(_expect)} 条,实际 {len(items)}"
+assert items == _expect, "提取的 (名称, 价格) 与靶站真实数据不一致,请检查列下标与去空白" `,
+      hintSteps: ["每行有 6 个 td:编号/名称/类别/品牌/价格/评分。名称是第 2 个(td[1]),价格是第 5 个(td[4])。", "列表推导式 [ (row.select('td')[1].get_text().strip(), row.select('td')[4].get_text().strip()) for row in rows ]。", "用 .strip() 去掉首尾空白——判分器比对的是精确值,多余空格会导致不一致。"],
+      explanation: '字段提取的关键是列定位:名称第 2 列、价格第 5 列。判定器用靶站真实数据逐条比对,这正是生产环境校验爬虫输出的方式。',
     },
     {
       id: 'course-test-09-t3',
       title: '实操题 3:直连「专辑热度榜」JSON 接口',
       skills: ["请求", "存储"],
       maxScore: 10,
+      question: `<h4>任务:直连「专辑热度榜」JSON 接口</h4><p>请求 <code>/practice/course-test-09/api/items.json</code>,解析 JSON 数据。</p><p><strong>要求:</strong></p><ul><li>把 <code>data</code> 字段(条目列表)存入变量 <code>items</code></li><li>把 <code>total</code> 字段(总数)存入变量 <code>total</code></li></ul><p class="ce-q-spec">判定标准:items 必须与接口真实返回的 40 条数据完全一致;total == 40。判分器会独立请求接口比对。</p>`,
       starter: `import requests
 
-# TODO 1: 请求 JSON 接口(路径 /api/items.json,拼接在靶站 base 后),用 .json() 解析
-# 把 data 字段存入变量 items,把 total 字段存入变量 total
-# URL = SITE_BASE + "/practice/course-test-09/api/items.json"
-# data = ...
+# TODO: 请求 JSON 接口,用 .json() 解析
+# 把 data 字段(列表)存入变量 items,把 total 字段存入变量 total
+# data = requests.get(f"SITE_BASE/practice/course-test-09/api/items.json", timeout=10).json()
 # items = ...
 # total = ...
 
 print("total:", total)
 print("条目数:", len(items))`,
-      check: `assert 'items' in globals() and len(items) == 40, f"JSON 接口应返回 40 条,实际 {len(items)}"
-assert 'total' in globals() and total == 40, f"total 应为 40,实际 {total}"
-assert isinstance(items[0], dict) and 'name' in items[0], "条目应为字典且包含 name 字段"`,
-      hintSteps: ["JSON 接口返回结构: code / message / total / data[]。", "data = requests.get(url, timeout=10).json() 一步拿到整个字典。", "items = data['data'],total = data['total'],然后打印验证。"],
-      explanation: '直连 JSON 接口是效率最高的方式:返回结构即数据本身,无需解析 HTML。判断一个页面是静态还是动态,先在 Network 面板找 JSON 请求是最快的路径。',
+      check: `import requests as _rq
+_exp = _rq.get(SITE_BASE + "/practice/course-test-09/api/items.json", timeout=10).json()
+assert 'items' in globals() and isinstance(items, list), "请把 data 字段存入变量 items"
+assert 'total' in globals(), "请把 total 字段存入变量 total"
+assert total == _exp["total"], f"total 应为 {_exp['total']},实际 {total}"
+assert len(items) == len(_exp["data"]), f"应返回 {len(_exp['data'])} 条,实际 {len(items)}"
+assert items == _exp["data"], "items 与接口真实数据不一致,请检查取的是否为 data 字段" `,
+      hintSteps: ["JSON 接口返回结构: code / message / total / data[]。", "data = requests.get(url, timeout=10).json() 一步拿到整个字典。", "items = data['data']; total = data['total'],然后打印验证。"],
+      explanation: '直连 JSON 接口是效率最高的方式。判定器独立请求接口并逐条比对,确保你的解析与真实数据结构完全吻合。',
     }
   ],
   '10': [
@@ -1506,6 +1826,7 @@ assert isinstance(items[0], dict) and 'name' in items[0], "条目应为字典且
       title: '实操题 1:抓取「家居好物甄选」列表',
       skills: ["请求", "解析"],
       maxScore: 10,
+      question: `<h4>任务:抓取「家居好物甄选」榜单</h4><p>请求 <code>SITE_BASE + "/practice/course-test-10/"</code>,用 Python 爬虫解析页面数据。</p><p><strong>要点:</strong></p><ul><li>靶站为静态 HTML 表格,数据为虚构教学数据</li><li>判分器会<strong>独立重新抓取靶站</strong>生成期望值,与你提交的结果<strong>逐项比对</strong>,无法靠数行数或伪造变量通过</li><li>注意编码:<code>r.encoding = "utf-8"</code> 避免中文乱码</li></ul><p><strong>要求:</strong>用 CSS 选择器提取表格中所有行,存入变量 <code>rows</code>。</p><p class="ce-q-spec">判定标准:rows 数量与顺序必须和靶站真实表格行完全一致(24 行);且每行必须是 BeautifulSoup 解析出的对象。</p>`,
       starter: `import requests
 from bs4 import BeautifulSoup
 
@@ -1513,20 +1834,28 @@ r = requests.get(SITE_BASE + "/practice/course-test-10/", timeout=10)
 r.encoding = "utf-8"
 soup = BeautifulSoup(r.text, "html.parser")
 
-# TODO 1: 用 CSS 选择器提取所有表格行,存入变量 rows(提示:tbody tr)
-# rows = ...
-
-print("抓到行数:", len(rows))`,
-      check: `assert 'rows' in globals(), "未定义变量 rows,请先把表格行存入 rows"
-assert len(rows) == 24, f"应抓到 24 行,实际 {len(rows)}"`,
-      hintSteps: ["表格行在 <tbody> 里,每行是 <tr>。CSS 选择器怎么写?", "soup.select('tbody tr') 会返回所有表格行,直接赋给 rows 即可。", "运行后应看到 '抓到行数: 24'。"],
-      explanation: '「家居好物甄选」列表页是单页表格,核心套路:requests 请求 → r.encoding 修正编码 → BeautifulSoup 定位 → select 提取。这是所有爬虫的第一步。',
+# TODO: 用 CSS 选择器把表格中所有行存入变量 rows(提示: tbody tr)
+# rows = ...`,
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/course-test-10/", timeout=10)
+_src.encoding = "utf-8"
+_soup = _bs(_src.text, "html.parser")
+_expect = [_tr.select("td")[1].get_text().strip() for _tr in _soup.select("tbody tr")]
+assert 'rows' in globals(), "未定义变量 rows,请先把表格行存入 rows"
+assert isinstance(rows, list) and len(rows) == len(_expect), f"行数应为 {len(_expect)},实际 {len(rows)}"
+assert hasattr(rows[0], "select"), "rows 元素应为 BeautifulSoup 解析出的行对象,请用 soup.select() 提取"
+_got = [row.select("td")[1].get_text().strip() for row in rows]
+assert _got == _expect, "提取的名称与靶站真实数据不一致,请检查选择器与下标" `,
+      hintSteps: ["表格行在 <tbody> 里,每行是 <tr>。soup.select('tbody tr') 是标准做法。", "判分器会重新抓靶站逐行比对——所以必须真实解析,不能伪造列表。", "运行后应看到 '抓到行数: 24'。"],
+      explanation: '「家居好物甄选」列表页是单页表格。测试用例式判定要求你真正解析出与靶站一致的数据——这是爬虫的核心:让代码与页面结构精确对应。',
     },
     {
       id: 'course-test-10-t2',
       title: '实操题 2:提取「商品」名称与价格',
       skills: ["解析"],
       maxScore: 10,
+      question: `<h4>任务:抓取「家居好物甄选」榜单</h4><p>请求 <code>SITE_BASE + "/practice/course-test-10/"</code>,用 Python 爬虫解析页面数据。</p><p><strong>要点:</strong></p><ul><li>靶站为静态 HTML 表格,数据为虚构教学数据</li><li>判分器会<strong>独立重新抓取靶站</strong>生成期望值,与你提交的结果<strong>逐项比对</strong>,无法靠数行数或伪造变量通过</li><li>注意编码:<code>r.encoding = "utf-8"</code> 避免中文乱码</li></ul><p><strong>要求:</strong>遍历表格行,把每行的<strong>名称</strong>(第 2 个 td)与<strong>价格</strong>(第 5 个 td)提取为元组,全部存入变量 <code>items</code>。</p><p class="ce-q-spec">判定标准:items 必须与靶站真实数据<strong>逐条完全一致</strong>(名称与价格,含顺序)。</p>`,
       starter: `import requests
 from bs4 import BeautifulSoup
 
@@ -1535,40 +1864,50 @@ r.encoding = "utf-8"
 soup = BeautifulSoup(r.text, "html.parser")
 rows = soup.select("tbody tr")
 
-# TODO 1: 遍历 rows,把每行的第 2 个 td(名称)与第 5 个 td(价格)提取为元组
-# 全部存入变量 items(提示:row.select("td") 取该行的单元格)
+# TODO: 遍历 rows,提取每行的名称(td 第 2 列)与价格(td 第 5 列)为 (名称, 价格) 元组,
+# 全部存入变量 items(提示: row.select("td") 取该行单元格)
 # items = ...
 
 print("条目数:", len(items))
 print("样例:", items[0] if items else None)`,
-      check: `assert 'items' in globals() and isinstance(items, list), "请把提取结果存入变量 items"
-assert len(items) == 24, f"应提取 24 条,实际 {len(items)}"
-name, price = items[0]
-assert isinstance(name, str) and price.startswith("¥"), "第 1 条应为 (名称, 价格) 元组且价格以 ¥ 开头"`,
-      hintSteps: ["每行有 6 个 td:编号/名称/类别/品牌/价格/评分。名称是第 2 个(td[1]),价格是第 5 个(td[4])。", "列表推导式 [ (row.select('td')[1].get_text(), row.select('td')[4].get_text()) for row in rows ]。", "用 .strip() 去掉首尾空白,价格单元格里有 ¥ 前缀。"],
-      explanation: '字段提取的关键是定位列位置:商品名称在第 2 列、价格在第 5 列。列位置一变,选择器或下标就要跟着变——这是真实爬虫里最常见的坑。',
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/course-test-10/", timeout=10)
+_src.encoding = "utf-8"
+_soup = _bs(_src.text, "html.parser")
+_expect = [(_tr.select("td")[1].get_text().strip(), _tr.select("td")[4].get_text().strip())
+           for _tr in _soup.select("tbody tr")]
+assert 'items' in globals() and isinstance(items, list), "请把提取结果存入变量 items"
+assert len(items) == len(_expect), f"应提取 {len(_expect)} 条,实际 {len(items)}"
+assert items == _expect, "提取的 (名称, 价格) 与靶站真实数据不一致,请检查列下标与去空白" `,
+      hintSteps: ["每行有 6 个 td:编号/名称/类别/品牌/价格/评分。名称是第 2 个(td[1]),价格是第 5 个(td[4])。", "列表推导式 [ (row.select('td')[1].get_text().strip(), row.select('td')[4].get_text().strip()) for row in rows ]。", "用 .strip() 去掉首尾空白——判分器比对的是精确值,多余空格会导致不一致。"],
+      explanation: '字段提取的关键是列定位:名称第 2 列、价格第 5 列。判定器用靶站真实数据逐条比对,这正是生产环境校验爬虫输出的方式。',
     },
     {
       id: 'course-test-10-t3',
       title: '实操题 3:直连「家居好物甄选」JSON 接口',
       skills: ["请求", "存储"],
       maxScore: 10,
+      question: `<h4>任务:直连「家居好物甄选」JSON 接口</h4><p>请求 <code>/practice/course-test-10/api/items.json</code>,解析 JSON 数据。</p><p><strong>要求:</strong></p><ul><li>把 <code>data</code> 字段(条目列表)存入变量 <code>items</code></li><li>把 <code>total</code> 字段(总数)存入变量 <code>total</code></li></ul><p class="ce-q-spec">判定标准:items 必须与接口真实返回的 40 条数据完全一致;total == 40。判分器会独立请求接口比对。</p>`,
       starter: `import requests
 
-# TODO 1: 请求 JSON 接口(路径 /api/items.json,拼接在靶站 base 后),用 .json() 解析
-# 把 data 字段存入变量 items,把 total 字段存入变量 total
-# URL = SITE_BASE + "/practice/course-test-10/api/items.json"
-# data = ...
+# TODO: 请求 JSON 接口,用 .json() 解析
+# 把 data 字段(列表)存入变量 items,把 total 字段存入变量 total
+# data = requests.get(f"SITE_BASE/practice/course-test-10/api/items.json", timeout=10).json()
 # items = ...
 # total = ...
 
 print("total:", total)
 print("条目数:", len(items))`,
-      check: `assert 'items' in globals() and len(items) == 40, f"JSON 接口应返回 40 条,实际 {len(items)}"
-assert 'total' in globals() and total == 40, f"total 应为 40,实际 {total}"
-assert isinstance(items[0], dict) and 'name' in items[0], "条目应为字典且包含 name 字段"`,
-      hintSteps: ["JSON 接口返回结构: code / message / total / data[]。", "data = requests.get(url, timeout=10).json() 一步拿到整个字典。", "items = data['data'],total = data['total'],然后打印验证。"],
-      explanation: '直连 JSON 接口是效率最高的方式:返回结构即数据本身,无需解析 HTML。判断一个页面是静态还是动态,先在 Network 面板找 JSON 请求是最快的路径。',
+      check: `import requests as _rq
+_exp = _rq.get(SITE_BASE + "/practice/course-test-10/api/items.json", timeout=10).json()
+assert 'items' in globals() and isinstance(items, list), "请把 data 字段存入变量 items"
+assert 'total' in globals(), "请把 total 字段存入变量 total"
+assert total == _exp["total"], f"total 应为 {_exp['total']},实际 {total}"
+assert len(items) == len(_exp["data"]), f"应返回 {len(_exp['data'])} 条,实际 {len(items)}"
+assert items == _exp["data"], "items 与接口真实数据不一致,请检查取的是否为 data 字段" `,
+      hintSteps: ["JSON 接口返回结构: code / message / total / data[]。", "data = requests.get(url, timeout=10).json() 一步拿到整个字典。", "items = data['data']; total = data['total'],然后打印验证。"],
+      explanation: '直连 JSON 接口是效率最高的方式。判定器独立请求接口并逐条比对,确保你的解析与真实数据结构完全吻合。',
     }
   ]
 };
