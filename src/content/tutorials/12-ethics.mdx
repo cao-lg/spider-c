@@ -16,64 +16,60 @@ skillDomain:
 
 import CodeRunner from '../../components/CodeRunner.astro';
 
-技术再溜,越过红线就是风险。这一章不讲代码技巧,讲**底线**:什么能爬、什么不能碰、怎么爬才不惹麻烦。
+技术再溜,越过红线就是风险。这一章讲**底线**:什么能爬、什么不能碰。
 
-## 一、robots.txt:网站的「门牌告示」
+## 一、robots.txt:网站的门牌告示
 
-绝大多数站点根目录下有 `/robots.txt`,声明哪些路径允许爬虫、哪些禁止。爬之前先看一眼:
-
-```
-# 例:books.example.com/robots.txt
-User-agent: *
-Disallow: /private/
-Allow: /public/
-```
-
-Python 标准库自带的 `RobotFileParser` 能直接判断某路径能否抓取。下面在浏览器里跑:
+绝大多数站点根目录有 `/robots.txt`,声明哪些路径允许/禁止。Python 标准库 `RobotFileParser` 能程序化判断:
 
 <CodeRunner
   variant="guided"
   title="用 RobotFileParser 判断能否抓取"
-  prompt="预测输出:会打印两个布尔值,/private/x 为 False、/public/y 为 True。思考如果一个站点没有 robots.txt,can_fetch 默认返回什么?为什么「被允许」不等于「该爬」?"
+  prompt="任务:解析 robots 规则,判断两个路径是否允许抓取。提示:rp.parse() 加载规则,rp.can_fetch() 判断。"
   code={`from urllib.robotparser import RobotFileParser
 
 rp = RobotFileParser()
+
+# TODO 1: 用 rp.parse() 加载规则列表
 rp.parse([
     "User-agent: *",
     "Disallow: /private/",
     "Allow: /public/",
 ])
-print("能抓 /private/x ?", rp.can_fetch("*", "/private/x"))   # False
-print("能抓 /public/y ?", rp.can_fetch("*", "/public/y"))     # True`} />
 
-> `can_fetch` 返回 `True` 只代表「站方没禁止」,不代表「数据可随意使用」。商业用途还要看版权与授权。
+# TODO 2: 判断 /private/x 是否允许
+print("能抓 /private/x ?", rp.can_fetch("*", "/private/x"))
 
-## 二、访问频率与服务器压力
+# TODO 3: 判断 /public/y 是否允许
+print("能抓 /public/y ?", rp.can_fetch("*", "/public/y"))`} />
 
-- 控制 `time.sleep` 间隔,别把人家站点打挂。
-- 避开高峰期(如电商大促),降低对业务的影响。
-- 只抓必要字段,别无脑整站镜像。
+> can_fetch 返回 True 只代表站方没禁止,不代表数据可随意使用。
+
+## 二、访问频率
+
+- 控制 `time.sleep` 间隔,别打挂站点
+- 避开高峰期
+- 只抓必要字段
 
 ## 三、法规底线(国内)
 
 | 红线 | 说明 |
 | --- | --- |
-| 个人信息 | 《个人信息保护法》:爬取姓名、电话、住址、人脸等需合法基础,禁止非法收集/买卖 |
-| 重要数据 | 《数据安全法》:金融、地图、人口等数据受分级保护,跨境/批量需审批 |
-| 版权内容 | 文字、图片、音视频受著作权保护,未经授权商用有法律风险 |
-| 突破防护 | 故意绕过技术措施(如破解验证码、强刷封禁)可能触及《刑法》相关条款 |
+| 个人信息 | 个人信息保护法:需合法基础,禁止非法收集 |
+| 重要数据 | 数据安全法:金融地图人口等受分级保护 |
+| 版权内容 | 受著作权保护,未经授权商用有风险 |
+| 突破防护 | 故意绕过技术措施可能触犯刑法 |
 
-## 四、合规爬虫清单
+## 四、合规清单
 
-- [ ] 先看 `robots.txt`,尊重 `Disallow`。
-- [ ] 带真实、可联系的 `User-Agent`(别伪装成普通用户欺诈)。
-- [ ] 控制频率,不压垮服务器。
-- [ ] 不碰个人信息、重要数据、受版权保护内容,除非有合法授权。
-- [ ] 数据仅用于学习/授权用途,不转卖、不滥用。
+- [ ] 先看 `robots.txt`,尊重 Disallow
+- [ ] 带可联系的 User-Agent
+- [ ] 控制频率不压垮服务器
+- [ ] 不碰个人信息和重要数据
+- [ ] 数据仅用于学习/授权用途
 
 ## 五、小结
 
-- `robots.txt` 是站方的「门牌告示」,爬前必看;`RobotFileParser` 可程序化判断。
-- 「技术能抓」≠「法律允许」,频率与压力要友好。
-- 国内红线:个人信息、重要数据、版权、突破防护——任一条都别碰。
-- 合规清单五条,是爬虫的基本修养。
+- robots.txt 是站方告示,爬前必看
+- 技能抓不等于法律允许
+- 国内红线:个人信息、重要数据、版权、突破防护

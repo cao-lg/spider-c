@@ -32,12 +32,12 @@ import CodeRunner from '../../components/CodeRunner.astro';
 
 ## 二、可运行:解析列表并收集为字典列表
 
-下面这段在浏览器里跑——它解析一份内联的图书列表,把每本书变成 `{"title":..., "price":...}` 收集起来,这正是「提取」这一步的核心:
+下面需要你补全——给定图书列表 HTML,把每本书解析成 `{"title":..., "price":...}` 字典并收集:
 
 <CodeRunner
   variant="guided"
   title="把图书列表解析成字典列表"
-  prompt="预测输出:会打印 3 本书的字典。思考为什么用 .books li.book 选中每本书、而不是 li?如果某本书缺价格,代码会怎样?怎么用 .get 兜底?"
+  prompt="任务:补全解析逻辑,遍历每本书,提取 title 和 price 存入字典列表。提示:先 BeautifulSoup 解析,再 select 找 li.book,逐个提取 .title 和 .price。"
   code={`from bs4 import BeautifulSoup
 
 html = """<ul class="books">
@@ -46,25 +46,30 @@ html = """<ul class="books">
   <li class="book"><span class="title">数据分析</span><span class="price">79</span></li>
 </ul>"""
 
+# TODO 1: 用 BeautifulSoup 解析 html(lxml)
 soup = BeautifulSoup(html, "lxml")
+
 books = []
+# TODO 2: 用 soup.select(".books li.book") 遍历每本书
 for li in soup.select(".books li.book"):
+    # TODO 3: 提取 .title 和 .price 的文本,append 到 books 列表
     books.append({
         "title": li.select_one(".title").get_text(strip=True),
         "price": li.select_one(".price").get_text(strip=True),
     })
+
 print("共抓到:", len(books), "本")
 for b in books:
     print(b)`} />
 
 ## 三、保存为 CSV
 
-拿到字典列表后,用标准库 `csv` 落盘。下面在浏览器里演示「内存中的 CSV」长什么样(`io.StringIO` 当临时文件,真实场景换成 `open("books.csv", "w")` 即可):
+拿到字典列表后,用标准库 `csv` 落盘。你需要补全写入逻辑:
 
 <CodeRunner
   variant="challenge"
   title="把字典列表写成 CSV"
-  prompt="下面代码已收集好 books,但 csv 只写了一行表头。思考怎么用 writerows 把每条书都写进去?补全后运行,观察输出的 CSV 文本。"
+  prompt="任务:books 已收集好,用 csv.DictWriter 把它写成 CSV 格式。提示:先 writeheader() 写表头,再用 writerows(books) 写数据,最后 getvalue() 查看。"
   code={`import csv, io
 
 books = [
@@ -76,7 +81,7 @@ books = [
 buf = io.StringIO()
 writer = csv.DictWriter(buf, fieldnames=["title", "price"])
 writer.writeheader()
-# TODO: 用 writerows(books) 把三本书写进去
+# TODO: 用 writerows 把 books 全部写进去,然后打印 buf.getvalue()
 writer.writerows(books)
 print(buf.getvalue())`} />
 

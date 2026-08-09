@@ -16,61 +16,61 @@ skillDomain:
 
 import CodeRunner from '../../components/CodeRunner.astro';
 
-学完前面所有章节,是时候把它们串成一个**完整项目**了。这一章以「爬取一个图书榜 → 存 CSV + SQLite」为例,走完从需求到交付的全流程。
+学完所有章节,是时候串成**完整项目**了。这一章以「爬取图书榜存 CSV + SQLite」为例走完全流程。
 
 ## 一、需求分析
 
-明确目标,再动手:
-
-- **数据源**:图书榜列表页(含书名、价格、作者)。
-- **输出**:`books.csv`(方便 Excel 看)+ `books.db`(方便查询)。
-- **约束**:遵守 `robots.txt`、控制频率、出错不中断。
+- **数据源**:图书榜列表页(书名、价格)
+- **输出**:books.csv + books.db
+- **约束**:守 robots.txt、控频率、出错不中断
 
 ## 二、项目结构
 
 ```
 crawler/
-├── crawler.py      # 主程序:请求→解析→存储
-├── books.csv       # 产出:表格
-└── books.db        # 产出:数据库
+├── crawler.py      # 主程序
+├── books.csv       # 产出
+└── books.db        # 产出
 ```
 
 ## 三、可运行:迷你爬虫端到端
 
-下面在浏览器里跑一个**缩微版**全流程——解析内联 HTML、收集字典、写 CSV(内存)、落 SQLite(内存)。真实项目只需把「内联 HTML」换成 `requests.get`、"内存"换成文件/数据库名:
+下面是一个缩微版全流程,你需要补全三个核心步骤:
 
 <CodeRunner
   variant="guided"
   title="端到端迷你爬虫"
-  prompt="预测输出:会打印抓到的 3 本书、一段 CSV 文本、以及 SQLite 查回的记录。思考真实项目里哪几行要替换成网络/文件操作?为什么先在内联数据上跑通再联网更稳?"
+  prompt="任务:补全三个步骤 - 1)BS4 解析提取 2)CSV 写入 3)SQLite 落库查询。这是综合练习!"
   code={`import csv, io, sqlite3
 from bs4 import BeautifulSoup
 
-html = """<ul class="books">
-  <li class="book"><span class="title">Python 入门</span><span class="price">59</span></li>
-  <li class="book"><span class="title">爬虫实战</span><span class="price">69</span></li>
-  <li class="book"><span class="title">数据分析</span><span class="price">79</span></li>
-</ul>"""
+html = "<ul class='books'><li class='book'><span class='title'>Python 入门</span><span class='price'>59</span></li><li class='book'><span class='title'>爬虫实战</span><span class='price'>69</span></li><li class='book'><span class='title'>数据分析</span><span class='price'>79</span></li></ul>"
 
-# 1) 解析 + 提取
+# 步骤 1: 解析提取
+# TODO 1: 用 BS4 解析 html,遍历 li.book 收集 title+price 字典列表
 soup = BeautifulSoup(html, "lxml")
 books = [{
     "title": li.select_one(".title").get_text(strip=True),
     "price": li.select_one(".price").get_text(strip=True),
 } for li in soup.select("li.book")]
 
-# 2) 存 CSV(真实用 open("books.csv", "w", ...))
+# 步骤 2: 存 CSV
+# TODO 2: 用 csv.DictWriter 写入 buf(writeheader + writerows)
 buf = io.StringIO()
-w = csv.DictWriter(buf, fieldnames=["title", "price"]); w.writeheader(); w.writerows(books)
+w = csv.DictWriter(buf, fieldnames=["title", "price"])
+w.writeheader()
+w.writerows(books)
 
-# 3) 落 SQLite(真实用 connect("books.db"))
+# 步骤 3: 落 SQLite
+# TODO 3: 连接内存库,建表,批量插入,SELECT 查询打印
 conn = sqlite3.connect(":memory:")
 c = conn.cursor()
 c.execute("CREATE TABLE book (title TEXT, price TEXT)")
 c.executemany("INSERT INTO book VALUES (?, ?)", [(b["title"], b["price"]) for b in books])
 
 print("抓到:", len(books), "本")
-print("--- CSV ---"); print(buf.getvalue())
+print("--- CSV ---")
+print(buf.getvalue())
 print("--- DB ---")
 for row in c.execute("SELECT * FROM book"):
     print(row)
@@ -78,43 +78,34 @@ conn.close()`} />
 
 ## 四、异常处理与日志
 
-真实网站会各种抽风,健壮项目要兜底:
-
 ```python
 import logging, time, random
 import requests
 
-logging.basicConfig(filename="crawler.log", level=logging.INFO,
-                    format="%(asctime)s %(levelname)s %(message)s")
+logging.basicConfig(filename="crawler.log", level=logging.INFO)
 
 def fetch(url, headers):
     for attempt in range(3):
         try:
             resp = requests.get(url, headers=headers, timeout=5)
             resp.raise_for_status()
-            logging.info("OK %s", url)
             return resp.text
-        except requests.exceptions.RequestException as e:
-            logging.warning("重试 %s: %s", url, e)
+        except requests.exceptions.RequestException:
             time.sleep(random.uniform(2, 5))
     return None
 ```
 
-- `logging` 记录每次成功/失败,事后好排查。
-- `raise_for_status()` + `try/except` + 退避重试,单页失败不拖垮全局。
-- 拿到 `None` 就跳过该页,继续下一页。
-
 ## 五、交付清单
 
-- [ ] 代码可运行、无硬编码敏感信息。
-- [ ] `robots.txt` 已检查、频率已控制。
-- [ ] 数据已落 CSV / 数据库,可查询。
-- [ ] 日志可回溯,异常有处理。
-- [ ] 写明数据用途与授权,合规自检通过。
+- [ ] 代码可运行,无硬编码敏感信息
+- [ ] robots.txt 已检查,频率已控制
+- [ ] 数据已落 CSV / 数据库
+- [ ] 日志可回溯,异常有处理
+- [ ] 合规自检通过
 
 ## 六、小结
 
-- 完整项目 = 需求 → 结构 → 请求/解析/存储 → 异常/日志 → 交付。
-- 先在内联数据上把「解析→存储」跑通,再换真实联网,排错更高效。
-- 健壮性靠 `try/except` + 重试 + `logging`,单点失败不致命。
-- 交付前过一遍合规清单——技术之外,底线更重要。
+- 完整项目 = 需求 → 结构 → 请求/解析/存储 → 异常/日志 → 交付
+- 先在内联数据跑通再联网,排错更高效
+- 健壮性靠 try/except + 重试 + logging
+- 交付前过合规清单,底线更重要

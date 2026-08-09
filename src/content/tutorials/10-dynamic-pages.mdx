@@ -36,61 +36,48 @@ with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
     page = browser.new_page()
     page.goto("https://example.com/list", timeout=30000)
-    page.wait_for_selector(".book")          # 等 JS 把 .book 渲染出来
-    html = page.content()                     # 拿到「渲染后」的完整 HTML
+    page.wait_for_selector(".book")
+    html = page.content()
     browser.close()
-
-# 之后的解析和之前一样
-from bs4 import BeautifulSoup
-soup = BeautifulSoup(html, "lxml")
 ```
 
-> Playwright 需要本地安装(`pip install playwright && playwright install`),且依赖系统浏览器,**无法在浏览器运行器里执行**——上面的代码请在你的电脑上跑。
+> Playwright 需要本地安装,**无法在浏览器运行器里执行**——请在电脑上跑。
 
 ## 三、等待与交互
 
-动态页面最忌「数据还没出来就解析」。Playwright 提供多种等待:
-
 ```python
-page.wait_for_selector(".list")              # 等某个元素出现
-page.wait_for_timeout(1000)                  # 硬等 1 秒(兜底)
-# 模拟点击「加载更多」
-page.click(".load-more")
-page.wait_for_load_state("networkidle")      # 等网络安静
+page.wait_for_selector(".list")      # 等元素出现
+page.wait_for_timeout(1000)          # 硬等 1 秒(兜底)
+page.click(".load-more")             # 点击加载更多
 ```
 
-## 四、可运行:先吃透「渲染后解析」这半步
+## 四、可运行:解析渲染后的 HTML
 
-Playwright 的 `goto`/`wait` 在浏览器跑不了,但「拿到渲染后的 HTML 后怎么解析」和之前完全一样。下面这段在浏览器里就能跑——它解析一份「已经渲染好」的 HTML,正是 Playwright 交给你的那份:
+Playwright 拿到的 `page.content()` 和静态页一样用 BS4 解析。补全下面的提取逻辑:
 
 <CodeRunner
   variant="guided"
   title="解析渲染后的 HTML"
-  prompt="预测输出:会打印 2 本书。思考为什么这部分能在浏览器跑、而 goto 不能?Playwright 真正替我们解决的是哪一步?"
+  prompt="任务:这段 HTML 假设来自 Playwright 的 page.content()。用 BS4 解析提取书名。"
   code={`from bs4 import BeautifulSoup
 
-# 假设这是 Playwright 的 page.content() 返回的「渲染后」HTML
-rendered = """<ul class="books">
-  <li class="book"><span class="title">Python 入门</span></li>
-  <li class="book"><span class="title">爬虫实战</span></li>
-</ul>"""
+rendered = "<ul class='books'><li class='book'><span class='title'>Python 入门</span></li><li class='book'><span class='title'>爬虫实战</span></li></ul>"
 
+# TODO 1: 用 BeautifulSoup 解析 rendered
 soup = BeautifulSoup(rendered, "lxml")
+
+# TODO 2: 遍历 li.book 提取 .title 文本并打印
 for li in soup.select("li.book"):
     print(li.select_one(".title").get_text(strip=True))`} />
 
 ## 五、什么时候才上 Playwright
 
-- 能直接抓 JSON 接口 → 优先(第 9 章),最快最稳。
-- 数据在 HTML 源码里 → `requests` + BS4 足矣。
-- 只有 JS 渲染才有数据、又没接口 → 才用 Playwright。
-
-无头浏览器重、慢、占资源,是「最后手段」,不是首选。
+- 能抓 JSON 接口 → 优先(第 9 章)
+- 数据在 HTML 源码 → requests + BS4 足矣
+- 只有 JS 渲染才有效据 → 才用 Playwright
 
 ## 六、小结
 
-- 判断动态:查看源代码搜不到数据、又没独立接口 → 需浏览器自动化。
-- Playwright 流程:`launch` → `goto` → `wait_for_selector` → `content()` → 交给 BS4。
-- 解析「渲染后的 HTML」和静态页一模一样;Playwright 只解决「拿到渲染后 HTML」这一步。
-- 能用接口/静态解析就别用 Playwright,它重且慢。
-- 去 [Level 5 靶站](/practice/level5-dynamic/) 体会动态渲染。
+- 判断动态:源码搜不到 + 无接口 → 需浏览器自动化
+- Playwright 流程:launch → goto → wait → content → BS4
+- 能用接口/静态就别用 Playwright,重且慢

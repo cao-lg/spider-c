@@ -35,12 +35,12 @@ soup = BeautifulSoup(html, "lxml")          # 更快,需装 lxml(推荐)
 2. **按属性**:`soup.find('div', class_='book')`(`class` 要写成 `class_`,因为 class 是 Python 关键字)。
 3. **CSS 选择器**(最常用):`soup.select('div.book > span.title')` 返回列表,`select_one` 返回单个。
 
-下面在浏览器里跑一段:解析图书列表,用 `select` 把每本书的书名和价格取出来:
+下面需要你补全提取逻辑——给定一段图书列表 HTML,用 CSS 选择器取出每本书的书名和价格:
 
 <CodeRunner
   variant="guided"
   title="用 CSS 选择器提取图书列表"
-  prompt="预测输出:会打印 2 本书的「书名 价格」。思考 .book > .title 的 > 为什么不能省?如果 HTML 里价格用的是 <b> 而不是 <span class='price'>,选择器要怎么改?"
+  prompt="任务:补全解析代码,用 select 找到每本书,再用 select_one 取出书名和价格并打印。提示:先 BeautifulSoup(html,'lxml') 解析,再 select('li.book') 遍历。"
   code={`from bs4 import BeautifulSoup
 
 html = """<ul class="books">
@@ -48,10 +48,14 @@ html = """<ul class="books">
   <li class="book"><span class="title">爬虫实战</span><span class="price">69</span></li>
 </ul>"""
 
+# TODO 1: 用 BeautifulSoup 解析 html,指定 lxml 解析器
 soup = BeautifulSoup(html, "lxml")
+
+# TODO 2: 用 soup.select("li.book") 找到所有书,遍历每一本
 for li in soup.select("li.book"):
-    title = li.select_one(".title").get_text()
-    price = li.select_one(".price").get_text()
+    # TODO 3: 用 select_one(".title") 取书名文本,select_one(".price") 取价格文本
+    title = li.select_one(".title").get_text(strip=True)
+    price = li.select_one(".price").get_text(strip=True)
     print(title, price)`} />
 
 ## 三、遍历节点树
@@ -71,12 +75,12 @@ HTML 是树,BS4 让你上下左右走:
 - 取文本:`tag.get_text(strip=True)` 的 `strip=True` 能顺手去掉首尾空白,实战必加。
 - 批量属性:`[a.get('href') for a in soup.select('a')]`。
 
-再来一个例子,练「遍历 + 取属性 + 清洗文本」这条完整链路:
+再来一个练习,这次链接文字前后有多余空格和换行,你需要正确清洗:
 
 <CodeRunner
   variant="challenge"
   title="提取链接并清洗文本"
-  prompt="下面 HTML 的链接文字前后有空格、还有换行。思考怎么在提取时一次性清理掉?补全后运行,观察 strip=True 的效果。"
+  prompt="任务:提取每个 a 标签的 href 属性和清洗后的文本。注意原始文本有空格和换行!提示:get_text(strip=True) 可以一次性去掉首尾空白。"
   code={`from bs4 import BeautifulSoup
 
 html = """<div class="list">
@@ -85,7 +89,8 @@ html = """<div class="list">
 </div>"""
 
 soup = BeautifulSoup(html, "lxml")
-# TODO: 提取每个链接的 href 与清洗后的文本(去掉首尾空白)
+
+# TODO: 遍历所有 a 标签,提取 href 和清洗后的文本,格式打印
 for a in soup.select("a"):
     href = a.get("href")
     text = a.get_text(strip=True)

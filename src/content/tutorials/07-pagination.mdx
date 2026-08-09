@@ -35,12 +35,12 @@ for page in range(1, 6):          # 1 到 5 页
 
 ## 二、可运行:循环解析多页并汇总
 
-下面在浏览器里模拟「3 页 HTML,逐页解析、汇总到同一个列表」——这就是翻页爬虫的骨架,只不过真实场景里每页来自一次网络请求:
+下面模拟 3 页 HTML 数据,你需要补全「逐页解析 + 汇总到一个列表」的逻辑:
 
 <CodeRunner
   variant="guided"
   title="循环翻页并汇总数据"
-  prompt="预测输出:会打印 6 本书(每页 2 本 × 3 页)。思考如果某一页解析出 0 条,循环会出错吗?真实翻页时该怎么判断「到最后一页」?"
+  prompt="任务:pages 列表里存了 3 页的 HTML,遍历每一页,用 BS4 解析出书名,extend 到 all_books 里。最后打印总数和全部书名。"
   code={`from bs4 import BeautifulSoup
 
 pages = [
@@ -50,6 +50,7 @@ pages = [
 ]
 
 all_books = []
+# TODO: 遍历 pages(用 enumerate 编号),每页 BS4 解析后 extend 进 all_books
 for i, html in enumerate(pages, start=1):
     soup = BeautifulSoup(html, "lxml")
     titles = [li.get_text(strip=True) for li in soup.select("li.book")]

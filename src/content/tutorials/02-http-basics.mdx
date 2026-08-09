@@ -43,23 +43,28 @@ import CodeRunner from '../../components/CodeRunner.astro';
 | `?q=python&page=2` | 查询参数(query),`&` 分隔多个 |
 | `#top` | 片段(fragment),浏览器内锚点,**不会发给服务器** |
 
-用 Python 标准库就能把 URL 拆开看个明白(下面在浏览器里直接跑):
+用 Python 标准库就能把 URL 拆开看个明白。下面需要你补全拆解逻辑:
 
 <CodeRunner
   variant="guided"
   title="拆解一个真实 URL"
-  prompt="预测输出:会打印协议、主机、路径、查询字典、片段。思考 #top 为什么不会出现在服务器的查询里?再试着改 URL 里的 q 值看 parse_qs 怎么变。"
-  code={`from urllib.parse import urlparse, parse_qs
+  prompt="任务:用 urlparse 拆解 URL,分别打印协议/主机/路径/查询参数/片段。再用 urlencode 把字典拼回查询串。提示:从 urllib.parse 导入需要的函数。"
+  code={`# TODO 1: 从 urllib.parse 导入 urlparse, parse_qs, urlencode
+from urllib.parse import urlparse, parse_qs, urlencode
 
-u = urlparse("https://books.example.com/search?q=python&page=2#top")
+url = "https://books.example.com/search?q=python&page=2#top"
+
+# TODO 2: 用 urlparse(url) 拆解,打印 scheme / netloc / path / fragment
+u = urlparse(url)
 print("协议:", u.scheme)
 print("主机:", u.netloc)
 print("路径:", u.path)
-print("查询参数:", parse_qs(u.query))
 print("片段:", u.fragment)
 
-# 反推:用字典拼回查询字符串
-from urllib.parse import urlencode
+# TODO 3: 用 parse_qs 解析查询参数(query),打印结果
+print("查询参数:", parse_qs(u.query))
+
+# TODO 4: 用 urlencode 把字典拼回查询串
 print("拼回:", urlencode({"q": "python", "page": "2"}))`} />
 
 ## 三、常用方法与状态码

@@ -27,19 +27,21 @@ import CodeRunner from '../../components/CodeRunner.astro';
 
 ## 二、可运行:列表取链接 + 详情二次解析
 
-下面在浏览器里跑一段「两级」演示:先从列表 HTML 抽出详情链接和书名,再「模拟」进每个详情页解析出作者,最后合并成完整记录:
+下面模拟一个两级场景——先从列表抽链接和书名,再从「详情页」取作者,合并成完整记录:
 
 <CodeRunner
   variant="guided"
   title="列表 + 详情两级抓取"
-  prompt="预测输出:会打印 2 条含「书名 + 作者」的完整记录。思考真实场景里「进详情页」要用什么?为什么把详情链接先收集、再统一处理,比边解析边请求更稳?"
+  prompt="任务:1)从 list_html 提取每个 a 的 href 和文本;2)根据 URL 从 detail_pages 取出对应详情 HTML;3)解析作者并合并到记录中。三步都要补全。"
   code={`from bs4 import BeautifulSoup
 
-# 1) 列表页
+# 1) 列表页 HTML
 list_html = """<ul class="list">
   <li><a href="/book/1">Python 入门</a></li>
   <li><a href="/book/2">爬虫实战</a></li>
 </ul>"""
+
+# TODO 1: 解析 list_html,提取每个 a 的 href 和文本,存入 items 列表
 list_soup = BeautifulSoup(list_html, "lxml")
 items = []
 for a in list_soup.select("li a"):
@@ -50,10 +52,13 @@ detail_pages = {
     "/book/1": "<div class='author'>张三</div>",
     "/book/2": "<div class='author'>李四</div>",
 }
+
+# TODO 2: 遍历 items,根据 url 从 detail_pages 取详情 HTML,解析 .author 文本
 for it in items:
     d_soup = BeautifulSoup(detail_pages[it["url"]], "lxml")
     it["author"] = d_soup.select_one(".author").get_text(strip=True)
 
+# TODO 3: 打印完整记录
 print("完整记录:")
 for it in items:
     print(it)`} />
@@ -65,16 +70,18 @@ for it in items:
 <CodeRunner
   variant="challenge"
   title="用 set 给链接去重"
-  prompt="下面 links 里有重复的 /book/1。思考怎么用 set 让结果里每个链接只出现一次?补全后运行,观察 seen 集合的作用。"
+  prompt="任务:links 里有重复链接。用 set 维护已见集合 seen,只保留首次出现的链接到 unique 列表。补全去重逻辑。"
   code={`links = ["/book/1", "/book/2", "/book/1", "/book/3", "/book/2"]
 
 seen = set()
 unique = []
-# TODO: 遍历 links,若 link 不在 seen 就加入 unique 并标记 seen
+
+# TODO: 遍历 links,若 link 不在 seen 中就加入 unique 并加入 seen
 for link in links:
     if link not in seen:
         seen.add(link)
         unique.append(link)
+
 print("去重后:", unique)`} />
 
 ## 四、并发提速(进阶)

@@ -43,12 +43,12 @@ XPath 用「路径」描述你要找的节点,核心符号只有四个:
 
 `lxml.html.fromstring()` 把 HTML 字符串变成可查询的文档对象,再用 `.xpath("表达式")` 提取,返回**字符串列表**(对 `text()`/`@属性`)或**元素列表**(对标签)。
 
-下面这段在浏览器里就能运行——它解析一段内联 HTML,用 XPath 同时取出书名和链接:
+下面需要你补全 XPath 提取逻辑——给定一段 HTML,用 XPath 同时取出书名和链接:
 
 <CodeRunner
   variant="guided"
   title="XPath 提取书名与链接"
-  prompt="先预测输出:页面有 2 本书,每段会打印「书名 -> 链接」。思考 //li[@class='book'] 为什么能选中两本书,再展开运行验证。然后试着把 text() 改成 @href 看会发生什么。"
+  prompt="任务:用 lxml 解析 HTML,写两个 xpath 表达式——一个取所有书名文本,一个取所有详情链接。提示:fromstring 解析,//li[@class='book'] 定位每本书。"
   code={`from lxml import html
 
 doc = html.fromstring('''<ul class="books">
@@ -56,8 +56,13 @@ doc = html.fromstring('''<ul class="books">
   <li class="book"><span class="title">爬虫实战</span><a href="/b/2">详情</a></li>
 </ul>''')
 
+# TODO 1: 写 xpath 表达式,提取所有 //li[@class='book'] 下的 span/title 文本
 titles = doc.xpath("//li[@class='book']/span[@class='title']/text()")
+
+# TODO 2: 写 xpath 表达式,提取所有 //li[@class='book'] 下的 a/@href 属性
 links = doc.xpath("//li[@class='book']/a/@href")
+
+# TODO 3: 用 zip 配对打印每本书的「书名 -> 链接」
 for t, h in zip(titles, links):
     print(t, "->", h)`} />
 
@@ -67,12 +72,12 @@ for t, h in zip(titles, links):
 - **取属性**:`//img/@src` 直接拿到图片地址列表,常用于批量抓图。
 - **按文本过滤**:`//a[contains(text(),'详情')]` 选中文字含「详情」的链接;`contains()` 也常用于属性:`//div[contains(@class,'book')]`(class 含 book 即可,避免完整匹配)。
 
-再来一个带 `contains` 的实战例子,注意它和「精确等于」的区别:
+再来一个练习——这次 class 属性是多值的(`book hot`),精确匹配会漏掉,你需要用 `contains`:
 
 <CodeRunner
   variant="challenge"
   title="用 contains 模糊匹配 class"
-  prompt="下面 HTML 里 li 的 class 是 'book hot',用 [@class='book'] 会漏掉它。思考应该怎么写才能选中,再展开代码补全并运行。"
+  prompt="任务:li 的 class 是 'book hot',用 [@class='book'] 精确匹配会漏掉。改用 contains(@class,'book') 来模糊匹配,提取 span 文本。"
   code={`from lxml import html
 
 doc = html.fromstring('''<ul>
@@ -80,7 +85,7 @@ doc = html.fromstring('''<ul>
   <li class="book"><span>爬虫实战</span></li>
 </ul>''')
 
-# TODO: 用 contains(@class,'book') 选中所有书,提取其 span 文本
+# TODO: 用 contains(@class,'book') 替代精确匹配,提取 span 文本
 items = doc.xpath("//li[contains(@class,'book')]/span/text()")
 print("抓到:", items)`} />
 

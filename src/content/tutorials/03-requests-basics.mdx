@@ -55,20 +55,23 @@ resp = requests.get(
 print(resp.url)  # https://books.example.com/search?q=python&page=2
 ```
 
-下面这段在浏览器里就能跑——它模拟 `requests` 拼参数的过程,你看参数怎么变成查询串:
+下面这段在浏览器里就能跑——你需要补全「把字典拼成查询串」的逻辑,这正是 `requests.params` 在背后做的事:
 
 <CodeRunner
   variant="guided"
   title="把参数字典拼成查询串"
-  prompt="预测输出:会打印完整 URL 和解析后的参数。思考如果参数值含中文或空格,手写 URL 会出什么错?用 params / urlencode 为什么更安全?"
-  code={`from urllib.parse import urlencode, urlparse, parse_qs
+  prompt="任务:将 params 字典用 urlencode 编码,拼到 base URL 后面形成完整 URL,再反向解析验证。思考:中文参数会被编码成什么?手拼 URL 有什么风险?"
+  code={`# TODO 1: 从 urllib.parse 导入 urlencode, urlparse, parse_qs
+from urllib.parse import urlencode, urlparse, parse_qs
 
 base = "https://books.example.com/search"
 params = {"q": "python 爬虫", "page": "2"}
+
+# TODO 2: 用 urlencode(params) 将字典编码为查询字符串,拼接到 base 后面
 url = base + "?" + urlencode(params)
 print("最终 URL:", url)
 
-# 反过来证明它被正确编码了
+# TODO 3: 反向验证——用 urlparse + parse_qs 把刚拼的 URL 解回来,打印参数
 print("解析回参数:", parse_qs(urlparse(url).query))`} />
 
 ## 三、请求头与 UA 伪装

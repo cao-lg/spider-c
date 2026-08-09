@@ -34,55 +34,63 @@ data = resp.json()      # 直接把响应体解析成 dict / list
 
 ## 二、可运行:解析嵌套 JSON
 
-下面在浏览器里跑——它把一段接口返回的嵌套 JSON 解析出来,取出每本书的字段。实战里 `data` 来自 `resp.json()`,结构完全一致:
+下面给你一段 JSON 接口的返回数据,你需要补全解析逻辑:
 
 <CodeRunner
   variant="guided"
   title="解析嵌套 JSON 接口"
-  prompt="预测输出:会打印 2 本书的 title 与 price。思考 data['items'] 是什么类型?如果某本书没有 price 字段,data[0]['price'] 会怎样?怎么用 .get 兜底?"
+  prompt="任务:用 json.loads 解析 raw 字符串,取出 total 和每本书的 title/price。提示:data items 是列表,用 for 遍历;缺失字段用 .get 兜底。"
   code={`import json
 
-raw = '''{
-  "total": 2,
-  "items": [
-    {"id": 1, "title": "Python 入门", "price": 59},
-    {"id": 2, "title": "爬虫实战", "price": 69}
-  ]
-}'''
+raw = '{"total": 2, "items": [{"id": 1, "title": "Python 入门", "price": 59}, {"id": 2, "title": "爬虫实战", "price": 69}]}'
+
+# TODO 1: 用 json.loads(raw) 解析为 Python 字典 data
 data = json.loads(raw)
+
+# TODO 2: 打印 data total(总数)
 print("共", data["total"], "本")
+
+# TODO 3: 遍历 data items,打印每本书的 title 和 price
 for item in data["items"]:
     print(item["title"], "->", item.get("price"))`} />
 
 ## 三、用 SQLite 持久化
 
-抓来的数据要落库才方便查询。标准库 `sqlite3` 零配置,下面在浏览器里用内存数据库演示完整「建表 → 插入 → 查询」:
+抓来的数据要落库才方便查询。标准库 `sqlite3` 零配置,下面需要你补全建表、插入、查询:
 
 <CodeRunner
   variant="challenge"
   title="SQLite 建表并查询"
-  prompt="下面已建好表并插入一条数据。思考怎么把第二本书也插进去,并用 SELECT 查回全部?补全后运行,观察 fetchall 的返回。"
+  prompt="任务:已建好表并插入一条。补全插入第二本,然后 SELECT 查回全部记录。"
   code={`import sqlite3
 
-conn = sqlite3.connect(":memory:")   # 真实场景换成 "books.db"
+conn = sqlite3.connect(":memory:")
 c = conn.cursor()
+
+# TODO 1: 创建表 book,字段为 title TEXT 和 price INTEGER
 c.execute("CREATE TABLE book (title TEXT, price INTEGER)")
+
+# TODO 2: 插入第一条 Python 入门 59
 c.execute("INSERT INTO book VALUES (?, ?)", ("Python 入门", 59))
-# TODO: 再插入「爬虫实战 / 69」,然后 SELECT * 打印所有书
+
+# TODO 3: 插入第二条 爬虫实战 69
 c.execute("INSERT INTO book VALUES (?, ?)", ("爬虫实战", 69))
+
+# TODO 4: SELECT 查询并打印所有行
 for row in c.execute("SELECT * FROM book"):
     print(row)
+
 conn.close()`} />
 
-> 真实场景把 `:memory:` 换成文件名(如 `"books.db"`),数据就持久保存在磁盘上,下次打开还在。
+> 真实场景把 `:memory:` 换成文件名(如 `"books.db"`),数据就持久保存在磁盘上。
 
 ## 四、串联靶站
 
-去 [Level 4 靶站](/practice/level4-json-api/) 找一个返回 JSON 的接口,用 `resp.json()` 解析,再写进 SQLite。本页底部「代码实战」带你走一遍。
+去 [Level 4 靶站](/practice/level4-json-api/) 找一个返回 JSON 的接口,用 `resp.json()` 解析,再写进 SQLite。
 
 ## 五、小结
 
 - JSON 接口:Network → XHR/Fetch 找 `application/json` 请求,`resp.json()` 解析。
-- 嵌套 JSON 用 `data["key"][i]["field"]` 取;缺失字段用 `.get` 兜底。
+- 嵌套 JSON 用字典取值;缺失字段用 `.get` 兜底。
 - `sqlite3` 零配置:`connect` → `execute(CREATE/INSERT/SELECT)` → `close`。
 - 内存库 `:memory:` 适合练手,真实数据用文件名持久化。
