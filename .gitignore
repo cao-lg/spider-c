@@ -26,3 +26,6 @@ pnpm-debug.log*
 # python
 __pycache__/
 *.pyc
+
+# local workbuddy memory/state (not for public repo)
+.workbuddy/
