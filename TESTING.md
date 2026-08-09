@@ -96,6 +96,9 @@
 - 浏览器运行器每次整页刷新都会重建 Pyodide worker(首载约 5~10 秒),脚本对每个首次运行等待至多 150 秒。
 - 学习数据存于 `localStorage["crawler-course:v1"]`,E2E 用全新浏览器上下文隔离。
 - 靶站为静态生成的教学假数据,数据量断言依赖生成脚本,若调整数据规模需同步更新 T-022~T-026。
+- `pyodide-smoke.mjs` 在 Node 中 requests 网络段需要 `--experimental-wasm-stack-switching`(Node<24)
+  或 `runPythonAsync` 配合,属 Node 环境限制;浏览器内 requests 由 E2E T-010 已验证正常,
+  smoke 的核心目的(自托管 wheel 可加载、bs4/lxml 可用)不受影响。
 
 ## 6. 快速迭代流程
 
