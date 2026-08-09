@@ -15,9 +15,74 @@ skillDomain:
   - 存储
 ---
 
-本章节内容建设中,将覆盖:
+import CodeRunner from '../../components/CodeRunner.astro';
 
-- 通过浏览器开发者工具发现 JSON 接口
-- `requests` + `.json()` 解析
-- `sqlite3` 建表与写入
-- 靶站 Level 4 实战
+很多现代网站的数据根本不在 HTML 里——它在背后一个 **JSON 接口** 返回,前端再用 JS 渲染。直接抓接口,往往比解析 HTML 更干净、更稳。
+
+## 一、发现 JSON 接口
+
+打开浏览器 F12 → Network,筛选 `XHR` / `Fetch`,刷新页面,看那些返回 `Content-Type: application/json` 的请求。它的 URL 就是你要抓的接口。
+
+```python
+import requests
+
+resp = requests.get(api_url, headers=headers, timeout=5)
+data = resp.json()      # 直接把响应体解析成 dict / list
+```
+
+> 接口常带分页参数(如 `?offset=0&limit=20`),翻页方式和 HTML 分页一样。
+
+## 二、可运行:解析嵌套 JSON
+
+下面在浏览器里跑——它把一段接口返回的嵌套 JSON 解析出来,取出每本书的字段。实战里 `data` 来自 `resp.json()`,结构完全一致:
+
+<CodeRunner
+  variant="guided"
+  title="解析嵌套 JSON 接口"
+  prompt="预测输出:会打印 2 本书的 title 与 price。思考 data['items'] 是什么类型?如果某本书没有 price 字段,data[0]['price'] 会怎样?怎么用 .get 兜底?"
+  code={`import json
+
+raw = '''{
+  "total": 2,
+  "items": [
+    {"id": 1, "title": "Python 入门", "price": 59},
+    {"id": 2, "title": "爬虫实战", "price": 69}
+  ]
+}'''
+data = json.loads(raw)
+print("共", data["total"], "本")
+for item in data["items"]:
+    print(item["title"], "->", item.get("price"))`} />
+
+## 三、用 SQLite 持久化
+
+抓来的数据要落库才方便查询。标准库 `sqlite3` 零配置,下面在浏览器里用内存数据库演示完整「建表 → 插入 → 查询」:
+
+<CodeRunner
+  variant="challenge"
+  title="SQLite 建表并查询"
+  prompt="下面已建好表并插入一条数据。思考怎么把第二本书也插进去,并用 SELECT 查回全部?补全后运行,观察 fetchall 的返回。"
+  code={`import sqlite3
+
+conn = sqlite3.connect(":memory:")   # 真实场景换成 "books.db"
+c = conn.cursor()
+c.execute("CREATE TABLE book (title TEXT, price INTEGER)")
+c.execute("INSERT INTO book VALUES (?, ?)", ("Python 入门", 59))
+# TODO: 再插入「爬虫实战 / 69」,然后 SELECT * 打印所有书
+c.execute("INSERT INTO book VALUES (?, ?)", ("爬虫实战", 69))
+for row in c.execute("SELECT * FROM book"):
+    print(row)
+conn.close()`} />
+
+> 真实场景把 `:memory:` 换成文件名(如 `"books.db"`),数据就持久保存在磁盘上,下次打开还在。
+
+## 四、串联靶站
+
+去 [Level 4 靶站](/practice/level4-json-api/) 找一个返回 JSON 的接口,用 `resp.json()` 解析,再写进 SQLite。本页底部「代码实战」带你走一遍。
+
+## 五、小结
+
+- JSON 接口:Network → XHR/Fetch 找 `application/json` 请求,`resp.json()` 解析。
+- 嵌套 JSON 用 `data["key"][i]["field"]` 取;缺失字段用 `.get` 兜底。
+- `sqlite3` 零配置:`connect` → `execute(CREATE/INSERT/SELECT)` → `close`。
+- 内存库 `:memory:` 适合练手,真实数据用文件名持久化。

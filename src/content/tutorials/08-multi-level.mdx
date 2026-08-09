@@ -15,9 +15,89 @@ skillDomain:
   - 分页
 ---
 
-本章节内容建设中,将覆盖:
+import CodeRunner from '../../components/CodeRunner.astro';
 
-- 列表页提取详情链接
-- 详情页二次解析
-- 使用 set 去重
-- 靶站 Level 3 实战
+很多数据「列表页看概要、点进去才看全」。比如图书列表只显示书名,详情页才有作者、简介、评分。这就是**两级爬取**:先抓列表拿链接,再逐个进详情页抓细数据。
+
+## 一、两级结构长这样
+
+```
+列表页  →  提取每条的详情链接  →  逐条请求详情页  →  解析细数据  →  合并
+```
+
+## 二、可运行:列表取链接 + 详情二次解析
+
+下面在浏览器里跑一段「两级」演示:先从列表 HTML 抽出详情链接和书名,再「模拟」进每个详情页解析出作者,最后合并成完整记录:
+
+<CodeRunner
+  variant="guided"
+  title="列表 + 详情两级抓取"
+  prompt="预测输出:会打印 2 条含「书名 + 作者」的完整记录。思考真实场景里「进详情页」要用什么?为什么把详情链接先收集、再统一处理,比边解析边请求更稳?"
+  code={`from bs4 import BeautifulSoup
+
+# 1) 列表页
+list_html = """<ul class="list">
+  <li><a href="/book/1">Python 入门</a></li>
+  <li><a href="/book/2">爬虫实战</a></li>
+</ul>"""
+list_soup = BeautifulSoup(list_html, "lxml")
+items = []
+for a in list_soup.select("li a"):
+    items.append({"url": a.get("href"), "title": a.get_text(strip=True)})
+
+# 2) 模拟详情页(真实场景用 requests.get(base + item["url"]))
+detail_pages = {
+    "/book/1": "<div class='author'>张三</div>",
+    "/book/2": "<div class='author'>李四</div>",
+}
+for it in items:
+    d_soup = BeautifulSoup(detail_pages[it["url"]], "lxml")
+    it["author"] = d_soup.select_one(".author").get_text(strip=True)
+
+print("完整记录:")
+for it in items:
+    print(it)`} />
+
+## 三、用 set 去重
+
+列表页之间常有重复条目(尤其翻页重叠)。用 `set` 存已抓过的链接,遇到重复就跳过:
+
+<CodeRunner
+  variant="challenge"
+  title="用 set 给链接去重"
+  prompt="下面 links 里有重复的 /book/1。思考怎么用 set 让结果里每个链接只出现一次?补全后运行,观察 seen 集合的作用。"
+  code={`links = ["/book/1", "/book/2", "/book/1", "/book/3", "/book/2"]
+
+seen = set()
+unique = []
+# TODO: 遍历 links,若 link 不在 seen 就加入 unique 并标记 seen
+for link in links:
+    if link not in seen:
+        seen.add(link)
+        unique.append(link)
+print("去重后:", unique)`} />
+
+## 四、并发提速(进阶)
+
+详情页一多,串行请求会很慢。可用线程池并发(本地运行):
+
+```python
+from concurrent.futures import ThreadPoolExecutor
+import requests
+
+def fetch_detail(url):
+    return requests.get(url, timeout=5).text
+
+with ThreadPoolExecutor(max_workers=5) as pool:
+    details = pool.map(fetch_detail, detail_urls)
+```
+
+> 并发不是越快越好——`max_workers` 别太大,配合 `time.sleep` 才礼貌。
+
+## 五、小结
+
+- 两级爬取:列表页抽链接 → 详情页抓细数据 → 合并。
+- 先把链接和概要收集成列表,再统一进详情页,结构更清晰。
+- `set` 去重:用「已见集合」跳过重复链接。
+- 量大用 `ThreadPoolExecutor` 并发,但务必控制频率。
+- 去 [Level 3 靶站](/practice/level3-detail/) 实战列表 + 详情。

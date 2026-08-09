@@ -4,19 +4,100 @@ unitId: unit-1
 order: 2
 title: HTTP 基础
 slug: 02-http-basics
-duration: 30
-summary: 请求与响应、状态码、请求头,理解浏览器与服务器如何对话。
+duration: 35
+summary: 理解请求/响应模型、URL 结构、常用方法与状态码、请求头的作用。
 goals:
-  - 理解 HTTP 请求与响应结构
-  - 认识常见状态码的含义
-  - 理解 User-Agent 与请求头的作用
+  - 理解 HTTP 请求/响应模型
+  - 拆解 URL 的每个部分
+  - 认识常用方法(GET/POST)与状态码
+  - 理解请求头(User-Agent、Cookie 等)的作用
 skillDomain:
   - 请求
 ---
 
-本章节内容建设中,将覆盖:
+import CodeRunner from '../../components/CodeRunner.astro';
 
-- 请求方法:GET / POST
-- 响应状态码:200 / 301 / 403 / 404 / 429 / 500
-- 请求头与 User-Agent
-- Cookie 与 Session 的初步认识
+爬虫本质上是**模拟浏览器发 HTTP 请求、读懂服务器返回的响应**。不懂 HTTP,你只会「抄代码」,一旦网站变卦就束手无策。这一章把 HTTP 讲透。
+
+## 一、请求 / 响应模型
+
+一次抓取就是一次对话:
+
+```
+你(客户端)  --请求 Request-->   服务器
+你(客户端)  <--响应 Response--   服务器
+```
+
+请求里包含:要什么(URL)、用什么动作(方法)、附带什么信息(请求头/请求体)。
+响应里包含:状态码(成不成功)、响应头、以及真正的网页内容(HTML/JSON)。
+
+## 二、URL 结构拆解
+
+`https://books.example.com/search?q=python&page=2#top`
+
+| 部分 | 含义 |
+| --- | --- |
+| `https` | 协议(scheme) |
+| `books.example.com` | 主机(host) |
+| `/search` | 路径(path) |
+| `?q=python&page=2` | 查询参数(query),`&` 分隔多个 |
+| `#top` | 片段(fragment),浏览器内锚点,**不会发给服务器** |
+
+用 Python 标准库就能把 URL 拆开看个明白(下面在浏览器里直接跑):
+
+<CodeRunner
+  variant="guided"
+  title="拆解一个真实 URL"
+  prompt="预测输出:会打印协议、主机、路径、查询字典、片段。思考 #top 为什么不会出现在服务器的查询里?再试着改 URL 里的 q 值看 parse_qs 怎么变。"
+  code={`from urllib.parse import urlparse, parse_qs
+
+u = urlparse("https://books.example.com/search?q=python&page=2#top")
+print("协议:", u.scheme)
+print("主机:", u.netloc)
+print("路径:", u.path)
+print("查询参数:", parse_qs(u.query))
+print("片段:", u.fragment)
+
+# 反推:用字典拼回查询字符串
+from urllib.parse import urlencode
+print("拼回:", urlencode({"q": "python", "page": "2"}))`} />
+
+## 三、常用方法与状态码
+
+**方法(你要服务器做什么)**:
+
+- `GET`:取数据(最常见,参数在 URL 里)。
+- `POST`:提交数据(登录、搜索表单,参数在请求体里)。
+- 还有 `PUT`/`DELETE` 等,爬虫较少直接用。
+
+**状态码(服务器说结果)**:
+
+| 范围 | 含义 | 爬虫怎么处理 |
+| --- | --- | --- |
+| `2xx` | 成功(200) | 正常解析 |
+| `3xx` | 重定向(301/302) | requests 默认跟随,注意最终地址 |
+| `4xx` | 客户端错误 | 403 被拦、404 不存在、429 太快 |
+| `5xx` | 服务器错误 | 503 维护,可重试 |
+
+> 看到 `403` 别慌,通常是**请求头太「裸」**(没有 User-Agent),服务器当机器人拦了——下一章学 requests 时我们就解决它。
+
+## 四、请求头:你给服务器的「自我介绍」
+
+请求头是一组键值对,告诉服务器「我是谁、我要什么格式」。爬虫最关心的几个:
+
+- `User-Agent`:浏览器标识。很多站点只认正常 UA,缺失就 403。
+- `Cookie`:登录态。需要登录才能看的内容靠它。
+- `Referer`:从哪个页面来的,部分防盗链站点会校验。
+- `Accept-Language`:想要的语言。
+
+浏览器按 F12 → Network → 任意请求 → Headers,就能看到真实请求头,照着抄是最快的学习方式。
+
+## 五、小结
+
+- HTTP = 请求 → 响应。请求带 URL/方法/头/体,响应带回状态码/头/内容。
+- URL 五段:协议 / 主机 / 路径 / 查询 / 片段(`#` 不发服务器)。
+- `GET` 取、`POST` 交;状态码 `2xx` 成功、`4xx` 多是被拦、`5xx` 可重试。
+- 请求头里 `User-Agent`/`Cookie`/`Referer` 是爬虫最常调的三个。
+- 下一章用 `requests` 把这些概念变成代码。
+
+本页底部「代码实战」会让你用 requests 实际发一次请求。

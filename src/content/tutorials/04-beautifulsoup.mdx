@@ -5,19 +5,104 @@ order: 1
 title: BeautifulSoup 解析
 slug: 04-beautifulsoup
 duration: 45
-summary: 用 BeautifulSoup + CSS 选择器从 HTML 中提取数据。
+summary: 用 BeautifulSoup 把 HTML 变成可查询的对象,掌握 find/find_all、CSS 选择器与节点遍历。
 goals:
-  - 解析 HTML 文档结构
-  - 使用 find / find_all 定位元素
-  - 使用 CSS 选择器
-  - 提取文本与属性
+  - 用 BeautifulSoup 解析 HTML
+  - 用 find / find_all / select 定位元素
+  - 遍历父子与兄弟节点
+  - 正确提取文本与属性
 skillDomain:
   - 解析
 ---
 
-本章节内容建设中,将覆盖:
+import CodeRunner from '../../components/CodeRunner.astro';
 
-- HTML 树形结构与 DOM
-- `soup.find` / `soup.find_all`
-- CSS 选择器与 `.select`
-- 提取 `.text` 与 `.get('href')`
+拿到网页字符串只是开始,真正的功夫在**解析**——把杂乱的 HTML 变成你能按规则提取数据的结构。BeautifulSoup(BS4)是 Python 里最友好的解析库。
+
+## 一、解析器怎么选
+
+```python
+from bs4 import BeautifulSoup
+soup = BeautifulSoup(html, "html.parser")   # Python 内置,零依赖
+soup = BeautifulSoup(html, "lxml")          # 更快,需装 lxml(推荐)
+```
+
+教程统一用 `"lxml"`(快),它也能解析不规范的 HTML。下面所有示例都基于它。
+
+## 二、三种定位方式
+
+1. **按标签名**:`soup.find('title')` 找第一个,`soup.find_all('a')` 找全部。
+2. **按属性**:`soup.find('div', class_='book')`(`class` 要写成 `class_`,因为 class 是 Python 关键字)。
+3. **CSS 选择器**(最常用):`soup.select('div.book > span.title')` 返回列表,`select_one` 返回单个。
+
+下面在浏览器里跑一段:解析图书列表,用 `select` 把每本书的书名和价格取出来:
+
+<CodeRunner
+  variant="guided"
+  title="用 CSS 选择器提取图书列表"
+  prompt="预测输出:会打印 2 本书的「书名 价格」。思考 .book > .title 的 > 为什么不能省?如果 HTML 里价格用的是 <b> 而不是 <span class='price'>,选择器要怎么改?"
+  code={`from bs4 import BeautifulSoup
+
+html = """<ul class="books">
+  <li class="book"><span class="title">Python 入门</span><span class="price">59</span></li>
+  <li class="book"><span class="title">爬虫实战</span><span class="price">69</span></li>
+</ul>"""
+
+soup = BeautifulSoup(html, "lxml")
+for li in soup.select("li.book"):
+    title = li.select_one(".title").get_text()
+    price = li.select_one(".price").get_text()
+    print(title, price)`} />
+
+## 三、遍历节点树
+
+HTML 是树,BS4 让你上下左右走:
+
+- **父**:`tag.parent`
+- **子**:`tag.contents`(列表)/ `tag.children`(迭代器)
+- **兄弟**:`tag.next_sibling` / `tag.previous_sibling`
+- **后代文本**:`tag.get_text()` 把所有嵌套文字拼起来
+
+> 提取文字用 `.get_text()`,不要直接 `str(tag)`——后者会把标签也带进去。
+
+## 四、属性与文本的正确姿势
+
+- 取属性:`tag['href']` 或 `tag.get('href')`(推荐 `get`,没有时返回 None 不报错)。
+- 取文本:`tag.get_text(strip=True)` 的 `strip=True` 能顺手去掉首尾空白,实战必加。
+- 批量属性:`[a.get('href') for a in soup.select('a')]`。
+
+再来一个例子,练「遍历 + 取属性 + 清洗文本」这条完整链路:
+
+<CodeRunner
+  variant="challenge"
+  title="提取链接并清洗文本"
+  prompt="下面 HTML 的链接文字前后有空格、还有换行。思考怎么在提取时一次性清理掉?补全后运行,观察 strip=True 的效果。"
+  code={`from bs4 import BeautifulSoup
+
+html = """<div class="list">
+  <a href="/p/1">  Python 入门  </a>
+  <a href="/p/2">\n爬虫实战\n</a>
+</div>"""
+
+soup = BeautifulSoup(html, "lxml")
+# TODO: 提取每个链接的 href 与清洗后的文本(去掉首尾空白)
+for a in soup.select("a"):
+    href = a.get("href")
+    text = a.get_text(strip=True)
+    print(href, "=>", text)`} />
+
+## 五、BS4 vs lxml/XPath
+
+- BS4 胜在**容错好、API 直观**,新手友好。
+- 纯 XPath(`lxml`)在「按文字定位、向上找父节点」时更省事(见下一章 XPath)。
+- 实战常组合:BS4 做主解析,遇到 BS4 不擅长的定位再切到 `lxml` 的 XPath。
+
+## 六、小结
+
+- `BeautifulSoup(html, "lxml")` 解析;`class` 参数要写 `class_`。
+- 定位三件套:`find` / `find_all` / `select`(CSS)。
+- 取文本用 `get_text(strip=True)`,取属性用 `get('href')`。
+- 节点树可上下遍历:`.parent`、`.children`、`.next_sibling`。
+- 练手:[Level 1 靶站](/practice/level1-books/) 用 `select("tbody tr")` 抓 24 行。
+
+本页底部「代码实战」让你在靶站上完成一次真实提取。

@@ -5,20 +5,94 @@ order: 1
 title: 环境搭建
 slug: 01-environment
 duration: 20
-summary: 安装 Python、创建虚拟环境、安装 requests 与 BeautifulSoup。
+summary: 安装 Python、用 venv 隔离环境、安装 requests 与 BeautifulSoup 等核心库。
 goals:
   - 安装并验证 Python 环境
-  - 学会使用 pip 安装第三方库
   - 用 venv 创建隔离的虚拟环境
+  - 用 pip 安装 requests、beautifulsoup4、lxml
 skillDomain:
   - 请求
 ---
 
-本章节内容建设中,将覆盖:
+import CodeRunner from '../../components/CodeRunner.astro';
 
-- 安装 Python 与验证版本
-- pip 包管理器的使用
-- venv 虚拟环境
-- 安装 requests 与 beautifulsoup4
+写爬虫第一步不是写代码,而是把**运行环境**收拾干净。环境乱了,后面十倍的坑都出在「我本地能跑,你那怎么不行」。这一章把地基打牢。
 
-请在浏览器运行区或本地终端中练习基础命令。
+## 一、为什么需要隔离环境
+
+你以后会同时做很多 Python 项目,每个项目依赖的库版本可能冲突(比如 A 项目要 requests 2.x,B 项目要 1.x)。**虚拟环境(venv)**就是给每个项目单独建一个小房间,互不干扰。
+
+> 本教程的浏览器运行器已经预装好了 requests / BeautifulSoup / lxml,你不用装也能直接在页面里跑示例。但学会本地环境管理,是你把爬虫跑在自己电脑上的前提。
+
+## 二、安装并验证 Python
+
+1. 到 python.org 下载 **Python 3.10+**(勾选安装界面的 *Add Python to PATH*)。
+2. 打开终端验证:
+
+```bash
+python --version      # 或 python3 --version
+# 期望看到: Python 3.10.x 或更高
+```
+
+如果提示「找不到命令」,大概率是安装时没勾 PATH,或需要用 `python3`。
+
+## 三、用 venv 创建虚拟环境
+
+在项目目录里:
+
+```bash
+# 在当前目录创建名为 .venv 的虚拟环境
+python -m venv .venv
+
+# 激活(Windows)
+.venv\Scripts\activate
+# 激活(macOS / Linux)
+source .venv/bin/activate
+```
+
+激活后,终端提示符前面会出现 `(.venv)`,表示你已进入这个隔离房间。之后用 `pip` 装的库都只装在这里。
+
+## 四、用 pip 安装核心库
+
+爬虫三件套:
+
+```bash
+pip install requests beautifulsoup4 lxml
+```
+
+- **requests**:发 HTTP 请求拿网页
+- **beautifulsoup4**:把 HTML 解析成好用的对象(配 `lxml` 解析器最快)
+- **lxml**:高性能解析引擎,XPath 也靠它
+
+升级 pip 本身(可选):`python -m pip install --upgrade pip`。
+
+## 五、验证环境就绪
+
+下面这段在浏览器运行器里直接跑,它检查三个核心库是否都能导入——你本地激活环境后跑同样的代码,应该看到「核心库就绪」:
+
+<CodeRunner
+  variant="showcase"
+  title="检测核心库是否就绪"
+  prompt="观察输出:如果三行库名都打印出来,说明环境 OK。思考本地激活 venv 后再跑,和直接在浏览器跑,import 的包来自哪里?"
+  code={`import sys
+print("Python 版本:", sys.version.split()[0])
+
+try:
+    import requests, bs4, lxml
+    print("核心库就绪:", requests.__name__, bs4.__name__, lxml.__name__)
+except ImportError as e:
+    print("缺少库:", e)
+    print("在本地请运行: pip install requests beautifulsoup4 lxml")`} />
+
+## 六、常见坑
+
+- **`python` 和 `pip` 不是一对**:务必确认 `pip` 装到了你激活的 venv 里(激活后 `which pip` 应指向 `.venv`)。
+- **装完库却 import 失败**:多半是没激活环境,或用了另一个 Python。用 `pip show beautifulsoup4` 看装到哪了。
+- **Windows 激活报权限错误**:管理员打开终端,或执行 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`。
+
+## 七、小结
+
+- 先装 Python 3.10+,验证 `python --version`。
+- 每个项目用 `python -m venv .venv` 隔离,装库前先激活。
+- 三件套:`requests`(请求)+ `beautifulsoup4`(解析)+ `lxml`(引擎/XPath)。
+- 装完用 `import` 验证,比「以为装好了」可靠。

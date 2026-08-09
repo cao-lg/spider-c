@@ -15,9 +15,85 @@ skillDomain:
   - 分页
 ---
 
-本章节内容建设中,将覆盖:
+import CodeRunner from '../../components/CodeRunner.astro';
 
-- 分页 URL 的 `?page=` 规律
-- for 循环翻页抓取
-- `time.sleep()` 控制请求频率
-- 靶站 Level 2 实战
+单个列表页往往装不下全部数据,网站会用「分页」把它们拆成多页。爬虫要做的,就是找到翻页规律,把每一页都抓回来。
+
+## 一、找分页 URL 规律
+
+最常见的分页是 `?page=1`、`?page=2`……把页数换成变量即可:
+
+```python
+base = "https://books.example.com/list"
+for page in range(1, 6):          # 1 到 5 页
+    url = f"{base}?page={page}"
+    resp = requests.get(url, headers=headers, timeout=5)
+    # ...解析这一页
+```
+
+有些站点用路径分页(`/list/1`、`/list/2`),规律一样,只是拼法不同。先翻两三页,确认「变的是哪一段」。
+
+## 二、可运行:循环解析多页并汇总
+
+下面在浏览器里模拟「3 页 HTML,逐页解析、汇总到同一个列表」——这就是翻页爬虫的骨架,只不过真实场景里每页来自一次网络请求:
+
+<CodeRunner
+  variant="guided"
+  title="循环翻页并汇总数据"
+  prompt="预测输出:会打印 6 本书(每页 2 本 × 3 页)。思考如果某一页解析出 0 条,循环会出错吗?真实翻页时该怎么判断「到最后一页」?"
+  code={`from bs4 import BeautifulSoup
+
+pages = [
+    '''<ul class="books"><li class="book">Python 入门</li><li class="book">爬虫实战</li></ul>''',
+    '''<ul class="books"><li class="book">数据分析</li><li class="book">算法图解</li></ul>''',
+    '''<ul class="books"><li class="book">SQL 必知必会</li><li class="book">深度学习</li></ul>''',
+]
+
+all_books = []
+for i, html in enumerate(pages, start=1):
+    soup = BeautifulSoup(html, "lxml")
+    titles = [li.get_text(strip=True) for li in soup.select("li.book")]
+    print(f"第 {i} 页抓到 {len(titles)} 本")
+    all_books.extend(titles)
+
+print("合计:", len(all_books), "本 ->", all_books)`} />
+
+## 三、控制请求频率
+
+翻页意味着短时间内发很多请求,太快会被当成攻击。每页之间 `sleep` 一下:
+
+```python
+import time
+
+for page in range(1, 6):
+    resp = requests.get(f"{base}?page={page}", timeout=5)
+    # ...解析
+    time.sleep(1)   # 每秒最多 1 个请求,对服务器友好
+```
+
+## 四、何时停手
+
+两种常见终止条件:
+
+- **已知总页数**:`range(1, total + 1)`。
+- **未知总页数**:解析本页,若「没有数据」或「下一页按钮不存在」就 `break`。
+
+```python
+while True:
+    resp = requests.get(url, timeout=5)
+    items = parse(resp.text)
+    if not items:        # 空页,到底了
+        break
+    # ...收集
+    if not has_next_page(resp.text):
+        break
+    url = next_page_url(resp.text)
+```
+
+## 五、小结
+
+- 翻页先找规律:`?page=N` 还是 `/page/N`,把变的部分参数化。
+- 核心是 `for` / `while` 循环,每页解析后 `extend` 进总列表。
+- 每页之间 `time.sleep` 控频,避免压垮服务器、也避免被封。
+- 未知页数用「空页 / 无下一页」作为终止信号 `break`。
+- 去 [Level 2 靶站](/practice/level2-pagination/) 实战多页汇总。

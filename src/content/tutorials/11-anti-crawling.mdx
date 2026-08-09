@@ -15,9 +15,84 @@ skillDomain:
   - 反爬
 ---
 
-本章节内容建设中,将覆盖:
+import CodeRunner from '../../components/CodeRunner.astro';
 
-- 常见反爬:UA 检测、请求频率、验证码、封 IP
-- 请求头伪装与随机 UA
-- 随机延时与重试机制
-- 代理与 IP 池原理
+网站不希望被爬(耗带宽、抢资源、护数据),于是设关卡。反爬不是「道高一丈」的攻防秀,而是**在合规前提下,让请求看起来像正常用户、且不给服务器添堵**。
+
+## 一、常见反爬机制
+
+| 机制 | 表现 | 应对 |
+| --- | --- | --- |
+| UA 检测 | 没 UA / 奇怪 UA 直接 403 | 伪装成浏览器 UA |
+| 频率限制 | 太快返回 429 / 封 IP | `time.sleep` 控频 |
+| 登录校验 | 需 Cookie 才给数据 | `Session` 带登录态 |
+| 验证码 | 行为异常弹验证 | 降速、模拟真人 |
+| 封 IP | 单一 IP 请求过多拉黑 | 代理 / IP 池 |
+
+## 二、请求头伪装与随机 UA
+
+固定一个 UA 也容易被识别。准备一组真实 UA,每次随机挑一个:
+
+<CodeRunner
+  variant="guided"
+  title="随机选择一个浏览器 UA"
+  prompt="预测输出:每次运行会打印一个不同的 UA。思考为什么「随机」比「固定」更难被识别?真实爬虫里这个 UA 该放在请求的哪个参数里?"
+  code={`import random
+
+uas = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
+]
+ua = random.choice(uas)
+print("本次使用的 UA:", ua)
+print("它会放进 requests.get(url, headers={'User-Agent': ua})")`} />
+
+## 三、随机延时与重试
+
+固定 1 秒也像机器。用「随机延时」更像真人,同时给失败加重试:
+
+<CodeRunner
+  variant="challenge"
+  title="模拟随机延时"
+  prompt="下面每次打印一个 1~2 秒之间的延时。思考为什么用 uniform 而不是固定 sleep?关键行已经写好,运行观察每次数值不同。"
+  code={`import time, random
+
+# TODO: 关键行——用 random.uniform(1, 2) 生成 1~2 秒随机延时
+delays = [round(random.uniform(1, 2), 2) for _ in range(3)]
+print("本轮延时(秒):", delays)
+for d in delays:
+    print(f"等待 {d}s ...")`} />
+
+真实代码里配合 `try/except` 做重试:
+
+```python
+import time, random
+
+for attempt in range(3):
+    try:
+        resp = requests.get(url, headers=headers, timeout=5)
+        resp.raise_for_status()
+        break
+    except requests.exceptions.RequestException:
+        time.sleep(random.uniform(2, 5))   # 退避后重试
+```
+
+## 四、代理与 IP 池(原理)
+
+当单 IP 被限流,可让请求走不同出口 IP:
+
+```python
+proxies = {"http": "http://1.2.3.4:8080", "https": "http://1.2.3.4:8080"}
+resp = requests.get(url, proxies=proxies, timeout=5)
+```
+
+「IP 池」就是维护一批可用代理,每次随机挑一个。**注意**:代理来源要合法合规,免费代理常不稳定且有安全风险。
+
+## 五、小结
+
+- 反爬四板斧:伪装 UA、带请求头、控频率、必要时用代理。
+- 随机 UA + 随机延时,比「固定」更难被识别。
+- 重试用「退避 + try/except」,别死循环。
+- 代理/IP 池是进阶手段,来源务必合规。
+- 反爬的前提是**不越界**——见下一章「爬虫伦理」。

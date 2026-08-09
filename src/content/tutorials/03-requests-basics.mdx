@@ -17,27 +17,115 @@ skillDomain:
 
 import CodeRunner from '../../components/CodeRunner.astro';
 
+上一章把 HTTP 讲清楚了,这一章用 `requests` 把它变成代码。`requests` 是 Python 里最流行的 HTTP 库,把「发请求」从十几行收成了两三行。
 
-本章内容建设中。先通过下面这个可运行示例体验一下 **Pyodide 浏览器运行器**:
+> 浏览器运行器里已经预装 `requests`,但下面凡涉及**真实联网**的示例都用代码块展示(浏览器内的联网受跨域限制),可运行示例集中在「参数拼装」这类纯逻辑部分。
 
-- 点击「运行」,代码会在浏览器里用真实的 CPython(WASM)执行
-- 已预装 `requests`、`BeautifulSoup`、`lxml`,与本地环境写法完全一致
-- 变量会跨多次运行保留(方便分步演示)
+## 一、第一个 GET 请求
+
+```python
+import requests
+
+resp = requests.get("https://books.example.com/list")
+print(resp.status_code)   # 200
+print(resp.url)           # 实际访问的地址(含重定向后的)
+print(len(resp.text))     # 网页 HTML 文本长度
+```
+
+`resp`(Response 对象)是你最该熟悉的东西:
+
+| 属性 | 含义 |
+| --- | --- |
+| `resp.status_code` | 状态码(200/403/404...) |
+| `resp.text` | 解码后的网页文本(字符串) |
+| `resp.content` | 原始字节(下载图片/文件用) |
+| `resp.headers` | 响应头字典 |
+| `resp.url` | 最终 URL(跟随重定向后) |
+| `resp.encoding` | 编码,乱码时手动设 `resp.encoding = "utf-8"` |
+
+## 二、查询参数:用 params 代替手拼 URL
+
+别手写 `?q=python&page=2`,交给 `params` 字典,`requests` 会自动编码:
+
+```python
+resp = requests.get(
+    "https://books.example.com/search",
+    params={"q": "python", "page": 2},
+)
+print(resp.url)  # https://books.example.com/search?q=python&page=2
+```
+
+下面这段在浏览器里就能跑——它模拟 `requests` 拼参数的过程,你看参数怎么变成查询串:
 
 <CodeRunner
   variant="guided"
-  title="API 演示:解析一个 HTML 片段"
-  prompt="观察下面这段代码的结构(导入 → 数据 → 解析 → 提取 → 打印),预测输出后再展开代码运行验证。然后尝试:① 修改 HTML 内容;② 把 .title 改成 .price 看会发生什么。"
-  code={'from bs4 import BeautifulSoup\n\nhtml = """\n<div class="book">\n  <span class="title">Python 爬虫入门</span>\n  <span class="price">59</span>\n</div>\n"""\n\nsoup = BeautifulSoup(html, "html.parser")\ntitle = soup.select_one(".title").get_text()\nprice = soup.select_one(".price").get_text()\nprint(f"书名: {title}, 价格: {price} 元")'} />
+  title="把参数字典拼成查询串"
+  prompt="预测输出:会打印完整 URL 和解析后的参数。思考如果参数值含中文或空格,手写 URL 会出什么错?用 params / urlencode 为什么更安全?"
+  code={`from urllib.parse import urlencode, urlparse, parse_qs
 
-观察代码结构后,试试自己写一段:把上面的 HTML 换成 3 本书的列表,提取出每本书的书名与价格。
+base = "https://books.example.com/search"
+params = {"q": "python 爬虫", "page": "2"}
+url = base + "?" + urlencode(params)
+print("最终 URL:", url)
 
-试试把它改成你自己的 HTML,或者导入 `requests` 发起一个 GET 请求。
+# 反过来证明它被正确编码了
+print("解析回参数:", parse_qs(urlparse(url).query))`} />
 
-## 后续将覆盖
+## 三、请求头与 UA 伪装
 
-- `requests.get()` 与 `requests.post()`
-- 查询参数与请求头
-- `requests.Session()` 保持会话
-- 超时与异常处理
+很多站点看到「没有 User-Agent 的请求」就直接 403。`requests` 默认 UA 是 `python-requests/x.x`,很容易露馅:
 
+```python
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Accept-Language": "zh-CN,zh;q=0.9",
+}
+resp = requests.get("https://books.example.com/list", headers=headers)
+```
+
+> 把浏览器 F12 → Network 里看到的真实 `User-Agent` 抄过来,是最快的方式。
+
+## 四、POST 请求:提交数据
+
+登录、搜索表单多用 POST,参数放在请求体里:
+
+```python
+# 表单格式
+resp = requests.post(url, data={"username": "u", "password": "p"})
+# JSON 格式(接口常见)
+resp = requests.post(url, json={"key": "value"})
+```
+
+## 五、Session:保持登录态
+
+每次 `requests.get` 都是「新会话」,不带 Cookie。要维持登录,用 `Session`,它会自动保存并带上 Cookie:
+
+```python
+s = requests.Session()
+s.post(login_url, data={"user": "u", "pwd": "p"})  # 拿到登录 Cookie
+resp = s.get(protected_url)                         # 同一会话,自动带 Cookie
+```
+
+## 六、超时与异常处理
+
+**永远给请求加超时**,否则网站卡住你的脚本会一直挂起:
+
+```python
+try:
+    resp = requests.get(url, timeout=5)   # 5 秒超时
+    resp.raise_for_status()               # 状态码非 2xx 时主动抛异常
+except requests.exceptions.Timeout:
+    print("超时,稍后重试")
+except requests.exceptions.RequestException as e:
+    print("请求失败:", e)
+```
+
+`raise_for_status()` 是把「静默的 4xx/5xx」变成异常的好习惯,配合 `try/except` 才能写出健壮爬虫。
+
+## 七、小结
+
+- `requests.get(url)` / `requests.post(url, data=, json=)` 发请求。
+- 响应对象 `resp`:`status_code` / `text` / `content` / `headers` / `url`。
+- 参数用 `params=`,别手拼;请求头用 `headers=` 伪装 UA。
+- 需要登录态用 `Session()`;联网务必加 `timeout` + `try/except`。
+- `resp.raise_for_status()` 让错误显式化,是健壮爬虫的第一步。
