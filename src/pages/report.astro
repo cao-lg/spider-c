@@ -4,5 +4,84 @@ import Site from '../layouts/Site.astro';
 
 <Site title="学习中心">
   <h1>学习中心</h1>
-  <div class="callout info">学习中心正在建设中(M5)。届时将提供学习进度、成绩图表、掌握度雷达图与数据导出/导入。</div>
+  <p style="color: var(--text-2)">
+    你的学习数据只保存在浏览器本地。完成课程小测、代码实战与单元测试后,这里会自动汇总成可视化报告。
+  </p>
+
+  <div class="report-card">
+    <div class="report-card-title">学员档案</div>
+    <div class="profile-row">
+      <input id="profile-name" class="profile-name" type="text" placeholder="输入你的昵称(可选)" maxlength="20" />
+      <button id="profile-save" class="btn sm primary">保存</button>
+    </div>
+    <p class="report-hint">昵称仅保存在本机,用于个性化报告文案。</p>
+  </div>
+
+  <div class="report-empty" id="report-empty" hidden>
+    <p>还没有学习记录。先去 <a href="/tutorials/">课程目录</a> 完成第一课,或在 <a href="/tests/unit-1/">单元一综合测试</a> 上试试身手。</p>
+  </div>
+
+  <h2>学习总览</h2>
+  <div class="stats-grid" id="stats-grid">
+    <div class="report-card stat">
+      <div class="stat-value" id="stat-lessons">-</div>
+      <div class="stat-label">课程完成</div>
+    </div>
+    <div class="report-card stat">
+      <div class="stat-value" id="stat-attempts">-</div>
+      <div class="stat-label">累计作答</div>
+    </div>
+    <div class="report-card stat">
+      <div class="stat-value" id="stat-avg">-</div>
+      <div class="stat-label">练习平均得分率</div>
+    </div>
+    <div class="report-card stat">
+      <div class="stat-value" id="stat-unit">-</div>
+      <div class="stat-label">单元测最佳均分</div>
+    </div>
+  </div>
+
+  <h2>单元进度</h2>
+  <div id="unit-progress"></div>
+
+  <div class="chart-grid">
+    <div class="report-card">
+      <div class="report-card-title">技能掌握度</div>
+      <div id="radar-chart"></div>
+      <p class="report-hint" id="radar-hint">掌握度由练习得分加权得出,0 表示尚未练习该技能。</p>
+    </div>
+    <div class="report-card">
+      <div class="report-card-title">成绩趋势</div>
+      <div id="trend-chart"></div>
+      <p class="report-hint">横轴为时间,纵轴为每次作答的得分率。</p>
+    </div>
+  </div>
+
+  <h2>最近动态</h2>
+  <ul class="recent-list" id="recent-list"></ul>
+
+  <h2>数据管理</h2>
+  <div class="report-card">
+    <div class="btn-row">
+      <button id="btn-export" class="btn sm primary">导出备份(JSON)</button>
+      <button id="btn-import" class="btn sm">导入备份</button>
+      <button id="btn-reset" class="btn sm danger">清空全部数据</button>
+    </div>
+    <p class="report-hint" id="data-msg">
+      备份文件只包含学习记录,不含任何账号信息,可安全随身携带或在多台设备间同步。
+    </p>
+    <input id="import-file" type="file" accept="application/json,.json" hidden />
+    <div class="import-mode" id="import-mode" hidden>
+      <label><input type="radio" name="import-mode" value="merge" checked /> 合并导入(保留已有记录)</label>
+      <label><input type="radio" name="import-mode" value="replace" /> 覆盖导入(以文件为准)</label>
+      <div class="btn-row">
+        <button id="btn-import-go" class="btn sm primary">确认导入</button>
+        <button id="btn-import-cancel" class="btn sm">取消</button>
+      </div>
+    </div>
+  </div>
 </Site>
+
+<script>
+  import '../components/report-client';
+</script>

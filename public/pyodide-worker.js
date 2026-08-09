@@ -46,6 +46,14 @@ async function ensureInit() {
   emit('status', { text: '正在加载解析库(BeautifulSoup / lxml / requests)…' });
   await pyodide.loadPackage(CORE_PACKAGES);
   await loadLocalPackageIndex();
+  // 注入站点根地址,供 requests 拼接同源靶站 URL
+  await pyodide.runPython(
+    'try:\n' +
+      '    import js\n' +
+      '    SITE_BASE = js.location.origin\n' +
+      'except Exception:\n' +
+      '    SITE_BASE = ""\n',
+  );
   emit('ready', {});
 }
 

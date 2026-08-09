@@ -1,7 +1,9 @@
 ---
 import Site from '../../layouts/Site.astro';
+import CodeExercise from '../../components/CodeExercise.astro';
 import { getCollection, render } from 'astro:content';
 import { getUnit, lessons, unitIndexOfLesson, getLessonById } from '../../data/course';
+import { lessonTasks } from '../../data/tasks';
 
 export async function getStaticPaths() {
   const posts = await getCollection('tutorials');
@@ -18,6 +20,7 @@ const unit = getUnit(meta.unitId);
 const idx = unitIndexOfLesson(meta.id);
 const prev = idx > 0 ? lessons[idx - 1] : undefined;
 const next = idx < lessons.length - 1 ? lessons[idx + 1] : undefined;
+const task = lessonTasks[meta.id];
 ---
 
 <Site
@@ -44,6 +47,21 @@ const next = idx < lessons.length - 1 ? lessons[idx + 1] : undefined;
   )}
 
   <Content />
+
+  {task && (
+    <CodeExercise
+      id={task.id}
+      title={task.title}
+      starter={task.starter}
+      check={task.check}
+      hint={task.hint ?? ''}
+      explanation={task.explanation ?? ''}
+      skills={task.skills}
+      maxScore={task.maxScore}
+      recordKey="practice"
+      lesson={meta.id}
+    />
+  )}
 
   {meta.practiceTarget && (
     <div class="callout tip">
@@ -72,3 +90,11 @@ const next = idx < lessons.length - 1 ? lessons[idx + 1] : undefined;
     )}
   </div>
 </Site>
+
+<div data-lesson-id={meta.id} hidden></div>
+
+<script>
+  import { store } from '../../lib/store';
+  const el = document.querySelector<HTMLElement>('[data-lesson-id]');
+  if (el) store.recordLessonVisit(el.getAttribute('data-lesson-id')!);
+</script>

@@ -73,6 +73,6 @@ const levels = [
   </p>
   <CodeRunner
     title="实战:抓取 Level 1 图书榜"
-    code={'import requests\nfrom bs4 import BeautifulSoup\n\nurl = "/practice/level1-books/"\nr = requests.get(url, timeout=10)\nr.encoding = "utf-8"  # 无 charset 时 requests 可能误判编码\nsoup = BeautifulSoup(r.text, "html.parser")\nrows = soup.select("tbody tr")\nprint("状态码:", r.status_code)\nprint("抓到图书数:", len(rows))\nfor row in rows[:5]:\n    tds = row.select("td")\n    print(tds[1].get_text(), "|", tds[2].get_text(), "|", tds[4].get_text())'}
+    code={'import requests\nfrom bs4 import BeautifulSoup\n\nurl = SITE_BASE + "/practice/level1-books/"\nr = requests.get(url, timeout=10)\nr.encoding = "utf-8"  # 无 charset 时 requests 可能误判编码\nsoup = BeautifulSoup(r.text, "html.parser")\nrows = soup.select("tbody tr")\nprint("状态码:", r.status_code)\nprint("抓到图书数:", len(rows))\nfor row in rows[:5]:\n    tds = row.select("td")\n    print(tds[1].get_text(), "|", tds[2].get_text(), "|", tds[5].get_text())'}
   />
 </Site>

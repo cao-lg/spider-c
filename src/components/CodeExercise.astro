@@ -1,0 +1,46 @@
+---
+import type { RecordKind } from '../lib/types';
+
+interface Props {
+  id: string;
+  title?: string;
+  starter?: string;
+  check: string;
+  hint?: string;
+  explanation?: string;
+  skills?: string[];
+  maxScore?: number;
+  recordKey?: RecordKind;
+  lesson?: string;
+}
+
+const {
+  id,
+  title = '代码练习',
+  starter = '',
+  check,
+  hint = '',
+  explanation = '',
+  skills = [],
+  maxScore = 10,
+  recordKey = 'exercise',
+  lesson = '',
+} = Astro.props;
+---
+
+<py-code-exercise
+  data-id={id}
+  data-title={title}
+  data-starter={JSON.stringify(starter)}
+  data-check={JSON.stringify(check)}
+  data-hint={JSON.stringify(hint)}
+  data-explanation={JSON.stringify(explanation)}
+  data-skills={skills.join(',')}
+  data-max-score={maxScore}
+  data-record-key={recordKey}
+  data-lesson={lesson}
+></py-code-exercise>
+
+<script>
+  import '../components/code-exercise-client';
+</script>

@@ -1,22 +1,55 @@
 ---
 import Site from '../../layouts/Site.astro';
-import { getUnitTestByUnitId, getUnit } from '../../data/course';
+import CodeExercise from '../../components/CodeExercise.astro';
+import { getUnitTestByUnitId, getUnit, units } from '../../data/course';
+import { unitTestTasks } from '../../data/tasks';
 
 export function getStaticPaths() {
-  return import('../../data/course').then((m) =>
-    m.units.map((unit) => ({ params: { unitId: unit.id } })),
-  );
+  return units.map((unit) => ({ params: { unitId: unit.id } }));
 }
 
 const { unitId } = Astro.params;
 const test = getUnitTestByUnitId(unitId!)!;
 const unit = getUnit(unitId!);
+const tasks = unitTestTasks[test.id] ?? [];
+const totalPoints = tasks.reduce((s, t) => s + t.maxScore, 0);
 ---
 
-<Site title={`${test.title}`}>
+<Site title={test.title}>
   <h1>{test.title}</h1>
   <p style="color: var(--text-2)">
-    属于{unit.title}单元,共 10 题,考试模式限时 {test.minutes} 分钟。
+    属于「{unit.title}」单元,共 {tasks.length} 道实操题,满分 {totalPoints} 分。
+    在下方浏览器运行器里写代码、真打靶站,点「运行」后由判定器自动判分,可反复作答。
   </p>
-  <div class="callout info">综合测试组件建设中(M4)。</div>
+
+  {tasks.map((task, i) => (
+    <div class="unit-test-task">
+      <CodeExercise
+        id={task.id}
+        title={`${task.title}(${task.maxScore} 分)`}
+        starter={task.starter}
+        check={task.check}
+        hint={task.hint ?? ''}
+        explanation={task.explanation ?? ''}
+        skills={task.skills}
+        maxScore={task.maxScore}
+        recordKey="unitTest"
+      />
+    </div>
+  ))}
+
+  <div class="callout info">
+    <strong>答题提示:</strong>
+    <ul style="margin: 0.4em 0 0">
+      <li>运行器已内置变量 <code>SITE_BASE</code>,指向本站根地址,可拼接到靶站路径。</li>
+      <li>每道题都有关键变量需要你补全,点「查看提示」可获取线索。</li>
+      <li>成绩会保存在浏览器本地,并汇总到<a href="/report/">学习中心</a>的可视化报告中。</li>
+    </ul>
+  </div>
 </Site>
+
+<script>
+  import { store } from '../../lib/store';
+  // 单元测试作答期间不归因到任何课程,保持掌握度统计纯粹
+  store.pendingLesson = undefined;
+</script>

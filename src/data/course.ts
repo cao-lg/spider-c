@@ -17,6 +17,8 @@ export interface Lesson {
   duration: number; // 预计学习时长(分钟)
   summary: string; // 一句话简介
   goals: string[]; // 学习目标
+  /** 涉及技能维度(用于掌握度雷达图),取值见 skillDomains */
+  skills: string[];
   practiceTarget?: string; // 关联的靶站路径
 }
 
@@ -73,6 +75,7 @@ export const lessons: Lesson[] = [
     duration: 20,
     summary: '安装 Python、创建虚拟环境、安装 requests 与 BeautifulSoup。',
     goals: ['安装并验证 Python 环境', '学会使用 pip 安装第三方库', '用 venv 创建隔离的虚拟环境'],
+    skills: [],
   },
   {
     id: '02-http-basics',
@@ -83,6 +86,7 @@ export const lessons: Lesson[] = [
     duration: 30,
     summary: '请求与响应、状态码、请求头,理解浏览器与服务器如何对话。',
     goals: ['理解 HTTP 请求与响应结构', '认识常见状态码的含义', '理解 User-Agent 与请求头的作用'],
+    skills: ['请求'],
   },
   {
     id: '03-requests-basics',
@@ -93,6 +97,7 @@ export const lessons: Lesson[] = [
     duration: 40,
     summary: 'GET/POST、参数、请求头、Session、超时与异常处理。',
     goals: ['发起 GET 与 POST 请求', '携带参数与请求头', '使用 Session 保持状态', '正确处理超时与异常'],
+    skills: ['请求'],
   },
   {
     id: '04-beautifulsoup',
@@ -103,6 +108,7 @@ export const lessons: Lesson[] = [
     duration: 45,
     summary: '用 BeautifulSoup + CSS 选择器从 HTML 中提取数据。',
     goals: ['解析 HTML 文档结构', '使用 find / find_all 定位元素', '使用 CSS 选择器', '提取文本与属性'],
+    skills: ['解析'],
   },
   {
     id: '05-xpath',
@@ -113,6 +119,7 @@ export const lessons: Lesson[] = [
     duration: 40,
     summary: 'lxml 与 XPath 表达式,用路径精确定位网页元素。',
     goals: ['理解 XPath 路径语法', '使用 lxml 进行解析', '对比 XPath 与 CSS 选择器的取舍'],
+    skills: ['解析'],
   },
   {
     id: '06-single-page',
@@ -123,6 +130,7 @@ export const lessons: Lesson[] = [
     duration: 45,
     summary: '完整爬取一个图书列表页,并保存为 CSV。',
     goals: ['独立完成单页爬取流程', '将结果保存为 CSV', '结合靶站 Level 1 实操'],
+    skills: ['解析'],
     practiceTarget: '/practice/level1-books/',
   },
   {
@@ -134,6 +142,7 @@ export const lessons: Lesson[] = [
     duration: 45,
     summary: '循环翻页,应对分页结构的网站。',
     goals: ['识别分页 URL 规律', '循环遍历所有页面', '控制请求频率防止误伤'],
+    skills: ['分页'],
     practiceTarget: '/practice/level2-pagination/',
   },
   {
@@ -145,6 +154,7 @@ export const lessons: Lesson[] = [
     duration: 50,
     summary: '列表页 + 详情页的组合爬取策略。',
     goals: ['设计列表到详情的两级抓取', '维护已抓取集合去重', '合理并发提速'],
+    skills: ['分页', '请求'],
     practiceTarget: '/practice/level3-detail/',
   },
   {
@@ -156,6 +166,7 @@ export const lessons: Lesson[] = [
     duration: 50,
     summary: '直接请求 JSON 接口,并用 SQLite 持久化数据。',
     goals: ['识别并请求 JSON 接口', '解析嵌套 JSON 结构', '使用 SQLite 存储结构化数据'],
+    skills: ['存储', '请求'],
     practiceTarget: '/practice/level4-json-api/',
   },
   {
@@ -167,6 +178,7 @@ export const lessons: Lesson[] = [
     duration: 55,
     summary: '用无头浏览器处理 JS 动态渲染的页面。',
     goals: ['判断页面是否动态渲染', '使用 Playwright 自动化浏览器', '等待元素出现并提取数据'],
+    skills: ['反爬', '请求'],
     practiceTarget: '/practice/level5-dynamic/',
   },
   {
@@ -178,6 +190,7 @@ export const lessons: Lesson[] = [
     duration: 60,
     summary: 'UA 伪装、请求头、延时、代理与请求频率控制。',
     goals: ['理解常见反爬机制', '学会 UA 与请求头伪装', '掌握延时与频率控制', '了解代理与 IP 池的原理'],
+    skills: ['反爬'],
   },
   {
     id: '12-ethics',
@@ -188,6 +201,7 @@ export const lessons: Lesson[] = [
     duration: 30,
     summary: 'robots.txt、访问频率与国内数据合规红线。',
     goals: ['读懂并尊重 robots.txt', '遵循合理的访问频率', '了解国内数据相关法规底线'],
+    skills: [],
   },
   {
     id: '13-final-project',
@@ -198,6 +212,7 @@ export const lessons: Lesson[] = [
     duration: 90,
     summary: '从需求分析到数据落库,完成一个完整的爬虫项目。',
     goals: ['独立完成完整爬虫项目', '串联请求、解析、存储全部技能', '编写健壮的异常处理与日志'],
+    skills: ['请求', '解析', '分页', '反爬', '存储'],
   },
 ];
 
