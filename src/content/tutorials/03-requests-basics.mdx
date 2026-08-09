@@ -24,7 +24,13 @@ import CodeRunner from '../../components/CodeRunner.astro';
 - 已预装 `requests`、`BeautifulSoup`、`lxml`,与本地环境写法完全一致
 - 变量会跨多次运行保留(方便分步演示)
 
-<CodeRunner title="解析一个 HTML 片段" code={'from bs4 import BeautifulSoup\n\nhtml = """\n<div class="book">\n  <span class="title">Python 爬虫入门</span>\n  <span class="price">59</span>\n</div>\n"""\n\nsoup = BeautifulSoup(html, "html.parser")\ntitle = soup.select_one(".title").get_text()\nprice = soup.select_one(".price").get_text()\nprint(f"书名: {title}, 价格: {price} 元")'} />
+<CodeRunner
+  variant="guided"
+  title="API 演示:解析一个 HTML 片段"
+  prompt="观察下面这段代码的结构(导入 → 数据 → 解析 → 提取 → 打印),预测输出后再展开代码运行验证。然后尝试:① 修改 HTML 内容;② 把 .title 改成 .price 看会发生什么。"
+  code={'from bs4 import BeautifulSoup\n\nhtml = """\n<div class="book">\n  <span class="title">Python 爬虫入门</span>\n  <span class="price">59</span>\n</div>\n"""\n\nsoup = BeautifulSoup(html, "html.parser")\ntitle = soup.select_one(".title").get_text()\nprice = soup.select_one(".price").get_text()\nprint(f"书名: {title}, 价格: {price} 元")'} />
+
+观察代码结构后,试试自己写一段:把上面的 HTML 换成 3 本书的列表,提取出每本书的书名与价格。
 
 试试把它改成你自己的 HTML,或者导入 `requests` 发起一个 GET 请求。
 

@@ -224,6 +224,35 @@ export const unitTests: UnitTest[] = [
   { id: 'unit-test-5', unitId: 'unit-5', title: '单元五 综合测试 · 规范与综合', minutes: 15 },
 ];
 
+/** 课程综合测试(10 套难度相当的实践测试,各有独立同构靶站) */
+export interface CourseTest {
+  id: string;
+  number: number;
+  title: string;
+  topic: string;
+  siteTitle: string;
+  /** 靶站根路径(相对 /practice/) */
+  practicePath: string;
+  minutes: number;
+}
+
+export const courseTests: CourseTest[] = [
+  { id: '01', number: 1, title: '课程综合测试 01 · 城市气候观测', topic: '城市气候观测', siteTitle: '城市数据站', practicePath: '/practice/course-test-01/', minutes: 25 },
+  { id: '02', number: 2, title: '课程综合测试 02 · 数码配件行情', topic: '数码配件行情', siteTitle: '智能硬件城', practicePath: '/practice/course-test-02/', minutes: 25 },
+  { id: '03', number: 3, title: '课程综合测试 03 · 股票行情速览', topic: '股票行情速览', siteTitle: '金融数据局', practicePath: '/practice/course-test-03/', minutes: 25 },
+  { id: '04', number: 4, title: '课程综合测试 04 · 经典影片榜单', topic: '经典影片榜单', siteTitle: '光影档案馆', practicePath: '/practice/course-test-04/', minutes: 25 },
+  { id: '05', number: 5, title: '课程综合测试 05 · 人气餐厅推荐', topic: '人气餐厅推荐', siteTitle: '食味地图', practicePath: '/practice/course-test-05/', minutes: 25 },
+  { id: '06', number: 6, title: '课程综合测试 06 · 健身器材精选', topic: '健身器材精选', siteTitle: '运动装备库', practicePath: '/practice/course-test-06/', minutes: 25 },
+  { id: '07', number: 7, title: '课程综合测试 07 · 热门景点排行', topic: '热门景点排行', siteTitle: '旅行者指南', practicePath: '/practice/course-test-07/', minutes: 25 },
+  { id: '08', number: 8, title: '课程综合测试 08 · 宠物好物推荐', topic: '宠物好物推荐', siteTitle: '萌宠用品店', practicePath: '/practice/course-test-08/', minutes: 25 },
+  { id: '09', number: 9, title: '课程综合测试 09 · 专辑热度榜', topic: '专辑热度榜', siteTitle: '音乐唱片行', practicePath: '/practice/course-test-09/', minutes: 25 },
+  { id: '10', number: 10, title: '课程综合测试 10 · 家居好物甄选', topic: '家居好物甄选', siteTitle: '生活美学馆', practicePath: '/practice/course-test-10/', minutes: 25 },
+];
+
+export function getCourseTestById(id: string): CourseTest | undefined {
+  return courseTests.find((t) => t.id === id);
+}
+
 export const totalLessons = lessons.length;
 export const totalMinutes = lessons.reduce((sum, l) => sum + l.duration, 0);
 

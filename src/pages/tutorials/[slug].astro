@@ -36,13 +36,19 @@ const task = lessonTasks[meta.id];
   <h1>{meta.title}</h1>
 
   {meta.goals.length > 0 && (
-    <div class="callout info">
-      <strong>本课目标:</strong>
-      <ul style="margin: 0.4em 0 0">
-        {meta.goals.map((g) => (
+    <div class="lesson-path">
+      <div class="lesson-path-head">
+        <strong>📍 本课路径</strong>
+        <span class="lesson-path-meta">{meta.duration} 分钟 · {meta.goals.length} 个目标</span>
+      </div>
+      <ol class="lesson-path-goals">
+        {meta.goals.map((g, i) => (
           <li>{g}</li>
         ))}
-      </ul>
+      </ol>
+      <div class="lesson-path-rhythm">
+        🎯 学习节奏:① 看目标 → ② <strong>先思考再动手</strong> → ③ 在运行器写代码 → ④ 失败时按提示重试 → ⑤ 通过后看思路
+      </div>
     </div>
   )}
 
@@ -55,6 +61,7 @@ const task = lessonTasks[meta.id];
       starter={task.starter}
       check={task.check}
       hint={task.hint ?? ''}
+      hintSteps={task.hintSteps ?? []}
       explanation={task.explanation ?? ''}
       skills={task.skills}
       maxScore={task.maxScore}

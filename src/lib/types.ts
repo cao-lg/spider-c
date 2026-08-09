@@ -1,6 +1,7 @@
 // 学习系统共享类型定义
 
 export type QuestionType = 'choice' | 'truefalse' | 'fill';
+export type RunnerVariant = 'showcase' | 'guided' | 'challenge';
 
 export interface Question {
   id: string;

@@ -1,0 +1,81 @@
+---
+import Site from '../../../layouts/Site.astro';
+import CodeExercise from '../../../components/CodeExercise.astro';
+import { courseTests, getCourseTestById } from '../../../data/course';
+import { courseTestTasks } from '../../../data/tasks';
+
+export function getStaticPaths() {
+  return courseTests.map((ct) => ({ params: { id: ct.id } }));
+}
+
+const { id: courseId } = Astro.params;
+const test = getCourseTestById(courseId!)!;
+const tasks = courseTestTasks[test.id] ?? [];
+const totalPoints = tasks.reduce((s, t) => s + t.maxScore, 0);
+const prev = courseTests.find((c) => c.number === test.number - 1);
+const next = courseTests.find((c) => c.number === test.number + 1);
+---
+
+<Site title={test.title}>
+  <p style="margin: 0 0 0.4rem; color: var(--text-3); font-size: 0.85rem">
+    课程综合测试 {String(test.number).padStart(2, '0')} / {courseTests.length} — 预计 {test.minutes} 分钟
+  </p>
+  <h1>{test.title}</h1>
+
+  <div class="lesson-path">
+    <div class="lesson-path-head">
+      <strong>📍 测试要求</strong>
+      <span class="lesson-path-meta">{tasks.length} 道实践题 · 满分 {totalPoints} 分</span>
+    </div>
+    <ol class="lesson-path-goals">
+      <li>打开对应靶站 <a href={test.practicePath} target="_blank" rel="noopener">{test.siteTitle} →</a>,先观察页面/接口结构</li>
+      <li>在下方运行器里完成 3 道实践题:列表解析 → 字段提取 → JSON 直连</li>
+      <li>每道题都有关键变量待补全(<code># TODO</code>),写不出来先看分步提示,不要直接抄答案</li>
+      <li>全部通过即完成本套测试,成绩自动记入学习中心</li>
+    </ol>
+    <div class="lesson-path-rhythm">
+      🎯 答题节奏:① 看靶站 → ② 思考思路 → ③ 写代码 → ④ 运行判分 → ⑤ 失败看提示重试
+    </div>
+  </div>
+
+  {tasks.map((task, i) => (
+    <div class="unit-test-task">
+      <CodeExercise
+        id={task.id}
+        title={`第 ${i + 1} 题 · ${task.title}`}
+        starter={task.starter}
+        check={task.check}
+        hint={task.hint ?? ''}
+        hintSteps={task.hintSteps ?? []}
+        explanation={task.explanation ?? ''}
+        skills={task.skills}
+        maxScore={task.maxScore}
+        recordKey="unitTest"
+      />
+    </div>
+  ))}
+
+  <div class="pager">
+    {prev ? (
+      <a href={`/tests/course/${prev.id}/`}>
+        <span class="pager-label">← 上一套</span>
+        <span class="pager-title">{prev.title}</span>
+      </a>
+    ) : (
+      <span />
+    )}
+    {next ? (
+      <a class="next" href={`/tests/course/${next.id}/`}>
+        <span class="pager-label">下一套 →</span>
+        <span class="pager-title">{next.title}</span>
+      </a>
+    ) : (
+      <span />
+    )}
+  </div>
+</Site>
+
+<script>
+  import { store } from '../../../lib/store';
+  store.pendingLesson = undefined;
+</script>

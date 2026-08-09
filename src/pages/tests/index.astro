@@ -1,0 +1,61 @@
+---
+import Site from '../../layouts/Site.astro';
+import { courseTests, unitTests, units } from '../../data/course';
+import { courseTestTasks, unitTestTasks } from '../../data/tasks';
+---
+
+<Site title="综合测试">
+  <h1>综合测试</h1>
+  <p style="color: var(--text-2); max-width: 60em">
+    通过做<a href="/tutorials/">课程实操</a>掌握技能后,用这里的三级测试检验掌握度:
+    <strong>单元综合测试</strong>(按单元检验)与 <strong>课程综合测试</strong>(10 套难度相当的实践题,各有独立靶站)。
+    全部为代码实践题,在浏览器运行器里真写代码、真打靶站,自动判分。
+  </p>
+
+  <h2 style="margin-top: 2rem">单元综合测试</h2>
+  <div class="unit-grid">
+    {units.map((unit, i) => {
+      const test = unitTests[i];
+      const tasks = unitTestTasks[test?.id] ?? [];
+      return (
+        <div class="unit-card">
+          <div class="unit-card-head">
+            <h2>单元 {unit.number} · {unit.title}</h2>
+            <span class="unit-chip">{tasks.length} 题</span>
+          </div>
+          <p style="color: var(--text-2); font-size: 0.92rem">{unit.desc}</p>
+          <p style="margin: 0.6rem 0 0">
+            <a class="btn sm" href={`/tests/unit-${unit.number}/`}>开始测试 →</a>
+          </p>
+        </div>
+      );
+    })}
+  </div>
+
+  <h2 style="margin-top: 2.5rem">课程综合测试(10 套)</h2>
+  <p style="color: var(--text-2); max-width: 60em">
+    10 套难度相当的实践题,每套 3 题(列表解析 / 字段提取 / JSON 直连),各有独立同构靶站。
+    建议学完全部课程后再挑战,作为结课测验。
+  </p>
+  <div class="unit-grid">
+    {courseTests.map((ct) => {
+      const tasks = courseTestTasks[ct.id] ?? [];
+      const total = tasks.reduce((s, t) => s + t.maxScore, 0);
+      return (
+        <div class="unit-card">
+          <div class="unit-card-head">
+            <h2>综合测试 {String(ct.number).padStart(2, '0')}</h2>
+            <span class="unit-chip">{total} 分</span>
+          </div>
+          <p style="color: var(--text-2); font-size: 0.92rem">
+            {ct.topic} · 靶站「{ct.siteTitle}」({tasks.length} 题)
+          </p>
+          <p style="margin: 0.6rem 0 0">
+            <a class="btn sm" href={`/tests/course/${ct.id}/`}>开始测试 →</a>
+            <a class="btn sm" href={ct.practicePath} target="_blank" rel="noopener">打开靶站</a>
+          </p>
+        </div>
+      );
+    })}
+  </div>
+</Site>

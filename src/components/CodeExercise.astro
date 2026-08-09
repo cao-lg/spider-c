@@ -7,6 +7,7 @@ interface Props {
   starter?: string;
   check: string;
   hint?: string;
+  hintSteps?: string[];
   explanation?: string;
   skills?: string[];
   maxScore?: number;
@@ -20,6 +21,7 @@ const {
   starter = '',
   check,
   hint = '',
+  hintSteps = [],
   explanation = '',
   skills = [],
   maxScore = 10,
@@ -34,6 +36,7 @@ const {
   data-starter={JSON.stringify(starter)}
   data-check={JSON.stringify(check)}
   data-hint={JSON.stringify(hint)}
+  data-hint-steps={JSON.stringify(hintSteps)}
   data-explanation={JSON.stringify(explanation)}
   data-skills={skills.join(',')}
   data-max-score={maxScore}

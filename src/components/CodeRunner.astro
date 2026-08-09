@@ -1,14 +1,23 @@
 ---
+import type { RunnerVariant } from '../lib/types';
+
 interface Props {
   title?: string;
   code?: string;
   readonly?: boolean;
+  variant?: RunnerVariant;
+  prompt?: string;
 }
 
-const { title = 'Python 示例', code, readonly = false } = Astro.props;
+const { title = 'Python 示例', code, readonly = false, variant = 'showcase', prompt } = Astro.props;
 ---
 
-<py-runner data-title={title} data-readonly={String(readonly)}>
+<py-runner
+  data-title={title}
+  data-readonly={String(readonly)}
+  data-variant={variant}
+  data-prompt={prompt ?? ''}
+>
   {code !== undefined && <pre class="py-runner-source" hidden>{code}</pre>}
   <slot />
 </py-runner>

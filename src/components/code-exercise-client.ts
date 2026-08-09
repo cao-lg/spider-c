@@ -16,11 +16,14 @@ class PyCodeExercise extends HTMLElement {
   private starter = '';
   private check = '';
   private hint = '';
+  private hintSteps: string[] = [];
   private explanation = '';
   private skills: string[] = [];
   private maxScore = 10;
   private recordKey: RecordKind = 'exercise';
   private lessonId = '';
+  /** starter 中 # TODO 占位符的初始数量(检测学生是否动过手) */
+  private starterTodoCount = 0;
 
   private editorEl!: HTMLPreElement;
   private runBtn!: HTMLButtonElement;
@@ -44,6 +47,12 @@ class PyCodeExercise extends HTMLElement {
     this.check = this.decode(attr('data-check'));
     this.hint = this.decode(attr('data-hint'));
     this.explanation = this.decode(attr('data-explanation'));
+    const stepsRaw = this.decode(attr('data-hint-steps') || '[]');
+    try {
+      this.hintSteps = Array.isArray(stepsRaw) ? stepsRaw.filter((s) => typeof s === 'string') : [];
+    } catch {
+      this.hintSteps = [];
+    }
     this.skills = (this.getAttribute('data-skills') ?? '')
       .split(',')
       .map((s) => s.trim())
@@ -51,6 +60,7 @@ class PyCodeExercise extends HTMLElement {
     this.maxScore = parseInt(attr('data-max-score') || '10', 10) || 10;
     this.recordKey = (attr('data-record-key') as RecordKind) || 'exercise';
     this.lessonId = attr('data-lesson');
+    this.starterTodoCount = (this.starter.match(/#\s*TODO\b/g) ?? []).length;
   }
 
   private decode(s: string): string {
@@ -79,6 +89,16 @@ class PyCodeExercise extends HTMLElement {
     scoreTag.textContent = `通过得 ${this.maxScore} 分`;
     head.appendChild(scoreTag);
     root.appendChild(head);
+
+    // 任务前提示:刻意练习引导
+    if (this.starterTodoCount > 0) {
+      const prompt = document.createElement('div');
+      prompt.className = 'ce-prompt';
+      prompt.innerHTML =
+        `<strong>🎯 学习节奏</strong>:` +
+        `① 先想清楚思路 → ② 填入 <code># TODO</code> 处 → ③ 点击「运行并判题」`;
+      root.appendChild(prompt);
+    }
 
     // 运行器外壳
     const runner = document.createElement('div');
@@ -177,27 +197,48 @@ class PyCodeExercise extends HTMLElement {
     d.textContent = detail;
     this.feedbackEl.appendChild(d);
 
-    if (this.hint && kind !== 'pass') {
-      const hb = document.createElement('button');
-      hb.className = 'btn sm ce-hint-btn';
-      hb.textContent = '查看提示';
-      hb.addEventListener('click', () => {
-        if (hb.nextElementSibling) {
-          (hb.nextElementSibling as HTMLElement).hidden = !(hb.nextElementSibling as HTMLElement).hidden;
-        }
+    // 分步提示(优先)或单条提示
+    const steps = this.hintSteps.length > 0 ? this.hintSteps : (this.hint ? [this.hint] : []);
+    if (steps.length > 0 && kind !== 'pass') {
+      const hintBox = document.createElement('div');
+      hintBox.className = 'ce-hint-box';
+      const label = document.createElement('div');
+      label.className = 'ce-hint-label';
+      label.textContent = '💡 提示(按顺序思考,不要急于看完整答案)';
+      hintBox.appendChild(label);
+      const ol = document.createElement('ol');
+      ol.className = 'ce-hint-steps';
+      steps.forEach((step, i) => {
+        const li = document.createElement('li');
+        li.textContent = step;
+        li.dataset.idx = String(i);
+        // 前 1 步自动展开;其余折叠
+        li.classList.add('ce-hint-step');
+        if (i > 0) li.classList.add('ce-hint-collapsed');
+        const btn = document.createElement('button');
+        btn.className = 'btn xs ce-hint-reveal';
+        btn.textContent = i === 0 ? '查看' : `展开第 ${i + 1} 步`;
+        btn.addEventListener('click', () => {
+          li.classList.remove('ce-hint-collapsed');
+          btn.disabled = true;
+          btn.textContent = '已展开';
+        });
+        li.appendChild(btn);
+        ol.appendChild(li);
       });
-      const hdiv = document.createElement('div');
-      hdiv.className = 'ce-hint';
-      hdiv.hidden = true;
-      hdiv.textContent = this.hint;
-      this.feedbackEl.appendChild(hb);
-      this.feedbackEl.appendChild(hdiv);
+      hintBox.appendChild(ol);
+      this.feedbackEl.appendChild(hintBox);
     }
 
     if (this.explanation && kind === 'pass') {
       const ex = document.createElement('div');
       ex.className = 'ce-explanation';
-      ex.textContent = this.explanation;
+      const label = document.createElement('strong');
+      label.textContent = '🎉 解题思路';
+      ex.appendChild(label);
+      const txt = document.createElement('p');
+      txt.textContent = this.explanation;
+      ex.appendChild(txt);
       this.feedbackEl.appendChild(ex);
     }
 

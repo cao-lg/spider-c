@@ -4,7 +4,7 @@ import sys
 import os
 
 ROOT = r"C:\crawler-course"
-SCRIPTS = ["e2e_site.py", "e2e_lessons.py", "e2e_unittests.py", "e2e_report.py"]
+SCRIPTS = ["e2e_site.py", "e2e_lessons.py", "e2e_unittests.py", "e2e_coursetests.py", "e2e_report.py"]
 PY = sys.executable
 
 

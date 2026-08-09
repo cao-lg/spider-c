@@ -30,6 +30,7 @@ const totalPoints = tasks.reduce((s, t) => s + t.maxScore, 0);
         starter={task.starter}
         check={task.check}
         hint={task.hint ?? ''}
+        hintSteps={task.hintSteps ?? []}
         explanation={task.explanation ?? ''}
         skills={task.skills}
         maxScore={task.maxScore}

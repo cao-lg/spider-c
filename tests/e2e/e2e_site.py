@@ -37,12 +37,12 @@ def main():
         for u in ["unit-1", "unit-2", "unit-3", "unit-4", "unit-5"]:
             page.goto(f"{BASE}/tests/{u}/", wait_until="networkidle")
             n = page.locator("py-code-exercise").count()
-            record(f"T-004 单元测 {u} 有 3 道实操题", n == 3, f"count={n}")
+            record(f"T-004 单元测 {u} 有 5 道实操题", n == 5, f"count={n}")
 
         # ---- 导航 ----
         page.goto(BASE + "/report/", wait_until="networkidle")
         nav_items = page.locator(".main-nav a").count()
-        record("T-005 导航 4 项", nav_items == 4, f"count={nav_items}")
+        record("T-005 导航 5 项", nav_items == 5, f"count={nav_items}")
         active = page.locator(".main-nav a.active").inner_text()
         record("T-005b 学习中心高亮", active == "学习中心", active)
 

@@ -316,6 +316,312 @@ def gen_level5(books):
     write('level5-dynamic/index.html', head + body)
 
 
+# ---------------------------------------------------------------------------
+# 课程综合测试靶站(course-test-01 ~ course-test-10)
+# 10 个同构靶站:结构、数据量、难度完全一致,仅主题内容不同。
+# 每个靶站包含:
+#   index.html        列表页(24 行表格, 列: 编号/名称/类别/品牌/价格/评分)
+#   api/items.json    JSON 接口(40 条, 供直连接口练习)
+#   detail/*.html     8 个详情页(供列表+详情两级抓取)
+# ---------------------------------------------------------------------------
+
+COURSE_TESTS = [
+    {
+        'id': 'course-test-01', 'site': '城市数据站', 'topic': '城市气候观测',
+        'columns': ['编号', '城市', '气候带', '监测站', '年均温', '评分'],
+        'price_col': 4, 'name_col': 1,
+        'n_list': 24, 'n_json': 40, 'n_detail': 8,
+        'names': ['北京', '上海', '广州', '深圳', '成都', '杭州', '武汉', '西安',
+                  '南京', '重庆', '苏州', '天津', '长沙', '郑州', '青岛', '大连',
+                  '厦门', '昆明', '哈尔滨', '乌鲁木齐', '拉萨', '兰州', '海口', '桂林'],
+        'cats': ['温带季风', '亚热带季风', '热带季风', '高原气候', '温带大陆'],
+        'brands': ['华北站', '华东站', '华南站', '西南站', '西北站', '东北站'],
+        'desc_pool': ['全年气温记录完整,数据由自动气象站采集。',
+                      '气候特征典型,适合分析季节变化规律。',
+                      '历史数据丰富,覆盖近十年的观测记录。',
+                      '站点维护良好,数据质量经过人工复核。'],
+    },
+    {
+        'id': 'course-test-02', 'site': '智能硬件城', 'topic': '数码配件行情',
+        'columns': ['编号', '商品', '品类', '品牌', '价格', '评分'],
+        'price_col': 4, 'name_col': 1,
+        'n_list': 24, 'n_json': 40, 'n_detail': 8,
+        'names': ['无线蓝牙耳机', '机械键盘', '人体工学鼠标', '4K 显示器', '移动固态硬盘',
+                  'USB-C 扩展坞', '降噪头戴耳机', '便携充电宝', '智能手环', '桌面音响',
+                  '网络摄像头', '无线充电器', '电竞游戏耳机', '数位板', '笔记本支架',
+                  'Type-C 数据线', '空气净化器', '智能台灯', '电动牙刷', '筋膜枪',
+                  '扫地机器人', '投影仪', '行车记录仪', '电子墨水屏'],
+        'cats': ['音频', '外设', '存储', '智能家居', '办公'],
+        'brands': ['星环科技', '极光电子', '云雀创新', '锐峰数码', '蓝鲸智造'],
+        'desc_pool': ['销量稳定,口碑良好,支持七天无理由退货。',
+                      '性价比突出,常驻热门榜单。',
+                      '做工扎实,提供两年质保服务。',
+                      '新品上市,功能全面,支持固件升级。'],
+    },
+    {
+        'id': 'course-test-03', 'site': '金融数据局', 'topic': '股票行情速览',
+        'columns': ['编号', '股票名称', '行业', '交易所', '收盘价', '评分'],
+        'price_col': 4, 'name_col': 1,
+        'n_list': 24, 'n_json': 40, 'n_detail': 8,
+        'names': ['蓝海科技', '星辰生物', '大地能源', '云帆软件', '金穗农业',
+                  '远航物流', '磐石建设', '晨光传媒', '恒信金融', '绿洲环保',
+                  '璀璨光电', '祥云医疗', '领航教育', '稳健制造', '腾飞汽车',
+                  '晶彩半导体', '天穹航天', '润泽水务', '鼎新化工', '华美纺织',
+                  '启明智能', '双塔食品', '龙腾影视', '骏马钢铁'],
+        'cats': ['科技', '医药', '能源', '消费', '制造', '金融'],
+        'brands': ['沪市', '深市'],
+        'desc_pool': ['近期成交活跃,换手率处于合理区间。',
+                      '业绩稳健,机构持仓比例上升。',
+                      '波动适中,适合中长线跟踪。',
+                      '市场关注度高,分析师评级为买入。'],
+    },
+    {
+        'id': 'course-test-04', 'site': '光影档案馆', 'topic': '经典影片榜单',
+        'columns': ['编号', '电影名称', '类型', '发行公司', '票价', '评分'],
+        'price_col': 4, 'name_col': 1,
+        'n_list': 24, 'n_json': 40, 'n_detail': 8,
+        'names': ['星海彼岸', '风起云涌', '旧城往事', '荒野之歌', '时间之沙',
+                  '雾都迷踪', '春日来信', '南方车站', '暗夜行舟', '山河入梦',
+                  '孤岛灯塔', '无界行者', '月落长安', '回声山谷', '纸飞机',
+                  '深海回响', '零点之前', '远方来客', '暴雨将至', '候鸟迁徙',
+                  '雪落无声', '环形日记', '黎明之前', '午后咖啡'],
+        'cats': ['剧情', '悬疑', '科幻', '爱情', '动作', '文艺'],
+        'brands': ['星光影业', '曙光发行', '云图传媒', '琥珀影视'],
+        'desc_pool': ['口碑与票房双丰收,观众评分持续走高。',
+                      '叙事扎实,摄影与配乐广受好评。',
+                      '入选年度佳作,展映场次常满。',
+                      '题材新颖,引发热烈讨论。'],
+    },
+    {
+        'id': 'course-test-05', 'site': '食味地图', 'topic': '人气餐厅推荐',
+        'columns': ['编号', '餐厅名称', '菜系', '连锁品牌', '人均消费', '评分'],
+        'price_col': 4, 'name_col': 1,
+        'n_list': 24, 'n_json': 40, 'n_detail': 8,
+        'names': ['老巷小馆', '江南人家', '川香居', '粤味轩', '湘里人家',
+                  '东北饺子王', '西北面馆', '沪上小笼', '闽南渔村', '徽州食府',
+                  '潮汕牛肉锅', '新疆烤串', '云南过桥米线', '贵州酸汤鱼', '兰州拉面',
+                  '重庆小面', '成都冒菜', '武汉热干面', '沙县小吃', '天津狗不理',
+                  '北京烤鸭店', '澳门猪扒包', '港式茶餐厅', '台湾卤肉饭'],
+        'cats': ['川菜', '粤菜', '湘菜', '东北菜', '西北菜', '本帮菜'],
+        'brands': ['巷子餐饮', '一味集团', '舌尖餐饮', '灶火餐饮'],
+        'desc_pool': ['环境干净卫生,高峰期需排队等位。',
+                      '招牌菜口碑极佳,回头客众多。',
+                      '价格实惠,分量十足。',
+                      '食材新鲜,出餐速度快。'],
+    },
+    {
+        'id': 'course-test-06', 'site': '运动装备库', 'topic': '健身器材精选',
+        'columns': ['编号', '器材名称', '类别', '品牌', '价格', '评分'],
+        'price_col': 4, 'name_col': 1,
+        'n_list': 24, 'n_json': 40, 'n_detail': 8,
+        'names': ['可调节哑铃', '瑜伽垫', '跑步机', '动感单车', '杠铃套装',
+                  '健腹轮', '跳绳', '阻力带', '椭圆机', '划船机',
+                  '俯卧撑支架', '引体向上杆', '壶铃', '沙袋', '握力器',
+                  '泡沫轴', '弹力绳', '负重背心', '拳击手套', '运动手环',
+                  '篮球', '羽毛球拍', '乒乓球桌', '网球拍'],
+        'cats': ['力量训练', '有氧运动', '瑜伽拉伸', '球类运动', '户外装备'],
+        'brands': ['力拓体育', '驰风运动', '劲能健身', '跃动装备'],
+        'desc_pool': ['用料扎实,承重能力强,适合家用训练。',
+                      '符合国际安全标准,通过质量认证。',
+                      '轻便易收纳,不占空间。',
+                      '多档可调,满足不同强度训练需求。'],
+    },
+    {
+        'id': 'course-test-07', 'site': '旅行者指南', 'topic': '热门景点排行',
+        'columns': ['编号', '景点名称', '类型', '运营方', '门票价格', '评分'],
+        'price_col': 4, 'name_col': 1,
+        'n_list': 24, 'n_json': 40, 'n_detail': 8,
+        'names': ['云海天池', '古寺钟声', '翡翠峡谷', '月光沙滩', '千年古镇',
+                  '森林氧吧', '雪山之巅', '碧波湖泊', '红色圣地', '温泉小镇',
+                  '大漠孤烟', '梯田风光', '海滨栈道', '岩溶奇洞', '星空营地',
+                  '湿地公园', '茶园山丘', '峡谷漂流', '空中走廊', '民俗村落',
+                  '灯塔海岸', '雨林探秘', '冰川遗迹', '火山地貌'],
+        'cats': ['自然风光', '人文古迹', '主题乐园', '休闲度假', '户外探险'],
+        'brands': ['景区管委会', '文旅集团', '旅游开发公司'],
+        'desc_pool': ['景色优美,四季皆宜游览。',
+                      '配套设施完善,交通便利。',
+                      '历史文化底蕴深厚,讲解服务专业。',
+                      '游客体验良好,节假日人流量大。'],
+    },
+    {
+        'id': 'course-test-08', 'site': '萌宠用品店', 'topic': '宠物好物推荐',
+        'columns': ['编号', '商品名称', '适用宠物', '品牌', '价格', '评分'],
+        'price_col': 4, 'name_col': 1,
+        'n_list': 24, 'n_json': 40, 'n_detail': 8,
+        'names': ['猫粮', '狗粮', '猫砂', '宠物玩具', '牵引绳',
+                  '宠物窝', '自动喂食器', '饮水机', '宠物梳子', '指甲剪',
+                  '宠物背包', '训练零食', '宠物洗护液', '除毛器', '宠物帐篷',
+                  '猫咪爬架', '狗狗雨衣', '宠物凉席', '宠物垫', '喂药器',
+                  '宠物监控摄像头', '超声波驱虫器', '宠物自动门', '宠物推车'],
+        'cats': ['食品', '用品', '玩具', '护理', '出行'],
+        'brands': ['爪爪宠物', '毛球之家', '旺财宠物', '喵喵优品'],
+        'desc_pool': ['原料安全,经过严格质检。',
+                      '使用体验好,宠物接受度高。',
+                      '性价比高,复购率稳定。',
+                      '环保材质,对宠物健康友好。'],
+    },
+    {
+        'id': 'course-test-09', 'site': '音乐唱片行', 'topic': '专辑热度榜',
+        'columns': ['编号', '专辑名称', '音乐类型', '唱片公司', '售价', '评分'],
+        'price_col': 4, 'name_col': 1,
+        'n_list': 24, 'n_json': 40, 'n_detail': 8,
+        'names': ['无声告白', '城市之光', '远方的风', '深海梦境', '夏日序曲',
+                  '月光小调', '霓虹都市', '原野回声', '蓝色街灯', '纸船漂流',
+                  '星河漫步', '半山听雨', '候鸟归途', '梦里花开', '尘埃之舞',
+                  '午夜电台', '青色季节', '逆光而行', '晚风轻抚', '平行时空',
+                  '微光之城', '云端漫步', '枕边童话', '时光机'],
+        'cats': ['流行', '摇滚', '民谣', '电子', '古典', '爵士'],
+        'brands': ['风铃唱片', '音符国际', '星轨音乐', '回声录音'],
+        'desc_pool': ['编曲精良,制作水准在线。',
+                      '主打歌传唱度高,听众口碑一致好评。',
+                      '风格独特,是乐迷必入的收藏之作。',
+                      '发行首周即登顶热度榜。'],
+    },
+    {
+        'id': 'course-test-10', 'site': '生活美学馆', 'topic': '家居好物甄选',
+        'columns': ['编号', '商品名称', '品类', '品牌', '价格', '评分'],
+        'price_col': 4, 'name_col': 1,
+        'n_list': 24, 'n_json': 40, 'n_detail': 8,
+        'names': ['北欧风沙发', '实木餐桌', '记忆棉床垫', '落地灯', '陶瓷餐具',
+                  '香薰蜡烛', '加湿器', '收纳箱', '装饰画', '懒人沙发',
+                  '全棉四件套', '地毯', '窗帘', '绿植盆栽', '咖啡机',
+                  '空气炸锅', '保温杯', '餐具消毒柜', '智能门锁', '指纹保险箱',
+                  '无火香薰', '懒人桌', '墙面置物架', '人体工学椅'],
+        'cats': ['家具', '灯具', '家纺', '厨具', '收纳', '装饰'],
+        'brands': ['栖居生活', '简素家居', '暖巢家居', '匠心木作'],
+        'desc_pool': ['设计简约大方,融入各种家居风格。',
+                      '用料环保,做工精细。',
+                      '功能实用,提升生活品质。',
+                      '好评如潮,是家居博主的常客单品。'],
+    },
+]
+
+
+class CtItem:
+    """综合测试靶站的条目(城市/商品/电影等,同构字段: 名称/类别/品牌/价格/评分/描述)"""
+    __slots__ = ('id', 'name', 'category', 'brand', 'price', 'rating', 'desc')
+
+    def __init__(self, iid, name, category, brand, price, rating, desc):
+        self.id = iid
+        self.name = name
+        self.category = category
+        self.brand = brand
+        self.price = price
+        self.rating = rating
+        self.desc = desc
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'category': self.category,
+            'brand': self.brand,
+            'price': self.price,
+            'rating': self.rating,
+            'desc': self.desc,
+        }
+
+
+def make_ct_items(cfg, n):
+    r = random.Random(20260101 + int(cfg['id'].split('-')[-1]))
+    items = []
+    names = cfg['names']
+    for i in range(n):
+        name = names[i % len(names)] + ('' if i < len(names) else f' {i // len(names) + 1} 号')
+        items.append(CtItem(
+            f'{cfg["id"].split("-")[-1]}-{i + 1:04d}',
+            name,
+            r.choice(cfg['cats']),
+            r.choice(cfg['brands']),
+            r.choice([29, 39, 49, 59, 69, 79, 89, 99, 119, 139]),
+            round(r.uniform(3.6, 5.0), 1),
+            r.choice(cfg['desc_pool']),
+        ))
+    return items
+
+
+def gen_course_test(cfg):
+    prefix = cfg['id']  # course-test-01
+    site_title = f'{cfg["site"]} · {cfg["topic"]}'
+    cols = cfg['columns']
+    price_col = cfg['price_col']
+    name_col = cfg['name_col']
+
+    # 列表页(index.html): 24 行
+    items_list = make_ct_items(cfg, cfg['n_list'])
+    head = page_header(site_title, f'{cfg["topic"]} · 课程综合测试靶站 {prefix}')
+    th = ''.join(f'<th>{c}</th>' for c in cols)
+    rows = ''.join(
+        f'<tr><td>{b.id}</td>'
+        f'<td>{html.escape(b.name)}</td>'
+        f'<td>{html.escape(b.category)}</td>'
+        f'<td>{html.escape(b.brand)}</td>'
+        f'<td class="price">¥{b.price}</td>'
+        f'<td class="rating">{b.rating}</td></tr>'
+        for b in items_list)
+    body = f'''<div class="wrap">
+  <div class="panel">
+    <h2>{cfg["topic"]}榜单 <span class="meta">共 {cfg['n_list']} 条</span></h2>
+    <table>
+      <thead><tr>{th}</tr></thead>
+      <tbody>{rows}</tbody>
+    </table>
+  </div>
+{page_footer()}'''
+    write(f'{prefix}/index.html', head + body)
+
+    # JSON 接口(api/items.json): 40 条
+    items_json = make_ct_items(cfg, cfg['n_json'])
+    payload = {'code': 0, 'message': 'success', 'total': len(items_json),
+               'data': [b.to_dict() for b in items_json]}
+    write(f'{prefix}/api/items.json', json.dumps(payload, ensure_ascii=False, indent=2))
+    api_doc = f'''<div class="wrap">
+  <div class="panel">
+    <h2>接口说明</h2>
+    <p>GET <code>/practice/{prefix}/api/items.json</code> — 返回 {cfg['n_json']} 条{cfg['topic']}数据。</p>
+    <p class="meta">返回结构: code / message / total / data[];每条含 id、name、category、brand、price、rating、desc。</p>
+  </div>
+{page_footer()}'''
+    write(f'{prefix}/api/index.html', page_header(f'{site_title} · JSON 接口', '课程综合测试靶站') + api_doc)
+
+    # 详情页(detail/*.html): 8 个
+    items_detail = make_ct_items(cfg, cfg['n_detail'])
+    head_detail = page_header(f'{site_title} · 详情页', '课程综合测试靶站')
+    rows = ''.join(
+        f'<tr><td><a href="detail/{b.id}.html">{html.escape(b.name)}</a></td>'
+        f'<td>{html.escape(b.category)}</td>'
+        f'<td class="price">¥{b.price}</td>'
+        f'<td class="rating">{b.rating}</td></tr>'
+        for b in items_detail)
+    body = f'''<div class="wrap">
+  <div class="panel">
+    <h2>列表页(详情入口)</h2>
+    <table>
+      <thead><tr><th>{cols[name_col]}</th><th>{cols[2]}</th><th>{cols[price_col]}</th><th>{cols[5]}</th></tr></thead>
+      <tbody>{rows}</tbody>
+    </table>
+  </div>
+{page_footer()}'''
+    write(f'{prefix}/detail/index.html', head_detail + body)
+    for b in items_detail:
+        detail = f'''<div class="wrap">
+  <div class="panel">
+    <h2>{html.escape(b.name)}</h2>
+    <table>
+      <tr><th>{cols[name_col]}</th><td>{html.escape(b.name)}</td></tr>
+      <tr><th>{cols[2]}</th><td>{html.escape(b.category)}</td></tr>
+      <tr><th>{cols[3]}</th><td>{html.escape(b.brand)}</td></tr>
+      <tr><th>{cols[price_col]}</th><td class="price">¥{b.price}</td></tr>
+      <tr><th>{cols[5]}</th><td class="rating">{b.rating}</td></tr>
+    </table>
+    <h3>详情</h3>
+    <p>{html.escape(b.desc)}</p>
+    <p style="margin-top:18px"><a href="../index.html">← 返回列表</a></p>
+  </div>
+{page_footer()}'''
+        write(f'{prefix}/detail/{b.id}.html', detail)
+
+
 def main():
     print('生成靶站数据…')
     books = make_books(400)
@@ -325,6 +631,9 @@ def main():
     gen_level3(books[124:144])
     gen_level4(books[144:344])
     gen_level5(books[344:400])
+    print('生成课程综合测试靶站…')
+    for cfg in COURSE_TESTS:
+        gen_course_test(cfg)
     print('完成。')
 
 

@@ -69,10 +69,27 @@ const levels = [
 
   <h2 style="margin-top: 2rem">就地练习</h2>
   <p style="color: var(--text-2)">
-    直接抓取 Level 1 靶站试试(同源请求,浏览器运行器即可完成):
+    直接抓取 Level 1 靶站试试(同源请求,浏览器运行器即可完成)。这是挑战模式:不直接给参考代码,
+    先按任务尝试写,实在卡住再展开查看。
   </p>
   <CodeRunner
-    title="实战:抓取 Level 1 图书榜"
-    code={'import requests\nfrom bs4 import BeautifulSoup\n\nurl = SITE_BASE + "/practice/level1-books/"\nr = requests.get(url, timeout=10)\nr.encoding = "utf-8"  # 无 charset 时 requests 可能误判编码\nsoup = BeautifulSoup(r.text, "html.parser")\nrows = soup.select("tbody tr")\nprint("状态码:", r.status_code)\nprint("抓到图书数:", len(rows))\nfor row in rows[:5]:\n    tds = row.select("td")\n    print(tds[1].get_text(), "|", tds[2].get_text(), "|", tds[5].get_text())'}
+    variant="challenge"
+    title="挑战:抓取 Level 1 图书榜"
+    prompt="请用 requests + BeautifulSoup 抓取 Level 1,把 24 行数据存入 rows 并打印行数与前 5 行(书名/作者/价格)。先自己动手,卡住再展开。"
+    code={`import requests
+from bs4 import BeautifulSoup
+
+url = SITE_BASE + "/practice/level1-books/"
+r = requests.get(url, timeout=10)
+r.encoding = "utf-8"
+soup = BeautifulSoup(r.text, "html.parser")
+
+# TODO: 把所有表格行存入 rows,后续 print 与 for 循环会取前 5 行验证
+# rows = ...
+
+print("抓到图书数:", len(rows))
+for row in rows[:5]:
+    tds = row.select("td")
+    print(tds[1].get_text(), "|", tds[2].get_text(), "|", tds[5].get_text())`}
   />
 </Site>
