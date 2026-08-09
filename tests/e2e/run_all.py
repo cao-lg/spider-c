@@ -5,6 +5,7 @@ import os
 
 ROOT = r"C:\crawler-course"
 SCRIPTS = ["e2e_site.py", "e2e_lessons.py", "e2e_unittests.py", "e2e_report.py"]
+PY = sys.executable
 
 
 def run(cmd, cwd):
@@ -31,7 +32,7 @@ def main():
     failed = []
     for s in SCRIPTS:
         print(f"\n--- {s} ---")
-        code = run(f"python tests/e2e/{s}", ROOT)
+        code = run(f'"{PY}" tests/e2e/{s}', ROOT)
         if code != 0:
             failed.append(s)
     if failed:

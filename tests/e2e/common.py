@@ -73,9 +73,9 @@ def fill_todo(editor, answer: str):
 
 
 def summary():
-    ok = sum(1 for _, ok, _ in RESULTS if ok)
+    ok = sum(1 for _, passed, _ in RESULTS if passed)
     print(f"\n===== 结果: {ok}/{len(RESULTS)} 通过 =====")
-    for name, ok, detail in RESULTS:
-        if not ok:
+    for name, passed, detail in RESULTS:
+        if not passed:
             print(f"  FAIL {name} — {detail}")
     return ok == len(RESULTS)
