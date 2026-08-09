@@ -7,7 +7,11 @@ def main():
     console_logs = []
     page_errors = []
     with sync_playwright() as p:
-        browser = p.chromium.launch()
+        browser = p.chromium.launch(
+            headless=True,
+            executable_path=r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            args=["--no-sandbox"],
+        )
         page = browser.new_page()
         page.on("console", lambda m: console_logs.append(f"[{m.type}] {m.text}"))
         page.on("pageerror", lambda e: page_errors.append(str(e)))
@@ -65,13 +69,13 @@ def main():
             ex_settled = False
             for _ in range(80):
                 page.wait_for_timeout(500)
-                st2 = page.eval_on_selector("py-code-exercise", "el => el.querySelector('.ce-status')?.textContent")
+                st2 = page.eval_on_selector("py-code-exercise", "el => el.querySelector('.py-runner-status')?.textContent")
                 if st2 and ("运行中" not in st2) and ("正在启动" not in st2) and ("正在加载" not in st2):
                     print(">> 练习运行后状态:", st2)
                     ex_settled = True
                     break
             if not ex_settled:
-                st2 = page.eval_on_selector("py-code-exercise", "el => el.querySelector('.ce-status')?.textContent")
+                st2 = page.eval_on_selector("py-code-exercise", "el => el.querySelector('.py-runner-status')?.textContent")
                 print("!! 练习运行 40s 后仍卡住:", st2)
         else:
             print("!! 未找到练习运行按钮")
