@@ -119,7 +119,7 @@ function ensureWorker(): Promise<Worker> {
 
 async function executeRun(code: string, opts: RunOptions): Promise<RunResult> {
   const workerInstance = await ensureWorker();
-  const timeoutMs = opts.timeout ?? 30000;
+  const timeoutMs = opts.timeout ?? 45000;
 
   return new Promise<RunResult>((resolve) => {
     let settled = false;

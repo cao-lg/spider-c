@@ -1,9 +1,5 @@
 /*
   X-Content-Type-Options: nosniff
-  # Pyodide(浏览器内 Python 运行时)默认用 pthreads,需要跨源隔离才能拿到 SharedArrayBuffer。
-  # 缺少这两个头时,本地 localhost 可用(浏览器对 localhost 宽松),但部署到 Cloudflare Pages 会卡在「运行中」。
-  Cross-Origin-Opener-Policy: same-origin
-  Cross-Origin-Embedder-Policy: require-corp
 
 /practice/*
   Content-Type: text/html; charset=utf-8
