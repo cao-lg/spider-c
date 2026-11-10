@@ -52,31 +52,41 @@
 
 ## 2. 阶段 1：D1 + Pages Functions
 
-### 2.1 需要你在 Cloudflare 控制台做的事
+### 2.1 在网页上开通（Cloudflare 控制台）
 
-> 前提：已有 Pages 项目 `spider-c`、Node ≥ 22.12、本地 `npm run verify` 全绿。
-> 下列命令里的名称可改，但 binding 名必须是 `DB`，环境变量名必须是 `TEACHER_TOKEN` / `SYNC_SALT`。
+> 前提：Pages 项目 `spider-c` **必须是 Git 集成**（连 `cao-lg/spider-c` 的 `main`），Node ≥ 22.12。
+> 绑定名必须是 `DB`，变量名必须是 `TEACHER_TOKEN` / `SYNC_SALT`，大小写不能改。
+
+**两个前置检查**（不做会白忙）：
+
+1. Cloudflare 官方明确 **Direct Upload（控制台拖拽 `dist` 上传）不支持 Functions**。
+   若现有项目是拖拽建的，新建 `Create application → Pages → Connect to Git`，
+   构建设置 `npm run build` / 输出目录 `dist` / 生产分支 `main`。
+2. 删掉仓库 `wrangler.toml` 里的 `pages_build_output_dir = "dist"` 这一行。
+   该字段会让 Wrangler 文件随 Git 部署后成为项目配置的唯一来源，控制台绑定会被覆盖且不可编辑，
+   而文件里的 `database_id` 是占位符、`ARCHIVE` 桶尚未创建 → 阶段 1 直接失效。
+
+然后按顺序在控制台操作：
+
+| # | 位置 | 操作 |
+| --- | --- | --- |
+| ① | Workers & Pages → **D1 SQL Database** → Create database | 名称 `spider-c-learning`，Location hint 留默认 |
+| ② | 进入该库 → **Console** | 粘贴 `schema.sql` **全文** → Execute。文件里没有行内 `--` 注释，粘贴时换行被压平也不会出错。验证：`SELECT name FROM sqlite_master WHERE type='table';` 应返回 4 张表 |
+| ③ | Pages 项目 → **Settings → Bindings → Add → D1 database bindings** | Variable name 填 `DB`，选 `spider-c-learning` → Save；Production / Preview 各设一次 |
+| ④ | Pages 项目 → **Settings → Variables and Secrets → Add** | `TEACHER_TOKEN`（≥8 位，教师保管，不要发给学生）、`SYNC_SALT`（随机长串），两条都要勾 **Encrypt** → Save；Production / Preview 各设一次，保存后不可再查看 |
+| ⑤ | Settings → Builds & deployments / Functions | 确认 `npm run build` / `dist` / 根目录 `/`；Compatibility date 填 `2026-11-10`。v3 构建镜像默认 Node 22.23.4，已满足要求 |
+| ⑥ | **Deployments → Retry / Create new deployment** | 顺序：先绑定 + Secret，再重新部署。官方明确 D1 绑定需 redeploy 才生效、Secret 需在使用它的部署之前设好 |
+
+命令行等价做法（可选，网页上做完就不必执行）：
 
 ```bash
-# ① 创建 D1 数据库
 npx wrangler d1 create spider-c-learning
-#    把输出的 database_id 填进 wrangler.toml(本地联调用)
-
-# ② 建表
 npx wrangler d1 execute spider-c-learning --remote --file=./schema.sql
-#    本地联调改成 --local
-
-# ③ 设置两个服务端密钥(不要写进 wrangler.toml / 仓库 / 前端)
-npx wrangler pages secret put TEACHER_TOKEN     # 教师口令,至少 8 位
-npx wrangler pages secret put SYNC_SALT         # 加盐用,随机长字符串
+npx wrangler pages secret put TEACHER_TOKEN
+npx wrangler pages secret put SYNC_SALT
 ```
 
-再到 **Pages 项目 → Settings → Functions**：
-
-- D1 database bindings：`DB` → `spider-c-learning`
-- Environment variables：`TEACHER_TOKEN`、`SYNC_SALT`（也可在 Binding 里用 secret）
-
-重新部署一次 Pages。项目根目录的 `functions/` 会被自动识别成 `/api/*` 路由，Astro 静态构建不需要任何改动，`dist/` 仍是 36 个静态页。
+项目根目录的 `functions/` 会被自动识别成 `/api/*` 路由；Astro 静态构建不需要任何改动，`dist/` 仍是 36 个静态页。
 
 ### 2.2 验证后端已就位
 
@@ -89,7 +99,8 @@ curl https://spider-c.pages.dev/api/health
 
 ### 2.3 学生端与教师端
 
-- **学生**：「学习中心 → 云同步」填匿名学号、班级、教师分发的同步口令 → 「启用 / 登录」。启用时自动上传一次；之后换设备用同一学号 + 口令登录，点「从云端恢复」即可取回。口令不存本机，服务端只存 `SHA-256(SALT + 口令)`。
+- **学生**：「学习中心 → 云同步」填匿名学号、班级、教师分发的**班级同步口令** → 「启用 / 登录」。启用时自动上传一次；之后换设备用同一学号 + 口令登录，点「从云端恢复」即可取回。口令不存本机，服务端只存 `SHA-256(SYNC_SALT + ':' + 口令)`。
+  ⚠️ 三个口令不要混：`TEACHER_TOKEN`（≥8 位，教师看板专用，**绝不发给学生**）、`SYNC_SALT`（只存服务端）、班级同步口令（≥6 位，课堂上统一发布；`/api/enroll` 只校验长度与「同学号重登时一致」）。
 - **教师**：`/teacher/` → 「阶段 1/2 · 云端看板」→ 填 `TEACHER_TOKEN` → 「拉取班级数据」。
 - **删除权**：学生可点「删除云端数据」清除自己的快照、会话与注册记录；教师可用 `DELETE /api/student?id=<学号>` 按学校要求清理。本机数据不受影响。
 
@@ -209,6 +220,7 @@ jobs:
 | 报告里大量「无数据」 | 学生用的是旧版备份（没有逐题明细），且没做过该课实操 | 属正常且诚实的结果；让学生重新做一次课内检测即可补上直接证据 |
 | 学生看不到云同步卡片 | 页面还是旧构建 | 重新 `npm run build` 并部署，卡片在「学习中心」末尾 |
 | 两设备同步后记录变少 | 不该发生；说明有人绕过了 `/api/sync` 直接改库 | 检查 `snapshots.revision` 是否递增；服务端合并逻辑见 `backend.ts` |
+| D1 Console 执行 `schema.sql` 报 `incomplete input: SQLITE_ERROR` | 旧版 SQL 的行内 `--` 中文注释吞掉了闭合括号：粘贴时换行被压平，`--` 会注释掉它后面的一切 | 用仓库里已去掉行内注释的新版 `schema.sql` 全文重粘；或按分号逐条执行。已用 SQLite 验证「正常 / 压平」两种输入都能建成 4 表 3 索引 |
 
 ---
 
