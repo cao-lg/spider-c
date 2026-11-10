@@ -2619,3 +2619,623 @@ button {
     text-decoration: none;
   }
 }
+
+/* ── 教师端 · 学情报告 ──────────────────────────────────────────── */
+
+/* 只有第一个教师入口带竖线;第二个紧随其后,不再重复画分隔 */
+.main-nav a.nav-teacher.nav-teacher-secondary {
+  margin-left: 0;
+  padding-left: 0.8rem;
+  border-left: none;
+  border-radius: var(--radius-sm);
+}
+
+.teacher-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.teacher-head h1 {
+  margin-bottom: 0.35rem;
+}
+
+.teacher-badge {
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  background: var(--warning-soft);
+  color: var(--warning);
+  border: 1px solid #f0d9ae;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.teacher-lead {
+  color: var(--text-2);
+  margin: 0;
+  max-width: 62ch;
+}
+
+.teacher-head-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.82rem;
+  color: var(--text-3);
+  text-align: right;
+}
+
+.teacher-notice {
+  margin: 1.1rem 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid #f0d9ae;
+  border-left: 3px solid var(--warning);
+  border-radius: var(--radius-sm);
+  background: var(--warning-soft);
+  color: #7a5312;
+  font-size: 0.88rem;
+  line-height: 1.65;
+}
+
+.teacher-tabs {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.2rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.teacher-tab {
+  appearance: none;
+  border: 1px solid transparent;
+  border-bottom: none;
+  background: transparent;
+  padding: 0.6rem 1rem;
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--text-2);
+  cursor: pointer;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+.teacher-tab em {
+  display: block;
+  font-style: normal;
+  font-size: 0.75rem;
+  color: var(--text-3);
+  margin-top: 0.1rem;
+}
+
+.teacher-tab:hover {
+  background: var(--surface-2);
+}
+
+.teacher-tab.active {
+  background: var(--surface);
+  color: var(--primary);
+  font-weight: 600;
+  border-color: var(--border);
+  box-shadow: 0 -2px 0 var(--primary) inset;
+}
+
+.teacher-panel {
+  min-width: 0;
+}
+
+.teacher-card {
+  margin-bottom: 1.2rem;
+}
+
+/* 说明段与按钮行默认贴在一起,视觉上像压住了文字 */
+.teacher-card .btn-row {
+  margin: 0.75rem 0;
+}
+
+.teacher-sub {
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--text-3);
+  margin-left: 0.5rem;
+}
+
+.teacher-file-table input.teacher-inline,
+.teacher-cloud-form input,
+.teacher-cloud-form select,
+.teacher-filter select {
+  font: inherit;
+  font-size: 0.86rem;
+  padding: 0.28rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  max-width: 100%;
+}
+
+.teacher-file-table input.teacher-inline {
+  width: 8.5rem;
+}
+
+.teacher-file-table td {
+  vertical-align: middle;
+}
+
+.teacher-file-name {
+  max-width: 22rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--danger);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.btn-link:hover {
+  text-decoration: underline;
+}
+
+.teacher-report-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-bottom: 0.9rem;
+}
+
+.teacher-report-bar h2 {
+  margin-bottom: 0.1rem;
+}
+
+.teacher-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.teacher-filter {
+  font-size: 0.85rem;
+  color: var(--text-2);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.teacher-kpis {
+  margin-bottom: 1rem;
+}
+
+.teacher-kpi-hint {
+  font-size: 0.72rem;
+  color: var(--text-3);
+  margin-top: 0.15rem;
+}
+
+.teacher-compare {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.4rem;
+}
+
+.teacher-compare-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+
+.teacher-compare-title span {
+  font-weight: 400;
+  color: var(--text-3);
+  font-size: 0.78rem;
+  margin-left: 0.4rem;
+}
+
+.teacher-compare-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.2rem;
+  font-size: 0.86rem;
+  color: var(--text-2);
+  padding: 0.25rem 0;
+  border-top: 1px dashed var(--border);
+}
+
+.teacher-compare-row strong {
+  color: var(--text);
+  min-width: 3rem;
+}
+
+.teacher-table .teacher-obj {
+  font-size: 0.82rem;
+  color: var(--text-2);
+  line-height: 1.5;
+  margin-top: 0.15rem;
+}
+
+.teacher-anchor {
+  font-size: 0.75rem;
+  color: var(--text-3);
+  margin-top: 0.1rem;
+}
+
+.teacher-muted {
+  color: var(--text-3);
+  font-size: 0.82rem;
+}
+
+.teacher-mono {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+
+.teacher-chip {
+  display: inline-block;
+  padding: 0.05rem 0.4rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 0.75rem;
+}
+
+.teacher-bar {
+  display: inline-block;
+  vertical-align: middle;
+  width: 5.2rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.teacher-bar i {
+  display: block;
+  height: 100%;
+  background: var(--primary);
+  border-radius: 999px;
+}
+
+.teacher-bar-heat {
+  width: 8rem;
+}
+
+.teacher-bar-heat i {
+  background: var(--warning);
+}
+
+.teacher-rate-cell {
+  white-space: nowrap;
+}
+
+.teacher-rate {
+  font-size: 0.82rem;
+  color: var(--text-2);
+  margin-left: 0.4rem;
+}
+
+.teacher-status {
+  display: inline-block;
+  padding: 0.08rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.teacher-status-good {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.teacher-status-watch {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.teacher-status-critical {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.teacher-status-nodata {
+  background: var(--surface-2);
+  color: var(--text-3);
+}
+
+.teacher-row-critical td:first-child {
+  box-shadow: inset 3px 0 var(--danger);
+}
+
+.teacher-row-watch td:first-child {
+  box-shadow: inset 3px 0 var(--warning);
+}
+
+.teacher-row-nodata {
+  color: var(--text-3);
+}
+
+.teacher-heat {
+  margin-bottom: 1.4rem;
+}
+
+.teacher-heat-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px dashed var(--border);
+  font-size: 0.86rem;
+}
+
+.teacher-heat-label {
+  min-width: 11rem;
+  font-weight: 600;
+}
+
+.teacher-heat-num {
+  color: var(--text);
+  min-width: 4.5rem;
+}
+
+.teacher-heat-detail {
+  color: var(--text-3);
+  font-size: 0.78rem;
+}
+
+.teacher-two-col {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1.6rem;
+  margin-bottom: 1.4rem;
+}
+
+.teacher-skills {
+  margin-bottom: 1rem;
+}
+
+.teacher-skill-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+  padding: 0.2rem 0;
+}
+
+.teacher-skill-row > span:first-child {
+  min-width: 2.5rem;
+  font-weight: 600;
+}
+
+.teacher-decisions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.teacher-decision {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--primary);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: 0.65rem 0.85rem;
+  font-size: 0.86rem;
+}
+
+.teacher-decision-reteach {
+  border-left-color: var(--danger);
+}
+
+.teacher-decision-misconception {
+  border-left-color: var(--warning);
+}
+
+.teacher-decision-pace,
+.teacher-decision-group {
+  border-left-color: var(--accent);
+}
+
+.teacher-decision-title {
+  font-weight: 600;
+  margin-bottom: 0.2rem;
+}
+
+.teacher-decision p {
+  margin: 0 0 0.25rem;
+  color: var(--text-2);
+  line-height: 1.6;
+}
+
+.teacher-decision a {
+  font-size: 0.82rem;
+}
+
+.teacher-cloud-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.7rem;
+  margin: 0.8rem 0;
+}
+
+.teacher-cloud-form label,
+.teacher-filter {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.82rem;
+  color: var(--text-2);
+}
+
+.teacher-cloud-form input[type='password'] {
+  width: 16rem;
+}
+
+.teacher-archive {
+  margin-top: 0.8rem;
+}
+
+.teacher-archive-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  font-size: 0.85rem;
+  color: var(--text-2);
+}
+
+@media (max-width: 900px) {
+  .teacher-two-col {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .teacher-head-meta {
+    text-align: left;
+  }
+
+  .teacher-heat-label {
+    min-width: 8rem;
+  }
+
+  .main-nav a.nav-teacher.nav-teacher-secondary {
+    margin-left: 0;
+    padding-left: 0.5rem;
+  }
+}
+
+@media (max-width: 560px) {
+  .teacher-tab {
+    padding: 0.5rem 0.6rem;
+    font-size: 0.86rem;
+  }
+
+  .teacher-bar {
+    width: 3.6rem;
+  }
+
+  .teacher-bar-heat {
+    width: 5rem;
+  }
+
+  .teacher-cloud-form input[type='password'] {
+    width: 100%;
+  }
+}
+
+/* 打印:去掉所有操作控件,只留报告本体;两栏改单栏避免被切断 */
+@media print {
+  .teacher-tabs,
+  .teacher-notice,
+  .teacher-card,
+  .teacher-actions,
+  .btn-link,
+  #btn-print,
+  #btn-cloud-print {
+    display: none !important;
+  }
+
+  .teacher-two-col {
+    display: block;
+  }
+
+  /* 保持 [hidden] 生效:不打印未激活的数据源,也不打印空报告 */
+  .teacher-decision,
+  .teacher-heat-row,
+  .teacher-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .teacher-table th {
+    background: #f2f2f2 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .teacher-status,
+  .teacher-bar i {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+/* ── 学生端 · 云同步卡片 ──────────────────────────────────────── */
+
+.report-hint-inline {
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--text-3);
+  margin-left: 0.4rem;
+}
+
+.sync-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.7rem;
+  margin: 0.9rem 0 0.4rem;
+}
+
+.sync-form label,
+.teacher-cloud-form label {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.82rem;
+  color: var(--text-2);
+}
+
+.sync-form input {
+  font: inherit;
+  font-size: 0.88rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  width: 9.5rem;
+}
+
+.sync-form input[type='password'] {
+  width: 11rem;
+}
+
+.sync-actions {
+  margin-top: 0.4rem;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn:disabled:hover {
+  background: inherit;
+  border-color: var(--border);
+  color: var(--text-2);
+}
+
+@media (max-width: 560px) {
+  .sync-form input,
+  .sync-form input[type='password'] {
+    width: 100%;
+  }
+
+  .sync-form label {
+    flex: 1 1 100%;
+  }
+}

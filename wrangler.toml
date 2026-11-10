@@ -1,0 +1,24 @@
+# Cloudflare Pages 本地开发与绑定示例
+#
+# 重要:Pages 生产环境通常在控制台 Settings → Functions 里绑定 D1/R2 与环境变量,
+# 这个文件主要用于 `npx wrangler pages dev dist --local` 本地联调。
+# database_id / bucket_name 换成你自己的值,不要把任何密钥写进这个文件。
+
+name = "spider-c"
+compatibility_date = "2026-11-10"
+pages_build_output_dir = "dist"
+
+# 阶段 1:主库
+[[d1_databases]]
+binding = "DB"
+database_name = "spider-c-learning"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+
+# 阶段 2:周快照归档(不绑定时 /api/archive 返回 503,阶段 1 完全可用)
+[[r2_buckets]]
+binding = "ARCHIVE"
+bucket_name = "spider-c-archive"
+
+# TEACHER_TOKEN / SYNC_SALT 用 secret 设置,不要写进本文件:
+#   npx wrangler pages secret put TEACHER_TOKEN
+#   npx wrangler pages secret put SYNC_SALT

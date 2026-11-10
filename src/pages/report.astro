@@ -97,8 +97,34 @@ import Site from '../layouts/Site.astro';
       </div>
     </div>
   </div>
+
+  <h2>云同步 <span class="report-hint-inline">可选 · 默认关闭</span></h2>
+  <div class="report-card">
+    <div class="report-card-title">跨设备同步与班级上报</div>
+    <p class="report-hint">
+      不开通也能完整使用本课程:所有数据仍保存在本机,随时可以导出备份。
+      启用后,换一台电脑用同一学号 + 口令即可取回记录,教师端也能自动汇总班级学情(无需再收文件)。
+      请只用<strong>匿名学号</strong>,不要填真实姓名;口令由教师分发,不会保存在本机。
+    </p>
+    <div class="sync-form">
+      <label>匿名学号<input id="sync-student" type="text" placeholder="如 S01" maxlength="24" autocomplete="off" /></label>
+      <label>班级<input id="sync-class" type="text" placeholder="如 1班" maxlength="16" autocomplete="off" /></label>
+      <label>同步口令<input id="sync-code" type="password" placeholder="由教师提供" autocomplete="off" /></label>
+      <button id="btn-sync-enable" class="btn sm primary">启用 / 登录</button>
+    </div>
+    <div class="btn-row sync-actions">
+      <button id="btn-sync-push" class="btn sm">上传到云端</button>
+      <button id="btn-sync-pull" class="btn sm">从云端恢复</button>
+      <button id="btn-sync-disable" class="btn sm">本机退出同步</button>
+      <button id="btn-sync-delete" class="btn sm danger">删除云端数据</button>
+    </div>
+    <p class="report-hint" id="sync-msg" role="status" aria-live="polite">
+      未启用云同步。启用前请确认已知悉:采集的是匿名学号与学习记录,可在「删除云端数据」随时清除。
+    </p>
+  </div>
 </Site>
 
 <script>
   import '../components/report-client';
+  import '../components/sync-client';
 </script>

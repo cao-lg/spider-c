@@ -15,8 +15,10 @@
     "check": "node scripts/check-catalog.ts",
     "test": "node --test tests/unit/*.test.ts",
     "test:e2e": "python tests/e2e/run_all.py",
+    "archive:weekly": "node scripts/archive-weekly.ts",
     "verify": "npm run check && npm run typecheck && npm test && npm run build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p functions/tsconfig.json",
+    "typecheck:functions": "tsc --noEmit -p functions/tsconfig.json"
   },
   "dependencies": {
     "@astrojs/mdx": "^7.0.5",

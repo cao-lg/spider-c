@@ -77,11 +77,12 @@ scripts/
 npm install
 npm run dev          # 本地开发 (localhost:4321)
 npm run check        # 目录一致性校验(构建前自动跑)
-npm run typecheck    # tsc --noEmit(检查 .ts,不含 .astro 模板)
-npm test             # 纯逻辑快测:判分/掌握度/迁移/题库完整性(秒级)
-npm run build        # 静态构建 → dist/
+npm run typecheck    # 主站 + functions/ 两套 tsconfig 分别检查 .ts(不含 .astro 模板)
+npm test             # 纯逻辑快测:判分/迁移/题库/报告引擎/后端链路(秒级,含内存 D1/R2)
+npm run build        # 静态构建 → dist/(36 页)
 npm run verify       # check + typecheck + test + build,提交前跑这个
 npm run test:e2e     # Playwright 端到端(需要 pip install playwright)
+npm run archive:weekly  # 阶段 2 定时归档,需 SITE_URL + TEACHER_TOKEN 环境变量
 ```
 
 ## 四、加一节课要动哪些文件
@@ -95,9 +96,12 @@ npm run test:e2e     # Playwright 端到端(需要 pip install playwright)
 
 ## 五、学生数据与隐私
 
-- 无后端。学习记录只在浏览器 `localStorage`(key `crawler-course:v2`),可导出 JSON 备份。
+- **默认无后端**。学习记录只在浏览器 `localStorage`(key `crawler-course:v2`),可导出 JSON 备份。
 - 升级 schema 时走 `src/lib/schema.ts` 的 `migrate()`,**不允许**直接改 key 丢掉旧数据。
-- 昵称仅用于报告文案,不上传。
+- 昵称仅用于报告文案,不上传;逐题作答明细只用于「凭什么说学会了」的证据链。
+- **云同步是可选功能**:「学习中心 → 云同步」默认关闭,启用后才向 `/api/*` 上报匿名学号 + 学习快照,
+  服务端只存加盐哈希与聚合记录,学生可随时删除。不开通不影响任何课程功能。
+- 教师端聚合报告不做个人排名,学生明细只出现匿名学号;无证据的目标显示「无数据」而非 0 分。
 
 ## 六、已知限制(请在对外说明中保留)
 
@@ -116,3 +120,21 @@ npm run test:e2e     # Playwright 端到端(需要 pip install playwright)
 静态产物 `dist/` 可直接托管。当前配置面向 Cloudflare Pages(`astro.config.mjs` 的 `site`
 与 `public/_headers` 的 MIME 规则);`public/pyodide/` 必须整目录上传,worker 从
 `/pyodide/` 根路径取 wheel。详见 [docs/DEPLOY.md](docs/DEPLOY.md)。
+
+若要启用在线看板,项目根的 `functions/` 会被 Pages 自动识别成 `/api/*`,静态构建无需改动;
+需另建 D1 并绑定 `DB`、设置 `TEACHER_TOKEN` / `SYNC_SALT` 两个 secret,详见
+[docs/TEACHER-DATA.md](docs/TEACHER-DATA.md)。
+
+## 八、教师学情数据(三个阶段)
+
+| 阶段 | 入口 | 是否需要云 |
+| --- | --- | --- |
+| 0 · 离线汇总 | `/teacher/`(主导航「学情报告」),多选学生 JSON 出报告 | 否,零账号零费用 |
+| 1 · 在线看板 | 同页切「云端看板」,学生端「学习中心 → 云同步」 | D1 + Pages Functions |
+| 2 · 周快照归档 | 教师端一键 / `npm run archive:weekly` | R2(仅归档,不是主库) |
+
+三阶段共用 `src/lib/class-report.ts` 一套口径;报告包含目标达成矩阵(44 目标,标注证据强度)、
+共性误区热力图(28 标签)、进度与技能分布、教学决策建议,支持两班对比、CSV 导出与打印。
+**R2 不是主存储**:浏览器不能直连对象存储,且整包覆盖写会在多设备同步时丢记录;主数据在 D1,
+服务端用 `mergeLearningData()` 合并后 UPSERT。完整部署、合规与故障排查见
+[docs/TEACHER-DATA.md](docs/TEACHER-DATA.md)。

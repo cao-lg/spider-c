@@ -14,6 +14,7 @@ import type {
 } from './types';
 import { masteryFromAttempts } from './scoring';
 import { defaultData, migrate, SCHEMA_VERSION } from './schema';
+import { mergeLearningData } from './merge';
 import { lessons as courseLessons } from '../data/course';
 
 const STORAGE_KEY = `crawler-course:v${SCHEMA_VERSION}`;
@@ -99,6 +100,16 @@ export const store = {
   setProfile(name: string) {
     mutate(() => {
       data.profile.name = name;
+    });
+  },
+
+  /**
+   * 写入匿名学号/班级。开启云同步后调用,好处是此后导出的离线备份自带身份,
+   * 教师做阶段 0 汇总时不必再逐份手填 —— 两条路径自然打通。
+   */
+  setRoster(studentId: string, classId: string) {
+    mutate(() => {
+      data.roster = { studentId, classId };
     });
   },
 
@@ -247,53 +258,9 @@ export const store = {
       const parsed = migrate(JSON.parse(text));
       if (!parsed) return { ok: false, error: '文件格式或版本不兼容' };
       mutate(() => {
-        if (mode === 'replace') {
-          data = parsed;
-        } else {
-          // 合并:按记录时间戳去重
-          const mergeMap = (
-            target: Record<string, Attempt[]>,
-            incoming: Record<string, Attempt[]> | undefined,
-          ) => {
-            if (!incoming) return;
-            for (const [key, list] of Object.entries(incoming)) {
-              const cur = target[key] ?? [];
-              const seen = new Set(cur.map((a) => a.ts));
-              target[key] = [...cur, ...list.filter((a) => !seen.has(a.ts))].sort(
-                (a, b) => a.ts - b.ts,
-              );
-            }
-          };
-          mergeMap(data.exercises, parsed.exercises);
-          mergeMap(data.unitTests, parsed.unitTests);
-          mergeMap(data.practice, parsed.practice);
-          mergeMap(data.concepts, parsed.concepts);
-
-          // 错题本取"错误次数更多 / 更晚"的一份,避免合并把已消除的错题复活
-          for (const [qid, incoming] of Object.entries(parsed.mistakes ?? {})) {
-            const cur = data.mistakes[qid];
-            if (!cur) {
-              data.mistakes[qid] = incoming;
-              continue;
-            }
-            data.mistakes[qid] = {
-              ...cur,
-              wrongCount: Math.max(cur.wrongCount, incoming.wrongCount),
-              firstWrongAt: Math.min(cur.firstWrongAt, incoming.firstWrongAt),
-              lastWrongAt: Math.max(cur.lastWrongAt, incoming.lastWrongAt),
-              lastGiven: incoming.lastWrongAt >= cur.lastWrongAt ? incoming.lastGiven : cur.lastGiven,
-              misconception:
-                incoming.lastWrongAt >= cur.lastWrongAt ? incoming.misconception : cur.misconception,
-              resolvedAt: cur.resolvedAt ?? incoming.resolvedAt,
-            };
-          }
-
-          for (const [lid, p] of Object.entries(parsed.lessons ?? {})) {
-            const cur = data.lessons[lid];
-            data.lessons[lid] = cur && cur.status !== 'not_started' ? cur : p;
-          }
-          if (!data.profile.name && parsed.profile?.name) data.profile.name = parsed.profile.name;
-        }
+        // 合并口径抽到 lib/merge.ts:教师端离线汇总与云端同步用的是同一套规则,
+        // 否则「学生端看到的记录」和「教师报告里的记录」会对不上。
+        data = mode === 'replace' ? parsed : mergeLearningData(data, parsed);
       });
       return { ok: true };
     } catch (e) {

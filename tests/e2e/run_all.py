@@ -11,6 +11,7 @@ SCRIPTS = [
     "e2e_coursetests.py",
     "e2e_report.py",
     "e2e_concepts.py",
+    "e2e_teacher.py",
 ]
 PY = sys.executable
 

@@ -87,12 +87,24 @@ export interface LessonProgress {
   mastery: number;
 }
 
+/**
+ * 班级花名册元数据(可选)。
+ * 默认导出备份不带这些字段 —— 离线汇总时由教师在页面上手工填写;
+ * 只有开启阶段 1 云同步后才写入,这样"不开通云端"的学生完全不受影响。
+ * 只用匿名学号与班级代号,不收真实姓名/手机号。
+ */
+export interface RosterMeta {
+  studentId?: string;
+  classId?: string;
+}
+
 export interface LearningData {
   schemaVersion: 2;
   profile: {
     name?: string;
     createdAt: number;
   };
+  roster?: RosterMeta;
   lessons: Record<string, LessonProgress>;
   /** key: exercise id */
   exercises: Record<string, Attempt[]>;

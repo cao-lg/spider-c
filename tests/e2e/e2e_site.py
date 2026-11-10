@@ -42,7 +42,7 @@ def main():
         # ---- 导航 ----
         page.goto(BASE + "/report/", wait_until="networkidle")
         nav_items = page.locator(".main-nav a").count()
-        record("T-005 导航 7 项(含教师端教学设计)", nav_items == 7, f"count={nav_items}")
+        record("T-005 导航 8 项(含教师端教学设计、学情报告)", nav_items == 8, f"count={nav_items}")
         active = page.locator(".main-nav a.active").inner_text()
         record("T-005b 学习中心高亮", active == "学习中心", active)
 
@@ -50,6 +50,11 @@ def main():
         page.goto(BASE + "/design/", wait_until="networkidle")
         record("T-005c 教学设计在主导航且当前页高亮",
                page.locator(".main-nav a.nav-teacher.active").inner_text() == "教学设计")
+
+        # 教师端另一个入口(学情报告)同样不能只放在页脚
+        page.goto(BASE + "/teacher/", wait_until="networkidle")
+        record("T-005d 学情报告在主导航且当前页高亮",
+               page.locator(".main-nav a.nav-teacher.active").inner_text() == "学情报告")
 
         page.goto(BASE + "/", wait_until="networkidle")
         record("T-006 首页统计含课程数 13", "13" in page.locator(".stat-num").first.inner_text())

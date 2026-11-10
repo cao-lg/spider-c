@@ -10,6 +10,7 @@
 
 import { answersMatch, buildAttempt, pct } from '../lib/scoring';
 import { store } from '../lib/store';
+import type { QuestionAnswer } from '../lib/types';
 
 interface QState {
   el: HTMLFieldSetElement;
@@ -171,6 +172,10 @@ function initQuiz(root: HTMLElement) {
     let score = 0;
     const maxScore = states.reduce((s, q) => s + q.points, 0);
     const outcomes: { qid: string; correct: boolean; given: string; misconception?: string }[] = [];
+    // 逐题作答明细(教师端「目标达成矩阵」的直接证据)。
+    // 旧版只存卷面总分,教师无法回答「哪个目标没达成」;这里补齐,
+    // 未作答的题不记入明细(空着不等于有错误认知,也不等于做对了)。
+    const details: QuestionAnswer[] = [];
 
     for (const q of states) {
       const given = givenValue(q);
@@ -197,6 +202,13 @@ function initQuiz(root: HTMLElement) {
           given,
           misconception: ok ? undefined : q.misconception || undefined,
         });
+        details.push({
+          qid: q.id,
+          given,
+          correct: ok,
+          points: ok ? q.points : 0,
+          maxPoints: q.points,
+        });
       }
     }
 
@@ -204,6 +216,7 @@ function initQuiz(root: HTMLElement) {
 
     const ratio = maxScore > 0 ? score / maxScore : 0;
     const attempt = buildAttempt(score, maxScore, {
+      answers: details,
       skills: [...new Set(states.flatMap((q) => q.skills))],
       lessonId: states.length > 0 && states.every((q) => q.lessonId === states[0].lessonId)
         ? states[0].lessonId

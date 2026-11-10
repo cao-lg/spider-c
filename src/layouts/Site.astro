@@ -8,9 +8,11 @@ interface Props {
   sidebar?: boolean;
   activeUnitId?: string;
   activeLessonId?: string;
+  /** 教师端内部工具不需要被搜索引擎收录 */
+  noindex?: boolean;
 }
 
-const { title, description, sidebar = false, activeUnitId, activeLessonId } = Astro.props;
+const { title, description, sidebar = false, activeUnitId, activeLessonId, noindex = false } = Astro.props;
 const pageTitle = title ? `${title} · ${siteName}` : `${siteName} · ${siteTagline}`;
 const path = Astro.url.pathname;
 
@@ -26,6 +28,7 @@ function navActive(prefix: string): boolean {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="generator" content={Astro.generator} />
     <meta name="description" content={description ?? siteTagline} />
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
     <title>{pageTitle}</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   </head>
@@ -49,6 +52,11 @@ function navActive(prefix: string): boolean {
             class={`nav-teacher${navActive('/design') ? ' active' : ''}`}
             title="教师端:目标—活动—评价一致性、课时时间轴与形成性评价设计"
           >教学设计</a>
+          <a
+            href="/teacher/"
+            class={`nav-teacher nav-teacher-secondary${navActive('/teacher') ? ' active' : ''}`}
+            title="教师端:班级目标达成、共性误区与教学决策报告"
+          >学情报告</a>
         </nav>
       </div>
     </header>
@@ -86,7 +94,8 @@ function navActive(prefix: string): boolean {
         <span>© 2026 {siteName} · 仅供学习,请遵守 robots.txt 与相关法律法规</span>
         <span>
           学习数据仅保存在你的浏览器本地,可随时导出备份 ·
-          <a href="/design/">教学设计说明(教师)</a>
+          <a href="/design/">教学设计说明(教师)</a> ·
+          <a href="/teacher/">学情报告(教师)</a>
         </span>
       </div>
     </footer>

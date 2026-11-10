@@ -1,0 +1,202 @@
+---
+import Site from '../layouts/Site.astro';
+import { totalLessons } from '../data/course';
+import { designList } from '../data/design';
+import { misconceptionLabels } from '../data/questions';
+
+const objectiveCount = designList.reduce((s, d) => s + d.objectives.length, 0);
+const misconceptionCount = Object.keys(misconceptionLabels).length;
+---
+
+<Site title="学情报告(教师)" description="班级目标达成、共性误区与教学决策 · 教师端" noindex={true}>
+  <div class="teacher-head">
+    <div>
+      <h1>学情报告 <span class="teacher-badge">教师端</span></h1>
+      <p class="teacher-lead">
+        面向 <strong>2 个班、约 120 人</strong>的班级诊断。报告只回答四件事:哪个目标没达成、哪些误区是共性的、
+        进度卡在哪一课、下节课改什么。<strong>不做个人排名,不显示真实姓名。</strong>
+      </p>
+    </div>
+    <div class="teacher-head-meta">
+      <span>{totalLessons} 课 · {objectiveCount} 条可观测目标 · {misconceptionCount} 类误区</span>
+      <span>证据来自概念题逐题明细与错题本,不折算总分</span>
+    </div>
+  </div>
+
+  <div class="teacher-notice">
+    <strong>数据边界</strong> · 离线模式下所有文件只在你的浏览器里解析,不会上传到任何服务器;
+    在线模式只接收匿名学号与聚合学习记录。学生均为成年人,仍建议使用学号而非姓名,
+    并在首次采集时告知用途、保留期限与删除方式。
+  </div>
+
+  <div class="teacher-tabs" role="tablist" aria-label="数据源">
+    <button id="tab-offline" class="teacher-tab active" role="tab" aria-selected="true" aria-controls="panel-offline">
+      阶段 0 · 离线汇总 <em>无需任何账号,现在就能用</em>
+    </button>
+    <button id="tab-cloud" class="teacher-tab" role="tab" aria-selected="false" aria-controls="panel-cloud">
+      阶段 1/2 · 云端看板 <em>部署后自动汇总,无需收文件</em>
+    </button>
+  </div>
+
+  <!-- ── 阶段 0:离线汇总 ─────────────────────────────── -->
+  <section id="panel-offline" class="teacher-panel" role="tabpanel">
+    <div class="report-card teacher-card">
+      <div class="report-card-title">1 · 加入学生备份</div>
+      <p class="report-hint">
+        让学生在「学习中心 → 数据管理 → 导出备份」生成 JSON,收齐后一次性多选即可。
+        同一学生在多台设备导出的多份备份会自动按学号合并,不会重复计数。
+      </p>
+      <div class="btn-row">
+        <button id="btn-pick-files" class="btn sm primary">选择备份文件(可多选)</button>
+        <button id="btn-demo" class="btn sm">载入示例班级</button>
+        <button id="btn-clear" class="btn sm danger">清空</button>
+      </div>
+      <input id="teacher-files" type="file" accept="application/json,.json" multiple hidden />
+      <p class="report-hint" id="teacher-msg" role="status" aria-live="polite">
+        尚未加入任何备份。也可以先点「载入示例班级」看看报告长什么样。
+      </p>
+    </div>
+
+    <div class="report-card teacher-card" id="file-card" hidden>
+      <div class="report-card-title">2 · 核对学号与班级 <span class="teacher-sub">可直接修改,改动后报告立即重算</span></div>
+      <div class="table-scroll">
+        <table class="design-table teacher-file-table">
+          <thead>
+            <tr><th>来源文件</th><th>匿名学号</th><th>班级</th><th>作答数</th><th>完成课数</th><th>操作</th></tr>
+          </thead>
+          <tbody id="file-list"></tbody>
+        </table>
+      </div>
+      <p class="report-hint">班级名相同的归为一组。建议统一成「1班 / 2班」这样的短名,便于两班对比。</p>
+    </div>
+
+    <div id="teacher-report" hidden>
+      <div class="teacher-report-bar">
+        <div>
+          <h2>3 · 班级诊断报告</h2>
+          <p class="report-hint" id="report-meta"></p>
+        </div>
+        <div class="teacher-actions">
+          <label class="teacher-filter">班级
+            <select id="class-filter" aria-label="筛选班级"></select>
+          </label>
+          <button id="btn-csv-objectives" class="btn sm">目标达成 CSV</button>
+          <button id="btn-csv-misconceptions" class="btn sm">误区 CSV</button>
+          <button id="btn-csv-students" class="btn sm">学生明细 CSV</button>
+          <button id="btn-print" class="btn sm primary">打印 / 存 PDF</button>
+        </div>
+      </div>
+
+      <div class="stats-grid teacher-kpis" id="kpi-grid"></div>
+      <div id="class-compare" class="teacher-compare"></div>
+
+      <h2>① 目标达成矩阵 <span class="teacher-sub">达成率低于 60% 的建议重讲</span></h2>
+      <p class="report-hint">
+        「直接证据」= 有逐题作答明细(新版备份);「间接证据」有两种:旧备份只有卷面总分,只能由「参与作答 + 无未消除错题」推断;
+        或者该目标由<strong>代码实战</strong>评价(44 个目标中有 17 个没有概念题),此时以实操是否通过为准。
+        两者都不等同于精确认证;「无数据」= 这一节的检测与实战都还没做过,绝不按「没错题」算成达成。
+      </p>
+      <div class="table-scroll">
+        <table class="design-table teacher-table" id="objective-table">
+          <thead>
+            <tr>
+              <th>课程 / 目标</th><th>层级</th><th>达成</th><th>达成率</th><th>证据</th><th>状态</th>
+            </tr>
+          </thead>
+          <tbody id="objective-body"></tbody>
+        </table>
+      </div>
+
+      <h2>② 共性误区热力图 <span class="teacher-sub">按命中人数排序,指向下节课要重讲的那一段</span></h2>
+      <div id="misconception-list" class="teacher-heat"></div>
+
+      <div class="teacher-two-col">
+        <div>
+          <h2>③ 进度与掌握度分布</h2>
+          <div id="skill-list" class="teacher-skills"></div>
+          <div class="table-scroll">
+            <table class="design-table teacher-table">
+              <thead><tr><th>课程</th><th>已完成</th><th>进行中</th><th>未开始</th><th>平均掌握度</th></tr></thead>
+              <tbody id="lesson-body"></tbody>
+            </table>
+          </div>
+        </div>
+        <div>
+          <h2>④ 教学决策建议</h2>
+          <p class="report-hint">按影响面自动排序,每条都给出可执行的下一步,不是「加强练习」这类空话。</p>
+          <div id="decision-list" class="teacher-decisions"></div>
+        </div>
+      </div>
+
+      <h2>学生跟进清单 <span class="teacher-sub">只显示匿名学号,不排名</span></h2>
+      <div class="table-scroll">
+        <table class="design-table teacher-table">
+          <thead>
+            <tr><th>学号</th><th>班级</th><th>完成课数</th><th>平均掌握度</th><th>未消除错题</th><th>跟进</th></tr>
+          </thead>
+          <tbody id="student-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 阶段 1/2:云端看板 ──────────────────────────── -->
+  <section id="panel-cloud" class="teacher-panel" hidden role="tabpanel">
+    <div class="report-card teacher-card">
+      <div class="report-card-title">云端看板 · 需要已完成阶段 1 部署</div>
+      <p class="report-hint">
+        学生在「学习中心 → 云同步」用学号 + 班级 + 同步口令上报后,这里直接拉取全班快照,
+        用与离线模式<strong>完全相同</strong>的报告引擎计算,不再收文件。教师口令由服务端环境变量保存,不写进前端代码。
+      </p>
+      <div class="teacher-cloud-form">
+        <label>教师口令
+          <input id="cloud-token" type="password" autocomplete="off" placeholder="TEACHER_TOKEN" />
+        </label>
+        <label>班级
+          <select id="cloud-classes" aria-label="选择班级"><option value="">全部班级</option></select>
+        </label>
+        <button id="btn-cloud-load" class="btn sm primary">拉取班级数据</button>
+      </div>
+      <p class="report-hint" id="cloud-msg" role="status" aria-live="polite">
+        未连接。若站点还没绑定 D1,这里会提示接口不可用 —— 离线模式不受影响。
+      </p>
+    </div>
+
+    <div id="cloud-report" hidden>
+      <div class="teacher-report-bar">
+        <div><h2>云端班级诊断</h2><p class="report-hint" id="cloud-report-meta"></p></div>
+        <div class="teacher-actions">
+          <button id="btn-cloud-csv" class="btn sm">导出目标达成 CSV</button>
+          <button id="btn-cloud-print" class="btn sm primary">打印 / 存 PDF</button>
+        </div>
+      </div>
+      <div class="stats-grid teacher-kpis" id="cloud-kpis"></div>
+      <h2>目标达成矩阵</h2>
+      <div class="table-scroll">
+        <table class="design-table teacher-table">
+          <thead><tr><th>课程 / 目标</th><th>达成</th><th>达成率</th><th>证据</th><th>状态</th></tr></thead>
+          <tbody id="cloud-objective-body"></tbody>
+        </table>
+      </div>
+      <h2>教学决策建议</h2>
+      <div id="cloud-decisions" class="teacher-decisions"></div>
+    </div>
+
+    <div class="report-card teacher-card" id="archive-card">
+      <div class="report-card-title">阶段 2 · 周快照归档(R2)</div>
+      <p class="report-hint">
+        归档只保存聚合结果与匿名学号,不保存学生原始作答文本。R2 在这里的角色是<strong>长期留存与回看</strong>,
+        不是主数据库 —— 主数据在 D1,查询与聚合都走 D1。
+      </p>
+      <div class="btn-row">
+        <button id="btn-cloud-archive" class="btn sm">归档本周报告</button>
+        <button id="btn-cloud-archive-list" class="btn sm">查看归档</button>
+      </div>
+      <div id="archive-list" class="teacher-archive"></div>
+    </div>
+  </section>
+</Site>
+
+<script>
+  import '../components/teacher-client';
+</script>
