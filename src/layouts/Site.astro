@@ -44,6 +44,11 @@ function navActive(prefix: string): boolean {
           <a href="/tests/" class={navActive('/tests') ? 'active' : ''}>综合测试</a>
           <a href="/mistakes/" class={navActive('/mistakes') ? 'active' : ''}>错题本</a>
           <a href="/report/" class={navActive('/report') ? 'active' : ''}>学习中心</a>
+          <a
+            href="/design/"
+            class={`nav-teacher${navActive('/design') ? ' active' : ''}`}
+            title="教师端:目标—活动—评价一致性、课时时间轴与形成性评价设计"
+          >教学设计</a>
         </nav>
       </div>
     </header>

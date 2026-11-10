@@ -235,7 +235,8 @@ const edges = designList.flatMap((d) =>
 
                 <div class="design-block">
                   <h5>目标 · 达成证据 · 检测方式</h5>
-                  <table class="design-table">
+                  <div class="table-scroll">
+                    <table class="design-table">
                     <thead>
                       <tr>
                         <th style="width:38%">可观测目标</th>
@@ -264,12 +265,14 @@ const edges = designList.flatMap((d) =>
                         );
                       })}
                     </tbody>
-                  </table>
+                    </table>
+                  </div>
                 </div>
 
                 <div class="design-block">
                   <h5>课堂时间轴 · 教师做什么 / 学生做什么</h5>
-                  <table class="design-table timeline-table">
+                  <div class="table-scroll">
+                    <table class="design-table timeline-table">
                     <thead>
                       <tr>
                         <th style="width:8%">分钟</th>
@@ -290,7 +293,8 @@ const edges = designList.flatMap((d) =>
                         </tr>
                       ))}
                     </tbody>
-                  </table>
+                    </table>
+                  </div>
                 </div>
 
                 <div class="design-grid">

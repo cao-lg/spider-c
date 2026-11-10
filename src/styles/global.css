@@ -174,9 +174,11 @@ button {
   max-width: 1200px;
   margin: 0 auto;
   padding: 0 1.2rem;
-  height: 60px;
+  min-height: 60px;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  row-gap: 0.15rem;
   gap: 1.5rem;
 }
 
@@ -225,6 +227,18 @@ button {
   color: var(--primary);
   background: var(--primary-soft);
   font-weight: 600;
+}
+
+/* 教师端入口:用一条竖线与学习类目分开,学生扫一眼就知道那不归自己 */
+.main-nav a.nav-teacher {
+  margin-left: 0.4rem;
+  padding-left: 1rem;
+  border-left: 1px solid var(--border);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.main-nav a.nav-teacher.active {
+  border-left-color: transparent;
 }
 
 .layout {
@@ -1596,17 +1610,32 @@ button {
     max-height: none;
   }
 
+  /* 7 个条目放不下一行时换行,而不是横向滚动把「教学设计」藏到屏外 */
   .main-nav {
     gap: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    min-width: 0;
   }
 
   .main-nav a {
     padding: 0.4rem 0.5rem;
     font-size: 0.85rem;
+    white-space: nowrap;
+  }
+
+  .main-nav a.nav-teacher {
+    margin-left: 0.2rem;
+    padding-left: 0.6rem;
   }
 }
 
+/* 手机:导航换行后 header 会变高,取消吸顶,避免长期占掉六分之一屏 */
 @media (max-width: 560px) {
+  .site-header {
+    position: static;
+  }
+
   .content {
     padding: 1.2rem 1rem;
   }
@@ -2400,6 +2429,16 @@ button {
   font-weight: 700;
   color: var(--text-2);
   letter-spacing: 0.03em;
+}
+
+/* 窄屏下表格横向滚动,而不是把「覆盖」列挤成 30px —— 教师多在小屏或投屏边看 */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-scroll > .design-table {
+  min-width: 460px;
 }
 
 .design-table {
