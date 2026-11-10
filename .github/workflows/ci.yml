@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    name: 校验 · 类型 · 快测 · 构建
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 目录一致性校验(元数据/目标覆盖/靶站路径)
+        run: npm run check
+
+      - name: 类型检查(tsc --noEmit)
+        run: npm run typecheck
+
+      - name: 单元测试(判分 / 掌握度 / 迁移 / 题库完整性)
+        run: npm test
+
+      - name: 静态构建
+        run: npm run build
+
+      - name: 构建产物抽查
+        run: |
+          test -f dist/index.html
+          test -f dist/design/index.html
+          test -f dist/mistakes/index.html
+          test -f dist/sitemap.xml
+          echo "pages: $(find dist -name '*.html' | wc -l)"
