@@ -85,12 +85,19 @@ v2 新增:
 - T-015 课程页不再渲染理论 Quiz(0 个 `py-quiz`)。
 
 ### L4 · 数据与持久化
-- T-016 学习记录含 `lessons/exercises/practice/unitTests` 四张表,`schemaVersion=1`。
+- T-016 学习记录含 `lessons/exercises/practice/unitTests/concepts/mistakes` 各表,`schemaVersion=2`。
 - T-017 掌握度归因:课程页答题后该课 `mastery > 0`。
 - T-018 导出文件为合法 JSON 且不含内部 `pendingLesson` 字段。
 - T-019 清空数据后各表为空;覆盖导入恢复数据。
 - T-020 合并导入按 `ts` 去重:同 ts 不重复,新记录保留。
 - T-021 昵称保存后出现在 localStorage `profile.name`。
+- T-046 未选文件时「导入方式」区块保持收起(`hidden` 不被类上的 `display` 覆盖)。
+- T-047 点击「导入备份」会唤起系统文件选择器(而不是只改一行提示文字)。
+- T-048 选到非 JSON 文件:拒绝导入并说明原因,不展开确认区。
+- T-049 选到没有任何记录的备份:拒绝导入并说明原因。
+- T-050 选到合法备份:显示文件名/大小/课程数/作答数/错题数摘要。
+- T-051 取消导入后区块收起、提示「数据未改动」。
+- T-052 确认导入后回执当前总记录数(合并/覆盖分别标注)。
 
 ### L5 · 靶站一致性
 - T-022 Level1 表格 24 行、7 列,价格列含 `¥`。

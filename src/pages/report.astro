@@ -76,13 +76,21 @@ import Site from '../layouts/Site.astro';
       <button id="btn-import" class="btn sm">导入备份</button>
       <button id="btn-reset" class="btn sm danger">清空全部数据</button>
     </div>
-    <p class="report-hint" id="data-msg">
+    <p class="report-hint" id="data-msg" role="status" aria-live="polite">
       备份文件只包含学习记录,不含任何账号信息,可安全随身携带或在多台设备间同步。
     </p>
     <input id="import-file" type="file" accept="application/json,.json" hidden />
     <div class="import-mode" id="import-mode" hidden>
-      <label><input type="radio" name="import-mode" value="merge" checked /> 合并导入(保留已有记录)</label>
-      <label><input type="radio" name="import-mode" value="replace" /> 覆盖导入(以文件为准)</label>
+      <p class="import-file-info" id="import-file-info"></p>
+      <p class="import-mode-title">选择导入方式</p>
+      <label>
+        <input type="radio" name="import-mode" value="merge" checked />
+        <span>合并导入<em>保留本机已有记录,同一时间戳的作答自动去重</em></span>
+      </label>
+      <label>
+        <input type="radio" name="import-mode" value="replace" />
+        <span>覆盖导入<em>以备份文件为准,本机现有记录会被替换掉</em></span>
+      </label>
       <div class="btn-row">
         <button id="btn-import-go" class="btn sm primary">确认导入</button>
         <button id="btn-import-cancel" class="btn sm">取消</button>

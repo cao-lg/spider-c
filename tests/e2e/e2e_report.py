@@ -43,7 +43,59 @@ def main():
     page.on("pageerror", lambda e: errors.append(str(e)))
 
     try:
-        # ---- 空态 ----
+        # ---- 数据管理:导入入口必须真的能选文件(回归守护:hidden 被 display 覆盖 +
+        #      按钮只显示提示却不唤起文件选择器,曾导致「点了没反应」) ----
+        page.goto(BASE + "/report/", wait_until="networkidle")
+        record("T-046 导入方式默认收起", not page.locator("#import-mode").is_visible())
+
+        with page.expect_file_chooser() as fc_info:
+            page.click("#btn-import")
+        chooser = fc_info.value
+        record("T-047 点击「导入备份」唤起文件选择器", chooser is not None)
+
+        chooser.set_files(files=[{"name": "notes.txt", "mimeType": "text/plain", "buffer": b"hello"}])
+        page.wait_for_timeout(350)
+        bad = page.locator("#data-msg").inner_text()
+        record("T-048 选到非 JSON 时拒绝并说明原因",
+               (not page.locator("#import-mode").is_visible()) and "导入失败" in bad, bad[:46])
+
+        empty = {"schemaVersion": 2, "profile": {}, "lessons": {},
+                 "exercises": {}, "practice": {}, "unitTests": {}}
+        page.set_input_files("#import-file", files=[{
+            "name": "empty.json", "mimeType": "application/json",
+            "buffer": json.dumps(empty).encode("utf-8")}])
+        page.wait_for_timeout(350)
+        record("T-049 空备份被拒绝", not page.locator("#import-mode").is_visible(),
+               page.locator("#data-msg").inner_text()[:46])
+
+        def pick_seed():
+            page.set_input_files("#import-file", files=[{
+                "name": "backup.json", "mimeType": "application/json",
+                "buffer": json.dumps(seed(), ensure_ascii=False).encode("utf-8")}])
+            page.wait_for_timeout(350)
+
+        pick_seed()
+        info = page.locator("#import-file-info").inner_text()
+        record("T-050 选文件后显示备份摘要",
+               page.locator("#import-mode").is_visible() and "2 课" in info and "条作答" in info,
+               info[:56])
+
+        page.click("#btn-import-cancel")
+        page.wait_for_timeout(200)
+        record("T-051 取消后收起且数据未动",
+               (not page.locator("#import-mode").is_visible())
+               and "未改动" in page.locator("#data-msg").inner_text())
+
+        pick_seed()
+        page.check('input[name="import-mode"][value="merge"]')
+        page.click("#btn-import-go")
+        page.wait_for_timeout(350)
+        done = page.locator("#data-msg").inner_text()
+        record("T-052 导入成功给出统计回执",
+               "导入成功" in done and "条作答" in done, done[:56])
+
+        # ---- 空态(先清掉上一步导入进来的数据) ----
+        page.evaluate("() => localStorage.removeItem('crawler-course:v2')")
         page.goto(BASE + "/report/", wait_until="networkidle")
         record("T-028 空态提示可见", page.locator("#report-empty").is_visible())
         record("T-028b 空态统计 0/13", page.locator("#stat-lessons").inner_text() == "0 / 13")

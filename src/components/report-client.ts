@@ -1,6 +1,7 @@
 // 学习中心客户端逻辑:汇总 store 数据并渲染统计、进度、图表与数据管理
 
 import { store } from '../lib/store';
+import { migrate } from '../lib/schema';
 import { units, lessons, unitTests, skillDomains, totalLessons } from '../data/course';
 import { pct as pctOf } from '../lib/scoring';
 import { gradeLevel } from '../lib/types';
@@ -79,15 +80,20 @@ function skillValues(d: LearningData): number[] {
   });
 }
 
-function renderProfile(d: LearningData) {
+function fillProfile(d: LearningData) {
+  el<HTMLInputElement>('profile-name').value = d.profile.name ?? '';
+}
+
+function bindProfile() {
   const input = el<HTMLInputElement>('profile-name');
-  input.value = d.profile.name ?? '';
-  el('profile-save').addEventListener('click', () => {
+  const save = () => {
     store.setProfile(input.value.trim());
-  });
+    fillProfile(store.getData());
+  };
+  el('profile-save').addEventListener('click', save);
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
-      store.setProfile(input.value.trim());
+      save();
       input.blur();
     }
   });
@@ -305,67 +311,126 @@ function renderRecent(d: LearningData) {
   }
 }
 
+function fmtSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function summarize(data: LearningData) {
+  const lessonsDone = Object.values(data.lessons ?? {}).filter((l) => l.status === 'completed').length;
+  const attempts = allAttempts(data).length;
+  const mistakes = Object.keys(data.mistakes ?? {}).length;
+  return { lessonsDone, attempts, mistakes };
+}
+
 function bindDataActions() {
   const fileInput = el<HTMLInputElement>('import-file');
   const modeBox = el('import-mode');
+  const fileInfo = el('import-file-info');
   const msg = el('data-msg');
-  let pendingText = '';
-  let mode: 'merge' | 'replace' = 'merge';
+  let pending: { text: string; name: string } | null = null;
+
+  const resetImport = () => {
+    pending = null;
+    fileInput.value = '';
+    modeBox.hidden = true;
+    fileInfo.textContent = '';
+  };
+
+  const fail = (reason: string) => {
+    resetImport();
+    msg.textContent = `导入失败:${reason}`;
+  };
 
   el('btn-export').addEventListener('click', () => {
-    const blob = new Blob([store.exportJSON()], { type: 'application/json;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `crawler-course-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-    msg.textContent = '已导出备份文件。';
+    try {
+      const blob = new Blob([store.exportJSON()], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `crawler-course-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      msg.textContent = '已导出备份文件,请保存到安全的位置。';
+    } catch (err) {
+      msg.textContent = `导出失败:${err instanceof Error ? err.message : '浏览器拒绝了下载'}`;
+    }
   });
 
+  // 这一句以前漏了:按钮只把「导入方式」区块显示出来,却从不唤起文件选择器,
+  // 于是用户除了看到一行提示文字,什么也做不了 —— 表现就是「点了没反应」。
   el('btn-import').addEventListener('click', () => {
-    fileInput.value = '';
-    modeBox.hidden = false;
-    msg.textContent = '请选择一个 .json 备份文件,并选择导入方式。';
+    resetImport();
+    msg.textContent = '请选择之前导出的 .json 备份文件。';
+    fileInput.click();
   });
 
   el('btn-import-cancel').addEventListener('click', () => {
-    modeBox.hidden = true;
-    pendingText = '';
-    msg.textContent = '已取消导入。';
+    resetImport();
+    msg.textContent = '已取消导入,本机数据未改动。';
   });
 
   fileInput.addEventListener('change', async () => {
     const file = fileInput.files?.[0];
-    if (!file) return;
-    pendingText = await file.text();
-    msg.textContent = `已读取 ${file.name},点击「确认导入」完成导入。`;
-  });
-
-  document.querySelectorAll<HTMLInputElement>('input[name="import-mode"]').forEach((r) => {
-    r.addEventListener('change', () => {
-      mode = r.value === 'replace' ? 'replace' : 'merge';
-    });
+    if (!file) {
+      resetImport();
+      return;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(await file.text());
+    } catch {
+      fail('这个文件不是 JSON,可能选错了文件。');
+      return;
+    }
+    // 用与 store 相同的迁移逻辑预检,避免用户点了「确认导入」才知道文件不兼容
+    const data = migrate(parsed);
+    if (!data) {
+      fail('文件结构无法识别,可能不是本课程的备份,或来自更新的版本。');
+      return;
+    }
+    const s = summarize(data);
+    if (s.lessonsDone + s.attempts + s.mistakes === 0) {
+      fail('这个备份里没有任何学习记录,导入不会带来任何变化。');
+      return;
+    }
+    pending = { text: JSON.stringify(parsed), name: file.name };
+    fileInfo.innerHTML =
+      `<strong>${esc(file.name)}</strong> · ${fmtSize(file.size)} · ` +
+      `含 ${s.lessonsDone} 课完成记录、${s.attempts} 条作答、${s.mistakes} 道错题`;
+    modeBox.hidden = false;
+    msg.textContent = '已读取备份,请选择导入方式后点击「确认导入」。';
   });
 
   el('btn-import-go').addEventListener('click', () => {
-    if (!pendingText) {
+    if (!pending) {
       msg.textContent = '请先选择备份文件。';
       return;
     }
-    const res = store.importJSON(pendingText, mode);
-    msg.textContent = res.ok
-      ? `导入成功(${mode === 'merge' ? '合并' : '覆盖'})。`
-      : `导入失败:${res.error ?? '未知错误'}`;
-    modeBox.hidden = true;
-    pendingText = '';
+    const picked = document.querySelector<HTMLInputElement>('input[name="import-mode"]:checked');
+    const mode: 'merge' | 'replace' = picked?.value === 'replace' ? 'replace' : 'merge';
+    const { text, name } = pending;
+    const res = store.importJSON(text, mode);
+    if (!res.ok) {
+      msg.textContent = `导入失败:${res.error ?? '未知错误'}`;
+      return;
+    }
+    const s = summarize(store.getData());
+    msg.textContent =
+      `导入成功(${mode === 'merge' ? '合并' : '覆盖'},来自 ${name}):` +
+      `当前共 ${s.lessonsDone} 课完成记录、${s.attempts} 条作答、${s.mistakes} 道错题。`;
+    resetImport();
+    fillProfile(store.getData());
   });
 
   el('btn-reset').addEventListener('click', () => {
     if (window.confirm('确定要清空全部学习数据吗?此操作不可撤销。建议先导出备份。')) {
       store.resetAll();
+      resetImport();
+      fillProfile(store.getData());
       msg.textContent = '已清空全部学习数据。';
     }
   });
@@ -380,7 +445,8 @@ function renderAll() {
   renderRecent(d);
 }
 
-renderProfile(store.getData());
+fillProfile(store.getData());
+bindProfile();
 bindDataActions();
 renderAll();
 store.subscribe(renderAll);
