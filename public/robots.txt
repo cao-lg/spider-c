@@ -1,5 +1,27 @@
-User-agent: *
-Disallow: /private/
+# Crawler Academy -- robots.txt
+#
+# This file doubles as the reading material for Lesson 12 (Ethics):
+# fetch it and feed the lines to RobotFileParser.
+#
+# Three deliberate choices, all worth studying:
+#   1. ASCII-only. A .txt response usually carries no charset parameter, so
+#      HTTP clients decode it as ISO-8859-1 and non-ASCII bytes turn into
+#      mojibake; str.splitlines() then treats some 0x85 bytes as line breaks
+#      and shreds the rules. Rule files stay ASCII.
+#   2. No bare "Allow: /" line. Everything is allowed unless disallowed, so
+#      the line adds nothing -- and on Python 3.14 it flips the result of
+#      can_fetch('/private/') back to True. Fewer rules, fewer surprises.
+#   3. All comments live up here. Inside a group, a blank line or stray
+#      comment can end the group, leaving the Disallow lines orphaned and
+#      silently ignored. Keep "User-agent" and its rules contiguous.
+#
+# A Disallow line is a *request*, not a gate: the server still answers 200
+# for /private/ -- open it in a browser and see. Obeying it is the crawler
+# author's decision, not the server's job. The course target site lives
+# under /practice/, which is not listed here, so it stays crawlable.
 
 User-agent: *
+Disallow: /private/
 Disallow: /admin/
+
+Sitemap: https://spider-c.pages.dev/sitemap.xml

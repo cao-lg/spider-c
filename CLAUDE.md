@@ -1,22 +1,16 @@
-## Development
+# CLAUDE.md
 
-When starting the dev server, use background mode:
+本仓库的协作约定统一维护在 [`AGENTS.md`](AGENTS.md),请以该文件为准:
 
+- 四条必须遵守的硬约束(单一数据源、目标—评价对齐、错误选项诊断、数据迁移)
+- 常见任务的改动动线与验证命令
+- 编辑器的字体度量约定、自定义元素命名禁忌
+- 合规基调:`npm run verify` 必须通过后再提交
+
+快速开始:
+
+```bash
+npm install
+npm run dev      # http://localhost:4321
+npm run verify   # check + typecheck + test + build
 ```
-astro dev --background
-```
-
-Manage the background server with `astro dev stop`, `astro dev status`, and `astro dev logs`.
-
-## Documentation
-
-Full documentation: https://docs.astro.build
-
-Consult these guides before working on related tasks:
-
-- [Adding pages, dynamic routes, or middleware](https://docs.astro.build/en/guides/routing/)
-- [Working with Astro components](https://docs.astro.build/en/basics/astro-components/)
-- [Using React, Vue, Svelte, or other framework components](https://docs.astro.build/en/guides/framework-components/)
-- [Adding or managing content](https://docs.astro.build/en/guides/content-collections/)
-- [Adding styles or using Tailwind](https://docs.astro.build/en/guides/styling/)
-- [Supporting multiple languages](https://docs.astro.build/en/guides/internationalization/)

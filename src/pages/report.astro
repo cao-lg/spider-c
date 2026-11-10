@@ -39,7 +39,16 @@ import Site from '../layouts/Site.astro';
       <div class="stat-value" id="stat-unit">-</div>
       <div class="stat-label">单元测最佳均分</div>
     </div>
+    <div class="report-card stat">
+      <div class="stat-value" id="stat-concept">-</div>
+      <div class="stat-label">概念题正确率</div>
+    </div>
   </div>
+
+  <p class="report-hint" style="margin-top: 0.2rem">
+    概念题正确率只看"讲得清",不看"做得对";两类成绩分开呈现,避免用代码通过率掩盖概念漏洞。
+    答错的题会自动进入 <a href="/mistakes/">错题本</a>,按误区标签归类。
+  </p>
 
   <h2>单元进度</h2>
   <div id="unit-progress"></div>

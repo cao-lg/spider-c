@@ -4,14 +4,13 @@
 //   - guided:   引导型,代码默认折叠,显示任务说明,学生点开才看到
 //   - challenge:挑战型,starter 含 TODO,默认折叠,鼓励学生先动手
 // 用法: <py-runner title="示例" variant="guided" code="print(1)" prompt="任务..."></py-runner>
-//       <py-runner title="示例" variant="challenge"><pre># TODO: ...\nprint(1)</pre></py-runner>
 
 import { runPython } from './runner-runtime';
+import { createCodeEditor, type CodeEditor } from './code-editor';
 
 function extractDefaultCode(el: HTMLElement): string {
   const pre =
-    el.querySelector<HTMLPreElement>('.py-runner-source') ??
-    el.querySelector<HTMLPreElement>('pre');
+    el.querySelector<HTMLPreElement>('.py-runner-source') ?? el.querySelector<HTMLPreElement>('pre');
   if (pre) return pre.textContent?.replace(/^\n+/, '').replace(/\s+$/, '') ?? '';
   return el.getAttribute('code') ?? '';
 }
@@ -20,8 +19,8 @@ type Variant = 'showcase' | 'guided' | 'challenge';
 
 class PyRunner extends HTMLElement {
   private rootEl!: HTMLElement;
-  private editorEl!: HTMLPreElement;
-  private codeWrapEl!: HTMLElement; // 包裹代码与"展开/收起"按钮的容器
+  private editor!: CodeEditor;
+  private codeWrapEl!: HTMLElement;
   private consoleEl!: HTMLElement;
   private statusEl!: HTMLElement;
   private runBtn!: HTMLButtonElement;
@@ -42,15 +41,14 @@ class PyRunner extends HTMLElement {
 
   private build() {
     this.defaultCode = extractDefaultCode(this);
-    this.readonly = this.getAttribute('readonly') === 'true';
-    // Astro 把 prop 输出为 data-*;读 prop 兜底 data-prop
+    this.readonly = this.getAttribute('data-readonly') === 'true';
     const attr = (k: string) => this.getAttribute(k) ?? this.getAttribute(`data-${k}`) ?? '';
-    const title = attr('title') || 'Python 示例';
-    const v = (attr('variant') || 'showcase') as Variant;
+    const title = attr('title') || attr('data-title') || 'Python 示例';
+    const v = (attr('variant') || attr('data-variant') || 'showcase') as Variant;
     this.variant = v === 'guided' || v === 'challenge' ? v : 'showcase';
-    this.promptText = attr('prompt');
+    this.promptText = attr('prompt') || attr('data-prompt');
     this.starterTodoCount = (this.defaultCode.match(/#\s*TODO\b/g) ?? []).length;
-    this.revealed = this.variant === 'showcase'; // showcase 默认展开
+    this.revealed = this.variant === 'showcase';
 
     this.innerHTML = '';
 
@@ -69,11 +67,13 @@ class PyRunner extends HTMLElement {
     actions.className = 'py-runner-actions';
 
     this.resetBtn = document.createElement('button');
+    this.resetBtn.type = 'button';
     this.resetBtn.className = 'btn sm py-runner-reset';
     this.resetBtn.textContent = '重置';
     actions.appendChild(this.resetBtn);
 
     this.runBtn = document.createElement('button');
+    this.runBtn.type = 'button';
     this.runBtn.className = 'btn primary sm py-runner-run';
     this.runBtn.textContent = '▶ 运行';
     actions.appendChild(this.runBtn);
@@ -81,7 +81,6 @@ class PyRunner extends HTMLElement {
     head.appendChild(actions);
     this.rootEl.appendChild(head);
 
-    // 任务说明(guided/challenge 显示)
     if (this.promptText && this.variant !== 'showcase') {
       const promptEl = document.createElement('div');
       promptEl.className = 'py-runner-prompt';
@@ -89,12 +88,10 @@ class PyRunner extends HTMLElement {
       this.rootEl.appendChild(promptEl);
     }
 
-    // 学习节奏提示(challenge 模式)
     if (this.variant === 'challenge' && this.starterTodoCount > 0) {
       const note = document.createElement('div');
       note.className = 'py-runner-note';
-      note.innerHTML =
-        `<strong>🎯 学习节奏</strong>:① 先想清楚思路 → ② 填入 <code># TODO</code> 处 → ③ 点击「运行」验证`;
+      note.innerHTML = `<strong>🎯 学习节奏</strong>:① 先想清楚思路 → ② 填入 <code># TODO</code> 处 → ③ 点击「运行」验证`;
       this.rootEl.appendChild(note);
     } else if (this.variant === 'showcase') {
       const note = document.createElement('div');
@@ -103,47 +100,50 @@ class PyRunner extends HTMLElement {
       this.rootEl.appendChild(note);
     }
 
-    // 代码包裹层:guided/challenge 默认折叠在 details 里
     this.codeWrapEl = document.createElement('div');
     this.codeWrapEl.className = 'py-runner-code-wrap';
+
+    this.editor = createCodeEditor({
+      value: this.defaultCode,
+      readOnly: this.readonly,
+      label: `${title} 代码编辑器`,
+      onRun: () => void this.run(),
+      minRows: 3,
+    });
 
     if (this.variant !== 'showcase') {
       const details = document.createElement('details');
       details.className = 'py-runner-details';
       const summary = document.createElement('summary');
       this.revealBtn = document.createElement('button');
+      this.revealBtn.type = 'button';
       this.revealBtn.className = 'btn sm py-runner-reveal';
-      this.revealBtn.textContent = this.variant === 'challenge' ? '查看参考代码(先自己尝试)' : '展开代码';
+      this.revealBtn.textContent =
+        this.variant === 'challenge' ? '查看参考代码(先自己尝试)' : '展开代码';
       summary.appendChild(this.revealBtn);
       details.appendChild(summary);
       const codeHolder = document.createElement('div');
       codeHolder.className = 'py-runner-code-holder';
-      this.editorEl = document.createElement('pre');
-      this.editorEl.className = 'py-runner-editor';
-      this.editorEl.setAttribute('contenteditable', String(!this.readonly));
-      this.editorEl.setAttribute('spellcheck', 'false');
-      this.editorEl.textContent = this.defaultCode;
-      codeHolder.appendChild(this.editorEl);
+      codeHolder.appendChild(this.editor.element);
       details.appendChild(codeHolder);
       this.codeWrapEl.appendChild(details);
     } else {
-      this.editorEl = document.createElement('pre');
-      this.editorEl.className = 'py-runner-editor';
-      this.editorEl.setAttribute('contenteditable', String(!this.readonly));
-      this.editorEl.setAttribute('spellcheck', 'false');
-      this.editorEl.textContent = this.defaultCode;
-      this.codeWrapEl.appendChild(this.editorEl);
+      this.codeWrapEl.appendChild(this.editor.element);
     }
     this.rootEl.appendChild(this.codeWrapEl);
 
     this.consoleEl = document.createElement('div');
     this.consoleEl.className = 'py-runner-console';
     this.consoleEl.style.display = 'none';
+    this.consoleEl.setAttribute('aria-live', 'polite');
     this.rootEl.appendChild(this.consoleEl);
 
     this.statusEl = document.createElement('div');
     this.statusEl.className = 'py-runner-status';
-    this.statusEl.textContent = this.readonly ? '' : '点击「运行」执行代码,支持 Ctrl+Enter。';
+    this.statusEl.setAttribute('role', 'status');
+    this.statusEl.textContent = this.readonly
+      ? '代码为只读示例。'
+      : '点击「运行」执行代码,支持 Ctrl+Enter。';
     this.rootEl.appendChild(this.statusEl);
 
     this.appendChild(this.rootEl);
@@ -151,9 +151,9 @@ class PyRunner extends HTMLElement {
   }
 
   private bind() {
-    this.runBtn.addEventListener('click', () => this.run());
+    this.runBtn.addEventListener('click', () => void this.run());
     this.resetBtn.addEventListener('click', () => {
-      this.editorEl.textContent = this.defaultCode;
+      this.editor.setValue(this.defaultCode);
       this.clearConsole();
       this.setStatus('已重置为初始代码。');
     });
@@ -161,24 +161,19 @@ class PyRunner extends HTMLElement {
       const details = this.codeWrapEl.querySelector('details');
       this.revealBtn.addEventListener('click', (e) => {
         e.preventDefault();
-        if (details) details.open = !details.open;
-        this.revealed = details?.open ?? false;
-        if (this.revealed) {
-          this.revealBtn.textContent = this.variant === 'challenge' ? '收起参考代码' : '收起代码';
-        } else {
-          this.revealBtn.textContent = this.variant === 'challenge' ? '查看参考代码(先自己尝试)' : '展开代码';
-        }
+        if (!details) return;
+        details.open = !details.open;
+        this.revealed = details.open;
+        this.revealBtn!.textContent = this.revealed
+          ? this.variant === 'challenge'
+            ? '收起参考代码'
+            : '收起代码'
+          : this.variant === 'challenge'
+            ? '查看参考代码(先自己尝试)'
+            : '展开代码';
+        if (this.revealed) this.editor.focus();
       });
     }
-    this.editorEl.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        this.run();
-      } else if (e.key === 'Tab') {
-        e.preventDefault();
-        document.execCommand('insertText', false, '    ');
-      }
-    });
   }
 
   private clearConsole() {
@@ -200,8 +195,6 @@ class PyRunner extends HTMLElement {
   }
 
   private async run() {
-    // guided/challenge 模式下,未展开代码时直接点击运行提示学生
-    // 直接读 DOM 的 details.open(而非仅依赖 revealBtn 事件标志,兼容程序化展开)
     if (this.variant !== 'showcase') {
       const details = this.codeWrapEl.querySelector('details');
       const open = details ? details.open : this.revealed;
@@ -210,7 +203,7 @@ class PyRunner extends HTMLElement {
         return;
       }
     }
-    const code = this.editorEl.textContent ?? '';
+    const code = this.editor.getValue();
     this.runBtn.disabled = true;
     this.resetBtn.disabled = true;
     this.rootEl.classList.add('py-runner-busy');
@@ -234,4 +227,4 @@ class PyRunner extends HTMLElement {
   }
 }
 
-customElements.define('py-runner', PyRunner);
+if (!customElements.get('py-runner')) customElements.define('py-runner', PyRunner);

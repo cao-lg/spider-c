@@ -29,3 +29,12 @@ __pycache__/
 
 # local workbuddy memory/state (not for public repo)
 .workbuddy/
+
+# 本地预览/构建日志(曾误提交 preview.log)
+preview.log
+*.log
+
+# 测试产物
+test-results/
+tests/e2e/__pycache__/
+.screenshots/

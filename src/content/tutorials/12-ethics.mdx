@@ -1,17 +1,5 @@
 ---
 id: 12-ethics
-unitId: unit-5
-order: 1
-title: 爬虫伦理与合规
-slug: 12-ethics
-duration: 30
-summary: robots.txt、访问频率与国内数据合规红线。
-goals:
-  - 读懂并尊重 robots.txt
-  - 遵循合理的访问频率
-  - 了解国内数据相关法规底线
-skillDomain:
-  - 反爬
 ---
 
 import CodeRunner from '../../components/CodeRunner.astro';
@@ -45,6 +33,31 @@ print("能抓 /public/y ?", rp.can_fetch("*", "/public/y"))`} />
 
 > can_fetch 返回 True 只代表站方没禁止,不代表数据可随意使用。
 
+### 关于 robots.txt 的两个常见误解
+
+| 误解 | 事实 |
+| --- | --- |
+| 「写了 Disallow 就抓不到」 | 服务器根本不会读 robots.txt。本站 `/private/` 被 Disallow,却依然返回 200 —— 禁止是**站长的请求**,执行靠抓取方自觉 |
+| 「没被 Disallow 就能随便用」 | robots 只回答「能不能来」,不回答「能不能用」。著作权、个人信息、用户协议是另外几道关 |
+
+本站的 `/robots.txt` 就是现成的教材:靶站 `/practice/` 没有被列出,所以默认可抓;
+`Disallow: /private/` 划出禁区。你若真的去请求 `/private/`,会拿到一个正常 200 的页面——
+那一页讲的就是这件事本身。
+
+> **三个真实的坑(本站 robots.txt 就是照这三条写的)**
+>
+> 1. **规则文件保持纯 ASCII。** `.txt` 响应通常不带 charset,`requests` 按 ISO-8859-1 解码,
+>    中文注释全变乱码;更糟的是 `str.splitlines()` 会把乱码字节里的 `0x85`(NEL)当成换行,
+>    规则被切碎,`can_fetch` 于是对**所有**路径都返回 True。中文说明写网页里,别写进规则文件。
+> 2. **别写多余的 `Allow: /`。** 「没被 Disallow 就是允许」,这行不增加信息;实测它在
+>    Python 3.14 里会让 `can_fetch("/private/")` 翻回 True(3.13 为 False)——同一份规则,
+>    不同版本判出相反结论。写得越少,踩坑越少。
+> 3. **规则要紧跟 `User-agent`。** 组内插一个空行或一行注释,有些实现就认为这组结束了,
+>    后面的 `Disallow` 变成孤儿规则、被静默忽略。
+>
+> 这三条不是理论,而是本课判题能跑通的前提。真实世界里各家解析器实现不一,
+> **别假设某个库一定对**——用 `can_fetch` 实测。
+
 ## 二、访问频率
 
 - 控制 `time.sleep` 间隔,别打挂站点
@@ -71,5 +84,6 @@ print("能抓 /public/y ?", rp.can_fetch("*", "/public/y"))`} />
 ## 五、小结
 
 - robots.txt 是站方告示,爬前必看
+- 它是声明不是屏障:能抓到 ≠ 被允许抓
 - 技能抓不等于法律允许
 - 国内红线:个人信息、重要数据、版权、突破防护

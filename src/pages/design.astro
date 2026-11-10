@@ -1,0 +1,346 @@
+---
+// 教学设计页 —— 面向教师/教研,不是面向学生的第三个学习页面。
+//
+// 三件事:
+//   1. 先修关系图:哪些课必须先上,断了会怎样。
+//   2. 每课设计卡:目标(可观测)→ 活动(时间轴)→ 评价(证据)。
+//   3. 认知层级分布:整门课是不是只停在"记忆/理解"。
+
+import Site from '../layouts/Site.astro';
+import { units, lessons, getUnit } from '../data/course';
+import { lessonDesigns, designList } from '../data/design';
+import { conceptQuestions } from '../data/questions';
+import { lessonTasks } from '../data/tasks';
+import { BLOOM_LABEL, type BloomLevel } from '../lib/types';
+
+const bloomOrder: BloomLevel[] = ['remember', 'understand', 'apply', 'analyze'];
+const bloomClass: Record<BloomLevel, string> = {
+  remember: 'bloom-remember',
+  understand: 'bloom-understand',
+  apply: 'bloom-apply',
+  analyze: 'bloom-analyze',
+};
+
+// ── 认知层级分布 ──────────────────────────────────────────────
+const allObjectives = designList.flatMap((d) => d.objectives);
+const bloomCount = bloomOrder.map((lv) => ({
+  level: lv,
+  label: BLOOM_LABEL[lv],
+  count: allObjectives.filter((o) => o.bloom === lv).length,
+}));
+const totalObj = allObjectives.length;
+const higherOrder = allObjectives.filter((o) => o.bloom === 'apply' || o.bloom === 'analyze').length;
+
+// ── 目标覆盖:每个目标被几道概念题 / 有无实操任务覆盖 ──────────
+function coverageOf(lessonId: string, objectiveId: string) {
+  const q = conceptQuestions.filter((x) => x.objectiveId === objectiveId).length;
+  return { concept: q, task: Boolean(lessonTasks[lessonId]) };
+}
+
+// ── 先修图坐标:按单元分列,单元内按顺序分行 ──────────────────
+const COL_W = 178;
+const ROW_H = 78;
+const NODE_W = 150;
+const NODE_H = 44;
+const PAD_X = 20;
+const PAD_Y = 54;
+
+const unitIndex = new Map(units.map((u, i) => [u.id, i]));
+const pos = new Map<string, { x: number; y: number; cx: number; cy: number }>();
+for (const lesson of lessons) {
+  const col = unitIndex.get(lesson.unitId) ?? 0;
+  const row = lesson.order - 1;
+  const x = PAD_X + col * COL_W;
+  const y = PAD_Y + row * ROW_H;
+  pos.set(lesson.id, { x, y, cx: x + NODE_W / 2, cy: y + NODE_H / 2 });
+}
+const graphW = PAD_X * 2 + units.length * COL_W - (COL_W - NODE_W);
+const maxRow = Math.max(...lessons.map((l) => l.order));
+const graphH = PAD_Y + maxRow * ROW_H + 10;
+
+const edges = designList.flatMap((d) =>
+  d.prerequisites
+    .map((p) => ({ from: p, to: d.lessonId }))
+    .filter((e) => pos.has(e.from) && pos.has(e.to)),
+);
+---
+
+<Site title="教学设计 · 目标—活动—评价" description="爬虫学堂的课程设计说明:可观测目标、课堂时间轴、评价证据与先修关系,供教师备课与教研评审使用。">
+  <h1>教学设计说明</h1>
+  <p style="color: var(--text-2); max-width: 66em">
+    这一页写给教师和教研,不是给学生看的。它回答三个问题:这门课<strong>要达成什么</strong>
+    (可观测的目标)、<strong>怎么达成</strong>(每课的时间轴与活动)、<strong>凭什么说达成了</strong>
+    (评价证据)。所有目标与题库、实操题在构建期做了对齐校验,不存在"教了但没评"或"评了但没教"的目标。
+  </p>
+
+  <div class="design-principles">
+    <div class="principle-card">
+      <h3>① 目标是行为,不是态度</h3>
+      <p>
+        全部 {totalObj} 条目标用"能写出 / 能判断 / 能修复"这类可观察动词开头,不用"理解""掌握"——
+        后者无法判定是否达成,也就无法设计评价。
+      </p>
+    </div>
+    <div class="principle-card">
+      <h3>② 先诊断,后讲解</h3>
+      <p>
+        每课都以一个"学生答不上来但想知道"的矛盾情境开场(见各卡片的驱动性问题),
+        概念讲解发生在学生产生困惑之后,而不是之前。
+      </p>
+    </div>
+    <div class="principle-card">
+      <h3>③ 错误要归因,不要只判对错</h3>
+      <p>
+        概念题每个错误选项都配了诊断文本,说明"这个错法为什么有人会这么想"。
+        学生拿到的不是答案,而是对自己思路的解释。
+      </p>
+    </div>
+    <div class="principle-card">
+      <h3>④ 练习要能重跑</h3>
+      <p>
+        代码实操在浏览器内对靶站真实请求,失败可重试;入库类任务要求幂等,
+        让"重跑一次"成为安全动作而不是灾难。
+      </p>
+    </div>
+  </div>
+
+  <h2>认知层级分布</h2>
+  <p style="color: var(--text-2)">
+    {totalObj} 条目标中,<strong>{higherOrder} 条({Math.round((higherOrder / totalObj) * 100)}%)</strong>
+    落在「应用 / 分析」层。如果一门编程课的目标全部停在记忆层,学生会"背得出但写不出"——
+    这个比例是刻意设计的。
+  </p>
+  <div class="bloom-bars">
+    {
+      bloomCount.map((b) => (
+        <div class="bloom-bar-row">
+          <span class="bloom-bar-label">{b.label}</span>
+          <div class="bloom-bar-track">
+            <div
+              class={`bloom-bar-fill ${bloomClass[b.level]}`}
+              style={`width:${b.count === 0 ? 0 : Math.max(4, (b.count / totalObj) * 100)}%`}
+            />
+          </div>
+          <span class="bloom-bar-num">{b.count} 条</span>
+        </div>
+      ))
+    }
+  </div>
+
+  <h2>先修关系</h2>
+  <p style="color: var(--text-2)">
+    箭头表示"必须先学"。跨单元的长箭头是真正的关键依赖(例如「多级页面」依赖「分页」和「存储」),
+    排课时不要为了"单元整齐"把它们拆开。
+  </p>
+  <div class="graph-wrap">
+    <svg viewBox={`0 0 ${graphW} ${graphH}`} class="prereq-graph" role="img" aria-label="课程先修关系图">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--border-strong, #c7ced8)" />
+        </marker>
+      </defs>
+      {
+        units.map((u, i) => (
+          <text
+            x={PAD_X + i * COL_W + NODE_W / 2}
+            y={26}
+            text-anchor="middle"
+            font-size="12"
+            fill="var(--text-3)"
+          >
+            单元 {u.number} · {u.title}
+          </text>
+        ))
+      }
+      {
+        edges.map((e) => {
+          const a = pos.get(e.from)!;
+          const b = pos.get(e.to)!;
+          const x1 = a.x + NODE_W;
+          const y1 = a.cy;
+          const x2 = b.x;
+          const y2 = b.cy;
+          const mx = (x1 + x2) / 2;
+          return (
+            <path
+              d={`M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`}
+              fill="none"
+              stroke="var(--border-strong, #c7ced8)"
+              stroke-width="1.2"
+              marker-end="url(#arrow)"
+            />
+          );
+        })
+      }
+      {
+        lessons.map((l) => {
+          const p = pos.get(l.id)!;
+          return (
+            <a href={`#${l.id}`}>
+              <rect
+                x={p.x}
+                y={p.y}
+                width={NODE_W}
+                height={NODE_H}
+                rx="8"
+                fill="var(--surface)"
+                stroke="var(--border)"
+                stroke-width="1"
+              />
+              <text x={p.cx} y={p.cy + 4} text-anchor="middle" font-size="12" fill="var(--text)">
+                {l.title}
+              </text>
+            </a>
+          );
+        })
+      }
+    </svg>
+  </div>
+
+  <h2>逐课设计卡</h2>
+  <p style="color: var(--text-2)">
+    每张卡片可直接作为备课稿:目标 → 时间轴 → 误区预警 → 评价证据。打印本页可作听课记录表使用。
+  </p>
+
+  {
+    units.map((unit) => (
+      <section class="design-unit">
+        <h3 class="design-unit-title">
+          单元 {unit.number} · {unit.title}
+        </h3>
+        {lessons
+          .filter((l) => l.unitId === unit.id)
+          .map((lesson) => {
+            const d = lessonDesigns[lesson.id];
+            if (!d) return null;
+            const totalMin = d.timeline.reduce((s, t) => s + t.min, 0);
+            return (
+              <article class="design-card" id={lesson.id}>
+                <header class="design-card-head">
+                  <div>
+                    <h4>
+                      {String(unit.number)}.{lesson.order} {lesson.title}
+                    </h4>
+                    <p class="design-driving">
+                      <span class="design-driving-label">驱动性问题</span>
+                      {d.driving}
+                    </p>
+                  </div>
+                  <div class="design-card-meta">
+                    <span>{lesson.duration} 分钟</span>
+                    <span>{totalMin} 分钟排布</span>
+                    <span>{d.objectives.length} 个目标</span>
+                  </div>
+                </header>
+
+                <div class="design-block">
+                  <h5>目标 · 达成证据 · 检测方式</h5>
+                  <table class="design-table">
+                    <thead>
+                      <tr>
+                        <th style="width:38%">可观测目标</th>
+                        <th style="width:22%">层级</th>
+                        <th style="width:26%">达成证据</th>
+                        <th style="width:14%">覆盖</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {d.objectives.map((o) => {
+                        const cov = coverageOf(lesson.id, o.id);
+                        return (
+                          <tr>
+                            <td>{o.statement}</td>
+                            <td>
+                              <span class={`bloom-tag ${bloomClass[o.bloom]}`}>{BLOOM_LABEL[o.bloom]}</span>
+                            </td>
+                            <td class="design-evidence">{o.evidence}</td>
+                            <td class="design-cov">
+                              {cov.concept > 0 ? `概念 ${cov.concept} 题` : ''}
+                              {cov.concept > 0 && cov.task ? ' + ' : ''}
+                              {cov.task ? '实操' : ''}
+                              {cov.concept === 0 && !cov.task ? <em>未覆盖</em> : null}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div class="design-block">
+                  <h5>课堂时间轴 · 教师做什么 / 学生做什么</h5>
+                  <table class="design-table timeline-table">
+                    <thead>
+                      <tr>
+                        <th style="width:8%">分钟</th>
+                        <th style="width:16%">环节</th>
+                        <th style="width:38%">教师</th>
+                        <th style="width:38%">学生</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {d.timeline.map((t) => (
+                        <tr>
+                          <td class="tl-min">{t.min}′</td>
+                          <td>
+                            <strong>{t.phase}</strong>
+                          </td>
+                          <td>{t.teacher}</td>
+                          <td>{t.student}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div class="design-grid">
+                  <div class="design-block">
+                    <h5>课堂高发误区</h5>
+                    <ul class="design-pitfalls">
+                      {d.pitfalls.map((p) => (
+                        <li>{p}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div class="design-block">
+                    <h5>形成性评价</h5>
+                    <ul class="design-pitfalls">
+                      {d.formative.map((f) => (
+                        <li>{f}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+
+                <div class="design-transfer">
+                  <strong>迁移问题(结课用):</strong>
+                  {d.transfer}
+                </div>
+
+                {d.prerequisites.length > 0 && (
+                  <p class="design-prereq">
+                    先修:
+                    {d.prerequisites.map((p, i) => {
+                      const pl = lessons.find((x) => x.id === p);
+                      return (
+                        <>
+                          {i > 0 && '、'}
+                          <a href={`#${p}`}>{pl ? pl.title : p}</a>
+                        </>
+                      );
+                    })}
+                  </p>
+                )}
+              </article>
+            );
+          })}
+      </section>
+    ))
+  }
+
+  <div class="callout info">
+    <strong>关于评价的诚实说明:</strong>
+    本站在浏览器端判分,题目答案与诊断文本随页面下发。它适合日常形成性评价与自测,
+    <strong>不适合</strong>作为需要防作弊的正式考试。若用于学分认定,请另行安排线下或服务端监考方案。
+  </div>
+</Site>

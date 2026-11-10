@@ -388,7 +388,7 @@ assert 'Mozilla' in ua, "UA 应形如浏览器(包含 Mozilla)"`,
   },
   '12-ethics': {
     id: 'ex-12-robots',
-      question: `<h4>任务:读懂 robots.txt</h4><p>抓取 <code>/robots.txt</code>,用 <code>RobotFileParser</code> 判断哪些路径允许抓取。</p><p><strong>要点:</strong></p><ul><li><code>rp.parse(text.splitlines())</code> 加载规则</li><li><code>rp.can_fetch(ua, url)</code> 判断单条路径</li></ul><p class="ce-q-spec">判定标准:/practice/ 允许,/private/ 禁止。</p>`,
+      question: `<h4>任务:读懂 robots.txt</h4><p>抓取本站的 <code>/robots.txt</code>,用 <code>RobotFileParser</code> 判断哪些路径允许抓取。</p><p><strong>要点:</strong></p><ul><li><code>rp.parse(text.splitlines())</code> 加载规则</li><li><code>rp.can_fetch(ua, url)</code> 判断单条路径</li></ul><p class="ce-q-spec">判定标准:<code>/practice/</code> 允许,<code>/private/</code> 禁止。</p><p><strong>判完之后再想一步:</strong>手动 GET 一次 <code>/private/</code>——它会照常返回 200。这说明 robots.txt 是<strong>声明</strong>,不是<strong>屏障</strong>;它约束的是「守规矩的爬虫」,而不是服务器。</p>`,
     title: '实战:读懂 robots.txt',
     skills: [],
     maxScore: 10,
@@ -414,9 +414,10 @@ assert not rp.can_fetch("Crawler", SITE_BASE + "/private/"), "应禁止抓取 /p
     hintSteps: [
       'robots.txt 是站长的"君子协定",违反它通常不会立刻被封,但会被业内鄙视。',
       'RobotFileParser 用 parse() 加载规则后,can_fetch(ua, url) 判断单条路径。',
+      '判定为禁止 ≠ 打不开。服务器照样返回 200,是「你选择不去抓」而不是「你抓不到」。',
       '批量抓取前先 can_fetch 是合规爬虫的"职业礼仪",面试经常被问到。',
     ],
-    explanation: 'robots.txt 是站长的访问声明。用 RobotFileParser 解析后,can_fetch 一查就知道能不能抓——这是合规爬虫的第一步,也是判断"对方是否愿意被爬"的标准答案。',
+    explanation: 'robots.txt 是站长的访问声明。用 RobotFileParser 解析后,can_fetch 一查就知道能不能抓——这是合规爬虫的第一步,也是判断"对方是否愿意被爬"的标准答案。注意它拦不住请求:本站的 /private/ 被 Disallow,却依然返回 200;抓取方主动遵守,才是它生效的方式。',
   },
   '13-final-project': {
     id: 'ex-13-project',
@@ -916,7 +917,7 @@ rp.parse(text.splitlines())
 assert rp.can_fetch("Crawler", SITE_BASE + "/practice/level1-books/"), "应允许 /practice/"
 assert not rp.can_fetch("Crawler", SITE_BASE + "/private/"), "应禁止 /private/"`,
       hint: '用 rp.can_fetch(ua, url) 分别判断 /practice/ 与 /private/ 并打印。',
-      explanation: '单元五实操 1 完成:合规爬虫的第一步。',
+      explanation: '单元五实操 1 完成:合规爬虫的第一步。记住判定的结果只是"我该怎么选择",不是"服务器会怎样反应"——/private/ 被判禁止,请求却依然能成功。',
     },
     {
       id: 'unit-test-5-t2',

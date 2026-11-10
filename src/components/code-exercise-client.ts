@@ -6,13 +6,16 @@ import type { RecordKind } from '../lib/types';
 import { buildAttempt } from '../lib/scoring';
 import { store } from '../lib/store';
 import { runPython, type OutputChunk } from './runner-runtime';
+import { createCodeEditor, type CodeEditor } from './code-editor';
 
 const PASS_MARK = '__GRADE__PASS';
 const FAIL_MARK = '__GRADE__FAIL:';
 
 class PyCodeExercise extends HTMLElement {
-  private id = '';
-  private title = '代码练习';
+  /** 题目 id。不能叫 id:会遮蔽 HTMLElement.id */
+  private exerciseId = '';
+  /** 卡片标题。注意不能叫 title:会遮蔽 HTMLElement.title 属性 */
+  private heading = '代码练习';
   /** 完整题干(HTML,显示在代码区外,不含参考答案) */
   private question = '';
   private starter = '';
@@ -27,7 +30,7 @@ class PyCodeExercise extends HTMLElement {
   /** starter 中 # TODO 占位符的初始数量(检测学生是否动过手) */
   private starterTodoCount = 0;
 
-  private editorEl!: HTMLPreElement;
+  private editor!: CodeEditor;
   private runBtn!: HTMLButtonElement;
   private resetBtn!: HTMLButtonElement;
   private consoleEl!: HTMLElement;
@@ -43,8 +46,8 @@ class PyCodeExercise extends HTMLElement {
 
   private readConfig() {
     const attr = (k: string) => this.getAttribute(k) ?? '';
-    this.id = attr('data-id');
-    this.title = attr('data-title') || '代码练习';
+    this.exerciseId = attr('data-id');
+    this.heading = attr('data-title') || '代码练习';
     this.question = this.decode(attr('data-question'));
     this.starter = this.decode(attr('data-starter'));
     this.check = this.decode(attr('data-check'));
@@ -85,7 +88,7 @@ class PyCodeExercise extends HTMLElement {
     head.className = 'code-exercise-head';
     const titleEl = document.createElement('span');
     titleEl.className = 'code-exercise-title';
-    titleEl.textContent = this.title;
+    titleEl.textContent = this.heading;
     head.appendChild(titleEl);
     const scoreTag = document.createElement('span');
     scoreTag.className = 'code-exercise-score';
@@ -134,12 +137,13 @@ class PyCodeExercise extends HTMLElement {
     rhead.appendChild(actions);
     runner.appendChild(rhead);
 
-    this.editorEl = document.createElement('pre');
-    this.editorEl.className = 'py-runner-editor';
-    this.editorEl.setAttribute('contenteditable', 'true');
-    this.editorEl.setAttribute('spellcheck', 'false');
-    this.editorEl.textContent = this.starter;
-    runner.appendChild(this.editorEl);
+    this.editor = createCodeEditor({
+      value: this.starter,
+      label: `${this.heading} 代码编辑器`,
+      onRun: () => void this.run(),
+      minRows: 6,
+    });
+    runner.appendChild(this.editor.element);
 
     this.consoleEl = document.createElement('div');
     this.consoleEl.className = 'py-runner-console';
@@ -164,22 +168,13 @@ class PyCodeExercise extends HTMLElement {
   }
 
   private bind() {
-    this.runBtn.addEventListener('click', () => this.run());
+    this.runBtn.addEventListener('click', () => void this.run());
     this.resetBtn.addEventListener('click', () => {
-      this.editorEl.textContent = this.starter;
+      this.editor.setValue(this.starter);
       this.consoleEl.style.display = 'none';
       this.consoleEl.textContent = '';
       this.statusEl.textContent = '已重置为初始代码。';
       this.feedbackEl.hidden = true;
-    });
-    this.editorEl.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        this.run();
-      } else if (e.key === 'Tab') {
-        e.preventDefault();
-        document.execCommand('insertText', false, '    ');
-      }
     });
   }
 
@@ -257,7 +252,7 @@ class PyCodeExercise extends HTMLElement {
   }
 
   private async run() {
-    const student = this.editorEl.textContent ?? '';
+    const student = this.editor.getValue();
     const full = `${student}\n\n# ==== 自动判题(隐藏) ====\ntry:\n    ${this.check
       .split('\n')
       .join('\n    ')}\n    print("${PASS_MARK}")\nexcept Exception as __ce_err__:\n    print("${FAIL_MARK}", __ce_err__)`;
@@ -269,7 +264,8 @@ class PyCodeExercise extends HTMLElement {
     this.feedbackEl.hidden = true;
     this.setStatus('运行中…');
 
-    let grade: { pass: boolean; message: string } | null = null;
+    // 用对象持有,避免 TS 在闭包赋值后仍把变量收窄为 null
+    const grade: { current: { pass: boolean; message: string } | null } = { current: null };
     const start = performance.now();
 
     const result = await runPython(full, {
@@ -277,10 +273,10 @@ class PyCodeExercise extends HTMLElement {
       onOutput: (c: OutputChunk) => {
         this.log(c.text, c.isError);
         if (!c.isError) {
-          if (c.text.includes(PASS_MARK)) grade = { pass: true, message: '' };
+          if (c.text.includes(PASS_MARK)) grade.current = { pass: true, message: '' };
           const failIdx = c.text.indexOf(FAIL_MARK);
           if (failIdx >= 0) {
-            grade = { pass: false, message: c.text.slice(failIdx + FAIL_MARK.length).trim() };
+            grade.current = { pass: false, message: c.text.slice(failIdx + FAIL_MARK.length).trim() };
           }
         }
       },
@@ -295,17 +291,17 @@ class PyCodeExercise extends HTMLElement {
       return;
     }
 
-    if (grade && grade.pass) {
+    if (grade.current?.pass) {
       const attempt = buildAttempt(this.maxScore, this.maxScore, { passed: true });
-      store.recordAttempt(this.recordKey, this.id, attempt, this.skills);
+      store.recordAttempt(this.recordKey, this.exerciseId, attempt, this.skills);
       if (this.lessonId) store.recordLessonCompleted(this.lessonId);
       this.setStatus(`✔ 通过!用时 ${((performance.now() - start) / 1000).toFixed(1)} 秒,获得 ${this.maxScore} 分`);
       this.showFeedback('pass', `✔ 通过,获得 ${this.maxScore} 分`, '全部校验用例通过。');
-    } else if (grade) {
+    } else if (grade.current) {
       const attempt = buildAttempt(0, this.maxScore, { passed: false });
-      store.recordAttempt(this.recordKey, this.id, attempt, this.skills);
+      store.recordAttempt(this.recordKey, this.exerciseId, attempt, this.skills);
       this.setStatus('✘ 未通过校验,请检查输出与要求');
-      this.showFeedback('fail', '✘ 未通过', grade.message || '校验未通过,请对照题目要求检查。');
+      this.showFeedback('fail', '✘ 未通过', grade.current.message || '校验未通过,请对照题目要求检查。');
     } else {
       this.setStatus('⚠ 未检测到自动判题标记,请确认代码执行了完整流程');
       this.showFeedback('fail', '⚠ 无法自动判定', '校验代码未能执行完成,请检查是否有异常或死循环。');

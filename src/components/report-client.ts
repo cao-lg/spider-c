@@ -30,6 +30,7 @@ function allAttempts(d: LearningData): { kind: RecordKind; id: string; attempt: 
     exercise: d.exercises,
     practice: d.practice,
     unitTest: d.unitTests,
+    concept: d.concepts,
   };
   for (const kind of Object.keys(maps) as RecordKind[]) {
     for (const [id, list] of Object.entries(maps[kind] ?? {})) {
@@ -47,6 +48,14 @@ function resolveTitle(kind: RecordKind, id: string): string {
       return suffix ? `${t.title} · 实操${suffix.replace(/^t/, '#')}` : t.title;
     }
     return id;
+  }
+  if (kind === 'concept') {
+    const slug = id.replace(/^quiz-/, '');
+    const lesson = lessons.find((l) => l.id === slug);
+    if (lesson) return `${lesson.title} · 概念检查点`;
+    const unitTest = unitTests.find((t) => t.unitId === slug);
+    if (unitTest) return `${unitTest.title} · 概念卷`;
+    return `${slug} · 概念卷`;
   }
   if (kind === 'exercise') {
     const slug = id.replace(/^quiz-/, '');
@@ -109,6 +118,19 @@ function renderStats(d: LearningData) {
   el('stat-attempts').textContent = String(attempts.length);
   el('stat-avg').textContent = `${avg}%`;
   el('stat-unit').textContent = unitBestN ? `${unitBest}%` : '—';
+
+  // 概念题单独统计:与代码实战分开看,避免"会跑代码但说不清原理"
+  const concept = allAttempts(d).filter((x) => x.kind === 'concept');
+  const conceptEl = document.getElementById('stat-concept');
+  if (conceptEl) {
+    if (concept.length === 0) {
+      conceptEl.textContent = '—';
+    } else {
+      const avgRatio =
+        concept.reduce((s, x) => s + (x.attempt.ratio ?? 0), 0) / concept.length;
+      conceptEl.textContent = `${Math.round(avgRatio * 100)}%`;
+    }
+  }
 
   const empty = attempts.length === 0 && completed === 0;
   el('report-empty').hidden = !empty;
@@ -264,7 +286,15 @@ function renderRecent(d: LearningData) {
     const per = pctOf(attempt.score, attempt.maxScore);
     const level = gradeLevel(per);
     const tag =
-      kind === 'exercise' ? '小测' : kind === 'practice' ? (attempt.passed ? '实战 · 通过' : '实战') : '单元测';
+      kind === 'exercise'
+        ? '小测'
+        : kind === 'practice'
+          ? attempt.passed
+            ? '实战 · 通过'
+            : '实战'
+          : kind === 'concept'
+            ? '概念'
+            : '单元测';
     li.innerHTML =
       `<span class="recent-date">${fmtDate(attempt.ts)}</span>` +
       `<span class="recent-title">${esc(resolveTitle(kind, id))}</span>` +

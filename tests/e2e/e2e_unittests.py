@@ -60,11 +60,9 @@ def main():
             page.goto(f"{BASE}/tests/{unit}/", wait_until="networkidle")
             for ti in range(5):
                 ex = page.locator("py-code-exercise").nth(ti)
-                editor = ex.locator(".py-runner-editor").first
-                editor.evaluate(
-                    "(el, ans) => { el.textContent = el.textContent.replace('# === TODO 补全 ===', ans); }",
-                    ANSWERS[key][ti],
-                )
+                editor = ex.locator(".ce-input").first
+                code = editor.input_value().replace("# === TODO 补全 ===", ANSWERS[key][ti])
+                editor.fill(code)
                 st = run_runner(ex)
                 if "通过" not in st:
                     record(f"T-013 {unit} 实操{ti+1} 判分", False, st)

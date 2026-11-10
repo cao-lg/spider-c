@@ -1,8 +1,10 @@
 ---
 import Site from '../../layouts/Site.astro';
 import CodeExercise from '../../components/CodeExercise.astro';
+import Quiz from '../../components/Quiz.astro';
 import { getUnitTestByUnitId, getUnit, units } from '../../data/course';
 import { unitTestTasks } from '../../data/tasks';
+import { questionsOfUnit, unitQuizId } from '../../data/questions';
 
 export function getStaticPaths() {
   return units.map((unit) => ({ params: { unitId: unit.id } }));
@@ -12,17 +14,39 @@ const { unitId } = Astro.params;
 const test = getUnitTestByUnitId(unitId!)!;
 const unit = getUnit(unitId!);
 const tasks = unitTestTasks[test.id] ?? [];
+const concept = questionsOfUnit(unitId!);
 const totalPoints = tasks.reduce((s, t) => s + t.maxScore, 0);
+const conceptPoints = concept.reduce((s, q) => s + q.points, 0);
 ---
 
 <Site title={test.title}>
   <h1>{test.title}</h1>
   <p style="color: var(--text-2)">
-    属于「{unit.title}」单元,共 {tasks.length} 道实操题,满分 {totalPoints} 分。
-    在下方浏览器运行器里写代码、真打靶站,点「运行」后由判定器自动判分,可反复作答。
+    属于「{unit.title}」单元。分两部分:<strong>概念卷</strong>
+    {concept.length} 题({conceptPoints} 分),考察"讲得清";
+    <strong>实操卷</strong>
+    {tasks.length} 题({totalPoints} 分),考察"做得对"。两部分独立记分,都会汇总到
+    <a href="/report/">学习中心</a>。
   </p>
 
-  {tasks.map((task, i) => (
+  {
+    concept.length > 0 && (
+      <Quiz
+        id={unitQuizId(unit.id)}
+        title={`概念卷 · ${unit.title}`}
+        questions={concept}
+        lessonId={unit.id}
+        mode="unit"
+      />
+    )
+  }
+
+  <h2 id="hands-on">实操卷 · 在浏览器里真写代码</h2>
+  <p style="color: var(--text-2)">
+    下方运行器会真实请求本站靶站,由判定器自动判分,可反复作答。满分 {totalPoints} 分。
+  </p>
+
+  {tasks.map((task) => (
     <div class="unit-test-task">
       <CodeExercise
         id={task.id}
@@ -45,7 +69,7 @@ const totalPoints = tasks.reduce((s, t) => s + t.maxScore, 0);
     <ul style="margin: 0.4em 0 0">
       <li>运行器已内置变量 <code>SITE_BASE</code>,指向本站根地址,可拼接到靶站路径。</li>
       <li>每道题都有关键变量需要你补全,点「查看提示」可获取线索。</li>
-      <li>成绩会保存在浏览器本地,并汇总到<a href="/report/">学习中心</a>的可视化报告中。</li>
+      <li>概念题答错会自动进入<a href="/mistakes/">错题本</a>,并按误区标签归类,便于集中补习。</li>
     </ul>
   </div>
 </Site>

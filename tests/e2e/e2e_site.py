@@ -42,7 +42,7 @@ def main():
         # ---- 导航 ----
         page.goto(BASE + "/report/", wait_until="networkidle")
         nav_items = page.locator(".main-nav a").count()
-        record("T-005 导航 5 项", nav_items == 5, f"count={nav_items}")
+        record("T-005 导航 6 项", nav_items == 6, f"count={nav_items}")
         active = page.locator(".main-nav a.active").inner_text()
         record("T-005b 学习中心高亮", active == "学习中心", active)
 
@@ -83,8 +83,18 @@ def main():
 
         resp = page.request.get(BASE + "/robots.txt")
         text = resp.text()
-        record("T-027 robots.txt 允许practice/禁private",
-               "Disallow: /private/" in text, "robots ok")
+        record("T-027 robots.txt 允许靶站、禁止 /private/ 并声明 sitemap",
+               "Disallow: /private/" in text
+               and "Disallow: /practice/" not in text
+               and "Sitemap:" in text,
+               text.strip().replace("\n", " | ")[:90])
+
+        # robots 是声明不是屏障:/private/ 被 Disallow,服务器仍应正常返回内容
+        priv = page.request.get(BASE + "/private/")
+        priv_text = priv.text() if priv.ok else ""
+        record("T-043 /private/ 仍返回 200(证明 robots 是声明不是屏障)",
+               priv.status == 200 and "robots.txt" in priv_text and "不是「门锁」" in priv_text,
+               f"status={priv.status}")
 
         record("T-033 无 pageerror(静态页)", len(errors) == 0, " | ".join(errors[:3]))
     finally:

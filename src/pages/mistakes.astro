@@ -1,0 +1,55 @@
+---
+import Site from '../layouts/Site.astro';
+---
+
+<Site title="错题本">
+  <h1>错题本</h1>
+  <p style="color: var(--text-2); max-width: 62em">
+    这里收集你在概念题里答错的题目,并按<strong>误区标签</strong>归类。
+    排序不是按时间,而是按「又错得多、又放得久」优先——这是间隔复习的工程近似。
+    答对一次即从本页移除。
+  </p>
+
+  <div class="stats-grid" id="mistake-stats">
+    <div class="report-card stat">
+      <div class="stat-value" id="stat-open">-</div>
+      <div class="stat-label">待消除错题</div>
+    </div>
+    <div class="report-card stat">
+      <div class="stat-value" id="stat-lessons">-</div>
+      <div class="stat-label">涉及课程</div>
+    </div>
+    <div class="report-card stat">
+      <div class="stat-value" id="stat-tags">-</div>
+      <div class="stat-label">误区种类</div>
+    </div>
+    <div class="report-card stat">
+      <div class="stat-value" id="stat-total">-</div>
+      <div class="stat-label">累计错误次数</div>
+    </div>
+  </div>
+
+  <div id="mistake-empty" class="report-empty" hidden>
+    <p>错题本是空的。两种可能:你还没做概念题,或者全部答对了。</p>
+    <p>
+      去 <a href="/tutorials/">课程目录</a> 做一课的概念检查点,或直接试
+      <a href="/tests/unit-1/">单元一综合测试</a>。
+    </p>
+  </div>
+
+  <h2>按误区类别回顾</h2>
+  <div id="tag-cloud" class="tag-cloud"></div>
+
+  <h2>待消除清单</h2>
+  <div id="mistake-list"></div>
+
+  <div class="callout tip">
+    <strong>怎么用这本错题本:</strong>
+    先看「误区类别」——如果你在同一个标签下堆了 3 题以上,说明这不是粗心,而是概念本身有裂缝,
+    应该回到对应课程重读那一节,而不是刷题。
+  </div>
+</Site>
+
+<script>
+  import '../components/mistakes-client';
+</script>

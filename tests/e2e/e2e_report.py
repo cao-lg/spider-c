@@ -25,7 +25,7 @@ def seed():
 
 
 def inject(page, data):
-    page.evaluate("(d) => localStorage.setItem('crawler-course:v1', JSON.stringify(d))", data)
+    page.evaluate("(d) => localStorage.setItem('crawler-course:v2', JSON.stringify(d))", data)
 
 
 def do_import(page, text, mode):
@@ -73,8 +73,10 @@ def main():
 
         # ---- T-016 数据结构 ----
         keys = sorted(data.keys())
-        need = ["schemaVersion", "profile", "lessons", "exercises", "unitTests", "practice"]
-        record("T-016 数据表齐全", all(k in data for k in need) and data["schemaVersion"] == 1, str(keys))
+        need = ["schemaVersion", "profile", "lessons", "exercises", "unitTests", "practice",
+                "concepts", "mistakes"]
+        record("T-016 数据表齐全",
+               all(k in data for k in need) and data["schemaVersion"] == 2, str(keys))
 
         # ---- 导出 ----
         with page.expect_download() as dl:
@@ -126,7 +128,7 @@ def main():
 
 
 def inject_and_read(page):
-    return page.evaluate("() => JSON.parse(localStorage.getItem('crawler-course:v1'))")
+    return page.evaluate("() => JSON.parse(localStorage.getItem('crawler-course:v2'))")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,116 @@
+---
+// 概念检查点 —— 服务端渲染题干与选项,客户端负责判分与诊断反馈
+//
+// 为什么服务端渲染而不是纯客户端:题干是教学内容的一部分,需要在无 JS 时可读、
+// 可被搜索引擎与屏幕阅读器正常解析;交互只是"增强"。
+//
+// 注意:本组件把答案与诊断文本放在 data-* 里,属于"前端判分"。
+// 适合练习与自测,不适合作为需要防作弊的正式考试(见 docs/DESIGN.md)。
+
+import type { ConceptQuestion } from '../data/questions';
+
+interface Props {
+  /** 题组 id,记分用,如 quiz-03-requests-basics */
+  id: string;
+  title?: string;
+  questions: ConceptQuestion[];
+  /** 归属课程,写入错题本用于回到哪一课 */
+  lessonId: string;
+  /** lesson = 课内检查点(紧凑);unit = 单元概念卷(带计分) */
+  mode?: 'lesson' | 'unit';
+}
+
+const { id, title = '概念检查点', questions, lessonId, mode = 'lesson' } = Astro.props;
+const totalPoints = questions.reduce((s, q) => s + q.points, 0);
+---
+
+<section
+  class:list={['quiz', `quiz-${mode}`]}
+  data-quiz
+  data-quiz-id={id}
+  data-lesson={lessonId}
+  data-total={totalPoints}
+  aria-labelledby={`${id}-title`}
+>
+  <header class="quiz-head">
+    <div>
+      <h2 id={`${id}-title`} class="quiz-title">{title}</h2>
+      <p class="quiz-meta">
+        {questions.length} 题 · 满分 {totalPoints} 分 ·
+        {mode === 'unit' ? '答完点「提交」查看诊断' : '每题提交后立即给出诊断'}
+      </p>
+    </div>
+    <div class="quiz-progress" data-quiz-progress aria-live="polite">0 / {questions.length} 已答对</div>
+  </header>
+
+  <form class="quiz-form" data-quiz-form novalidate>
+    {
+      questions.map((q, qi) => (
+        <fieldset
+          class="quiz-q"
+          data-qid={q.id}
+          data-type={q.type}
+          data-points={q.points}
+          data-lesson={q.lessonId}
+          data-answers={JSON.stringify(q.answer)}
+          data-expl={q.explanation ?? ''}
+          data-anchor={q.anchor ?? ''}
+          data-misconception={q.misconception ?? ''}
+          data-skills={(q.skills ?? []).join(',')}
+          data-level={q.level ?? ''}
+        >
+          <legend class="quiz-q-prompt">
+            <span class="quiz-q-num">Q{qi + 1}</span>
+            <span set:html={q.prompt} />
+            <span class="quiz-q-points">{q.points} 分</span>
+          </legend>
+
+          <div class="quiz-opts">
+            {q.type === 'choice' &&
+              (q.options ?? []).map((opt, oi) => (
+                <label class="quiz-opt" data-opt={oi} data-fb={q.optionFeedback?.[oi] ?? ''}>
+                  <input type="radio" name={`${q.id}`} value={oi} />
+                  <span class="quiz-opt-mark" aria-hidden="true">{String.fromCharCode(65 + oi)}</span>
+                  <span class="quiz-opt-text" set:html={opt} />
+                </label>
+              ))}
+
+            {q.type === 'truefalse' && (
+              <>
+                <label class="quiz-opt" data-opt="T" data-fb="">
+                  <input type="radio" name={`${q.id}`} value="T" />
+                  <span class="quiz-opt-mark" aria-hidden="true">✓</span>
+                  <span class="quiz-opt-text">正确</span>
+                </label>
+                <label class="quiz-opt" data-opt="F" data-fb="">
+                  <input type="radio" name={`${q.id}`} value="F" />
+                  <span class="quiz-opt-mark" aria-hidden="true">✕</span>
+                  <span class="quiz-opt-text">错误</span>
+                </label>
+              </>
+            )}
+
+            {q.type === 'fill' && (
+              <label class="quiz-fill">
+                <span class="sr-only">填写答案</span>
+                <input type="text" autocomplete="off" spellcheck="false" placeholder="在此输入答案" />
+              </label>
+            )}
+          </div>
+
+          <div class="quiz-fb" data-quiz-fb hidden aria-live="polite" />
+        </fieldset>
+      ))
+    }
+
+    <div class="quiz-actions">
+      <button type="submit" class="btn primary" data-quiz-submit>提交作答</button>
+      <button type="button" class="btn" data-quiz-reset>重做本题组</button>
+      <span class="quiz-summary" data-quiz-summary aria-live="polite" hidden></span>
+    </div>
+  </form>
+</section>
+
+<script>
+  import '../components/quiz-client';
+</script>

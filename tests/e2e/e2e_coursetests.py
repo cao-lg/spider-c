@@ -45,8 +45,7 @@ COURSE_IDS = [f"{i:02d}" for i in range(1, 11)]
 
 
 def inject_code(ex, code):
-    editor = ex.locator(".py-runner-editor").first
-    editor.evaluate("(el, ans) => { el.textContent = ans; }", code)
+    ex.locator(".ce-input").first.fill(code)
 
 
 def main():
@@ -107,7 +106,7 @@ def main():
         ex = page.locator("py-code-exercise").first
         q_visible = ex.locator(".ce-question").count() > 0
         q_has_title = "任务" in ex.locator(".ce-question").inner_text() if q_visible else False
-        code_has_question = "判分器会" in ex.locator(".py-runner-editor").first.inner_text()
+        code_has_question = "判分器会" in ex.locator(".ce-input").first.input_value()
         record("T-044 题干在代码区外显示", q_visible and q_has_title and not code_has_question,
                f"question={q_visible},code_clean={not code_has_question}")
 

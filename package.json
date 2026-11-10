@@ -1,15 +1,22 @@
 {
   "name": "crawler-course",
   "type": "module",
-  "version": "0.0.1",
+  "version": "2.0.0",
+  "description": "爬虫学堂 —— 目标—活动—评价一致的 Python 爬虫课程站(浏览器内 Pyodide 实战)",
   "engines": {
     "node": ">=22.12.0"
   },
   "scripts": {
     "dev": "astro dev",
+    "prebuild": "npm run check",
     "build": "astro build",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "check": "node scripts/check-catalog.ts",
+    "test": "node --test tests/unit/*.test.ts",
+    "test:e2e": "python tests/e2e/run_all.py",
+    "verify": "npm run check && npm run typecheck && npm test && npm run build",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@astrojs/mdx": "^7.0.5",
@@ -17,6 +24,8 @@
     "echarts": "^6.1.0"
   },
   "devDependencies": {
-    "pyodide": "^314.0.3"
+    "@types/node": "^26.6.6",
+    "pyodide": "^314.0.3",
+    "typescript": "^6.0.3"
   }
 }

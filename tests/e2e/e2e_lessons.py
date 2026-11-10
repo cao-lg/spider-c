@@ -157,8 +157,7 @@ csv_text = out.getvalue()
 
 
 def inject_code(ex, code):
-    editor = ex.locator(".py-runner-editor").first
-    editor.evaluate("(el, ans) => { el.textContent = ans; }", code)
+    ex.locator(".ce-input").first.fill(code)
 
 
 def main():
@@ -222,8 +221,17 @@ def main():
         runner.evaluate("(el) => { const d = el.querySelector('details'); if (d) d.open = true; }")
         page.wait_for_timeout(300)
         # 注入完整实现(challenge starter 含 TODO,需先填写)
-        runner.evaluate(
-            "(el) => { const ed = el.querySelector('.py-runner-editor'); if (ed) ed.textContent = `import requests\nfrom bs4 import BeautifulSoup\n\nurl = SITE_BASE + \"/practice/level1-books/\"\nr = requests.get(url, timeout=10)\nr.encoding = \"utf-8\"\nsoup = BeautifulSoup(r.text, \"html.parser\")\nrows = soup.select(\"tbody tr\")\nprint(\"状态码:\", r.status_code)\nprint(\"抓到图书数:\", len(rows))`; }"
+        runner.locator(".ce-input").first.fill(
+            'import requests\n'
+            'from bs4 import BeautifulSoup\n'
+            '\n'
+            'url = SITE_BASE + "/practice/level1-books/"\n'
+            'r = requests.get(url, timeout=10)\n'
+            'r.encoding = "utf-8"\n'
+            'soup = BeautifulSoup(r.text, "html.parser")\n'
+            'rows = soup.select("tbody tr")\n'
+            'print("状态码:", r.status_code)\n'
+            'print("抓到图书数:", len(rows))'
         )
         page.wait_for_timeout(300)
         runner.locator(".py-runner-run").click()
@@ -260,8 +268,10 @@ def main():
         data = store_data(page)
         lessons = data.get("lessons", {})
         ok_all = all(lessons.get(s, {}).get("status") == "completed" for s in LESSONS)
+        missing = [s for s in LESSONS if lessons.get(s, {}).get("status") != "completed"]
         record("T-012 全部课程标记完成", ok_all,
-               f"完成 {sum(1 for s in LESSONS if lessons.get(s, {}).get('status') == 'completed')}/13")
+               f"完成 {len(LESSONS) - len(missing)}/{len(LESSONS)}"
+               + (f";未完成: {', '.join(missing)}" if missing else ""))
 
         total_score = sum(int(str(s).strip().split(" ")[-2] or 0) for s in scores.values()) if scores else 0
         record("T-012b 总分 145", total_score == 145, f"score={total_score}")

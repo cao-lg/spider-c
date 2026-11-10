@@ -1,9 +1,13 @@
 ---
 import Site from '../../layouts/Site.astro';
 import CodeExercise from '../../components/CodeExercise.astro';
+import Quiz from '../../components/Quiz.astro';
 import { getCollection, render } from 'astro:content';
 import { getUnit, lessons, unitIndexOfLesson, getLessonById } from '../../data/course';
 import { lessonTasks } from '../../data/tasks';
+import { questionsOfLesson, lessonQuizId } from '../../data/questions';
+import { lessonDesigns } from '../../data/design';
+import { BLOOM_LABEL } from '../../lib/types';
 
 export async function getStaticPaths() {
   const posts = await getCollection('tutorials');
@@ -15,91 +19,142 @@ export async function getStaticPaths() {
 
 const { post } = Astro.props;
 const { Content } = await render(post);
-const meta = post.data;
-const unit = getUnit(meta.unitId);
-const idx = unitIndexOfLesson(meta.id);
+
+// 元数据唯一来源:course.ts(不再是 mdx frontmatter)
+const lesson = getLessonById(post.data.id);
+if (!lesson) {
+  throw new Error(`课程 ${post.data.id} 在 src/data/course.ts 中不存在`);
+}
+const unit = getUnit(lesson.unitId);
+const idx = unitIndexOfLesson(lesson.id);
 const prev = idx > 0 ? lessons[idx - 1] : undefined;
 const next = idx < lessons.length - 1 ? lessons[idx + 1] : undefined;
-const task = lessonTasks[meta.id];
+const task = lessonTasks[lesson.id];
+const quiz = questionsOfLesson(lesson.id);
+const design = lessonDesigns[lesson.id];
+const objectives = design?.objectives ?? [];
+const goalItems = objectives.length > 0 ? objectives.map((o) => o.statement) : lesson.goals;
 ---
 
 <Site
-  title={`${meta.title} · 单元 ${unit.number}`}
-  description={meta.summary}
+  title={`${lesson.title} · 单元 ${unit.number}`}
+  description={lesson.summary}
   sidebar
   activeUnitId={unit.id}
-  activeLessonId={meta.id}
+  activeLessonId={lesson.id}
 >
   <p style="margin: 0 0 0.4rem; color: var(--text-3); font-size: 0.85rem">
-    单元 {unit.number} · {unit.title} — 预计 {meta.duration} 分钟
+    单元 {unit.number} · {unit.title} — 预计 {lesson.duration} 分钟
   </p>
-  <h1>{meta.title}</h1>
+  <h1>{lesson.title}</h1>
 
-  {meta.goals.length > 0 && (
-    <div class="lesson-path">
-      <div class="lesson-path-head">
-        <strong>📍 本课路径</strong>
-        <span class="lesson-path-meta">{meta.duration} 分钟 · {meta.goals.length} 个目标</span>
+  {
+    goalItems.length > 0 && (
+      <div class="lesson-path">
+        <div class="lesson-path-head">
+          <strong>📍 本课路径</strong>
+          <span class="lesson-path-meta">
+            {lesson.duration} 分钟 · {goalItems.length} 个目标
+          </span>
+        </div>
+        {design && (
+          <p class="lesson-driving">
+            <span class="lesson-driving-label">本课要回答</span>
+            {design.driving}
+          </p>
+        )}
+        <ol class="lesson-path-goals">
+          {goalItems.map((g, i) => (
+            <li>
+              {g}
+              {objectives[i] && (
+                <span class={`bloom-tag ${'bloom-' + objectives[i].bloom}`} style="margin-left:0.5em">
+                  {BLOOM_LABEL[objectives[i].bloom]}
+                </span>
+              )}
+            </li>
+          ))}
+        </ol>
+        <div class="lesson-path-rhythm">
+          🎯 学习节奏:① 看目标 → ② <strong>先思考再动手</strong> → ③ 做完概念检查点 → ④ 在运行器写代码 → ⑤ 失败时按提示重试
+        </div>
+        <p class="lesson-design-link">
+          <a href={`/design/#${lesson.id}`}>教师视角:本课的目标—活动—评价设计 →</a>
+        </p>
       </div>
-      <ol class="lesson-path-goals">
-        {meta.goals.map((g, i) => (
-          <li>{g}</li>
-        ))}
-      </ol>
-      <div class="lesson-path-rhythm">
-        🎯 学习节奏:① 看目标 → ② <strong>先思考再动手</strong> → ③ 在运行器写代码 → ④ 失败时按提示重试 → ⑤ 通过后看思路
-      </div>
-    </div>
-  )}
+    )
+  }
 
   <Content />
 
-  {task && (
-    <CodeExercise
-      id={task.id}
-      title={task.title}
-      question={task.question ?? ''}
-      starter={task.starter}
-      check={task.check}
-      hint={task.hint ?? ''}
-      hintSteps={task.hintSteps ?? []}
-      explanation={task.explanation ?? ''}
-      skills={task.skills}
-      maxScore={task.maxScore}
-      recordKey="practice"
-      lesson={meta.id}
-    />
-  )}
+  {
+    quiz.length > 0 && (
+      <Quiz
+        id={lessonQuizId(lesson.id)}
+        title="概念检查点 · 先确认理解,再动手"
+        questions={quiz}
+        lessonId={lesson.id}
+        mode="lesson"
+      />
+    )
+  }
 
-  {meta.practiceTarget && (
-    <div class="callout tip">
-      <strong>靶站实战:</strong>前往{' '}
-      <a href={meta.practiceTarget} target="_blank" rel="noopener">{meta.practiceTarget}</a>{' '}
-      动手练习本课内容。
-    </div>
-  )}
+  {
+    task && (
+      <CodeExercise
+        id={task.id}
+        title={task.title}
+        question={task.question ?? ''}
+        starter={task.starter}
+        check={task.check}
+        hint={task.hint ?? ''}
+        hintSteps={task.hintSteps ?? []}
+        explanation={task.explanation ?? ''}
+        skills={task.skills}
+        maxScore={task.maxScore}
+        recordKey="practice"
+        lesson={lesson.id}
+      />
+    )
+  }
+
+  {
+    lesson.practiceTarget && (
+      <div class="callout tip">
+        <strong>靶站实战:</strong>前往{' '}
+        <a href={lesson.practiceTarget} target="_blank" rel="noopener">
+          {lesson.practiceTarget}
+        </a>{' '}
+        动手练习本课内容。
+      </div>
+    )
+  }
 
   <div class="pager">
-    {prev ? (
-      <a href={`/tutorials/${prev.slug}/`}>
-        <span class="pager-label">← 上一课</span>
-        <span class="pager-title">{prev.title}</span>
-      </a>
-    ) : (
-      <span />
-    )}
-    {next ? (
-      <a class="next" href={`/tutorials/${next.slug}/`}>
-        <span class="pager-label">下一课 →</span>
-        <span class="pager-title">{next.title}</span>
-      </a>
-    ) : (
-      <span />
-    )}
+    {
+      prev ? (
+        <a href={`/tutorials/${prev.slug}/`}>
+          <span class="pager-label">← 上一课</span>
+          <span class="pager-title">{prev.title}</span>
+        </a>
+      ) : (
+        <span />
+      )
+    }
+    {
+      next ? (
+        <a class="next" href={`/tutorials/${next.slug}/`}>
+          <span class="pager-label">下一课 →</span>
+          <span class="pager-title">{next.title}</span>
+        </a>
+      ) : (
+        <span />
+      )
+    }
   </div>
 </Site>
 
-<div data-lesson-id={meta.id} hidden></div>
+<div data-lesson-id={lesson.id} hidden></div>
 
 <script>
   import { store } from '../../lib/store';
