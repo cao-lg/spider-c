@@ -4,7 +4,7 @@ import mdx from '@astrojs/mdx';
 
 // https://astro.build/config
 export default defineConfig({
-  site: 'https://spider-c.pages.dev',
+  site: 'https://crawler-course.app.workbuddy.host',
   output: 'static',
   integrations: [mdx()],
   vite: {

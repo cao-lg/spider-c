@@ -4,7 +4,8 @@ import { lessons, units, courseTests } from '../data/course';
 // 静态 sitemap:站点是纯静态课程站,路由可完全由数据推导,不需要额外依赖。
 export const prerender = true;
 
-const SITE = 'https://spider-c.pages.dev';
+// 单一来源:跟随 astro.config.mjs 的 site,换域名时不必再改这里。
+const SITE = (import.meta.env.SITE ?? 'https://crawler-course.app.workbuddy.host').replace(/\/$/, '');
 
 export const GET: APIRoute = () => {
   const paths: string[] = [
