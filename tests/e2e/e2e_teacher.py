@@ -85,7 +85,7 @@ def main():
         page.goto(BASE + "/report/", wait_until="networkidle")
         record("T-120 教师端「学情报告」在主导航",
                page.locator('.main-nav a[href="/teacher/"]').count() == 1)
-        record("T-120b 主导航共 8 项", page.locator(".main-nav a").count() == 8,
+        record("T-120b 主导航共 9 项", page.locator(".main-nav a").count() == 9,
                f"count={page.locator('.main-nav a').count()}")
 
         page.goto(BASE + "/teacher/", wait_until="networkidle")

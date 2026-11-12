@@ -3239,3 +3239,230 @@ button {
     flex: 1 1 100%;
   }
 }
+
+/* ── 云登录条 ─────────────────────────────────────────── */
+.auth-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.2rem 0;
+}
+
+.auth-status {
+  font-size: 0.82rem;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.auth-status[data-kind='error'] {
+  color: var(--danger);
+}
+
+.auth-user {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.auth-account {
+  font-size: 0.85rem;
+}
+
+.auth-uid-box {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  color: var(--text-2);
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.6rem;
+  margin-bottom: 0.35rem;
+}
+
+.auth-uid-box code,
+.uid-row code {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: var(--primary-strong);
+  background: var(--surface);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  user-select: all;
+}
+
+/* ── 档案 / 通用表单 ─────────────────────────────────── */
+.account-notice {
+  background: var(--warning-soft);
+  border-left: 3px solid var(--warning);
+  padding: 0.8rem 1rem;
+  border-radius: var(--radius-sm);
+  margin: 1rem 0;
+}
+
+.account-notice h2 {
+  font-size: 1.1rem;
+  margin: 0.2rem 0;
+}
+
+.account-notice p {
+  margin: 0.3rem 0;
+}
+
+.account-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 0.7rem 1rem;
+  margin: 0.8rem 0;
+}
+
+.account-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.9rem;
+  color: var(--text-2);
+}
+
+.account-form input,
+.account-form select,
+#exam-grade-select {
+  font: inherit;
+  font-size: 0.92rem;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.account-list {
+  margin: 0.4rem 0;
+  padding-left: 1.2rem;
+  font-size: 0.9rem;
+  color: var(--text-2);
+}
+
+.uid-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.report-hint[data-kind='error'] {
+  color: var(--danger);
+}
+
+/* ── 在线考试 ─────────────────────────────────────────── */
+.exam-tabs {
+  display: flex;
+  gap: 0.4rem;
+  border-bottom: 1px solid var(--border);
+  margin: 1rem 0 1.2rem;
+}
+
+.exam-tabs button {
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--text-2);
+  padding: 0.5rem 0.9rem;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.exam-tabs button.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  font-weight: 600;
+}
+
+.exam-list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.8rem 1rem;
+  margin: 0.6rem 0;
+}
+
+.exam-list-item p {
+  margin: 0.15rem 0 0;
+}
+
+.exam-done {
+  font-size: 0.88rem;
+  color: var(--text-3);
+}
+
+.exam-published {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.exam-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.exam-timer {
+  font-family: var(--font-mono);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--danger);
+}
+
+.exam-question {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  margin: 0 0 0.9rem;
+  padding: 0.8rem 1rem 1rem;
+}
+
+.exam-question legend {
+  font-size: 0.88rem;
+  color: var(--text-3);
+  padding: 0 0.35rem;
+}
+
+.exam-prompt {
+  margin: 0.2rem 0 0.7rem;
+  line-height: 1.6;
+}
+
+.exam-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.exam-option:hover {
+  background: var(--surface-2);
+}
+
+.exam-option input {
+  margin-top: 0.45rem;
+}
+
+#exam-grade-table table,
+#exam-admin-list table {
+  width: 100%;
+  min-width: 460px;
+}

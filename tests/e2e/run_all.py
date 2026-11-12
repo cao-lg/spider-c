@@ -12,6 +12,7 @@ SCRIPTS = [
     "e2e_report.py",
     "e2e_concepts.py",
     "e2e_teacher.py",
+    "e2e_cloud.py",
 ]
 PY = sys.executable
 

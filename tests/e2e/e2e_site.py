@@ -42,7 +42,7 @@ def main():
         # ---- 导航 ----
         page.goto(BASE + "/report/", wait_until="networkidle")
         nav_items = page.locator(".main-nav a").count()
-        record("T-005 导航 8 项(含教师端教学设计、学情报告)", nav_items == 8, f"count={nav_items}")
+        record("T-005 导航 9 项(含在线考试、教师端教学设计、学情报告)", nav_items == 9, f"count={nav_items}")
         active = page.locator(".main-nav a.active").inner_text()
         record("T-005b 学习中心高亮", active == "学习中心", active)
 
@@ -57,6 +57,10 @@ def main():
                page.locator(".main-nav a.nav-teacher.active").inner_text() == "学情报告")
 
         page.goto(BASE + "/", wait_until="networkidle")
+        record("T-005e 在线考试入口在主导航",
+               page.locator('.main-nav a[href="/exam/"]').count() == 1)
+        record("T-005f 全站可见微信登录条",
+               page.locator("#auth-login").count() == 1 and page.locator("#auth-uid-box").count() == 1)
         record("T-006 首页统计含课程数 13", "13" in page.locator(".stat-num").first.inner_text())
         page.goto(BASE + "/tutorials/", wait_until="networkidle")
         record("T-007 课程目录 5 单元卡片", page.locator(".unit-card").count() >= 5)

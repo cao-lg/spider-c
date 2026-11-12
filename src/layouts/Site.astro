@@ -45,6 +45,7 @@ function navActive(prefix: string): boolean {
           <a href="/tutorials/" class={navActive('/tutorials') ? 'active' : ''}>课程目录</a>
           <a href="/practice/" class={navActive('/practice') ? 'active' : ''}>靶站</a>
           <a href="/tests/" class={navActive('/tests') ? 'active' : ''}>综合测试</a>
+          <a href="/exam/" class={navActive('/exam') ? 'active' : ''}>在线考试</a>
           <a href="/mistakes/" class={navActive('/mistakes') ? 'active' : ''}>错题本</a>
           <a href="/report/" class={navActive('/report') ? 'active' : ''}>学习中心</a>
           <a
@@ -58,6 +59,20 @@ function navActive(prefix: string): boolean {
             title="教师端:班级目标达成、共性误区与教学决策报告"
           >学情报告</a>
         </nav>
+
+        <div class="auth-bar" id="auth-bar">
+          <span class="auth-status" id="auth-status" role="status" aria-live="polite">正在检查登录状态…</span>
+          <button id="auth-login" class="btn sm primary" type="button" hidden>微信登录</button>
+          <div class="auth-user" id="auth-user" hidden>
+            <a class="auth-account" href="/account/">我的档案</a>
+            <button id="auth-copy" class="btn sm" type="button">复制 uid</button>
+            <button id="auth-logout" class="btn sm" type="button">退出</button>
+          </div>
+        </div>
+        <div class="auth-uid-box" id="auth-uid-box" hidden>
+          <span>我的 uid(发给教师登记权限,不含任何隐私信息):</span>
+          <code id="auth-uid"></code>
+        </div>
       </div>
     </header>
 
@@ -93,11 +108,15 @@ function navActive(prefix: string): boolean {
       <div class="footer-inner">
         <span>© 2026 {siteName} · 仅供学习,请遵守 robots.txt 与相关法律法规</span>
         <span>
-          学习数据仅保存在你的浏览器本地,可随时导出备份 ·
+          学习数据默认保存在浏览器本地,登录后可在「我的档案」同步到云端 ·
           <a href="/design/">教学设计说明(教师)</a> ·
           <a href="/teacher/">学情报告(教师)</a>
         </span>
       </div>
     </footer>
+
+    <script>
+      import '../components/auth-client';
+    </script>
   </body>
 </html>

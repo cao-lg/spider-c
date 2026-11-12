@@ -1,0 +1,86 @@
+---
+import Site from '../layouts/Site.astro';
+---
+
+<Site title="我的档案" noindex>
+  <h1>我的档案</h1>
+  <p style="color: var(--text-2)">
+    登录后可以把班级、学号、姓名与学习记录保存到云端,换电脑不用再导入导出。不登录也能完整上课,本地学习数据不受影响。
+  </p>
+
+  <div id="account-locked" class="account-notice">
+    <h2>请先登录</h2>
+    <p>点击页面右上角的 <strong>微信登录</strong>,扫码后会自动回到本站。首次登录请先在下面绑定班级与学号。</p>
+    <p class="report-hint">微信登录只用于确认「是你」,本站不获取也不保存你的微信昵称、头像或手机号。</p>
+  </div>
+
+  <div id="account-panel" hidden>
+    <section class="report-card">
+      <div class="report-card-title">我的 uid</div>
+      <p class="report-hint">
+        云服务分配的账号标识。教师需要用它登记教师权限;它是一个不含姓名、手机号的随机字符串,复制发给教师即可。
+      </p>
+      <div class="uid-row">
+        <code id="account-uid"></code>
+        <button id="account-copy" class="btn sm" type="button">复制 uid</button>
+      </div>
+    </section>
+
+    <section class="report-card">
+      <div class="report-card-title">班级 / 学号 / 姓名</div>
+      <p class="report-hint">
+        用于教师把考试成绩对应到本人;学情报告与成绩展示默认只用学号,姓名仅教师端可见。
+        全班均为 18 岁以上学员,保存即表示已知悉下列隐私说明。
+      </p>
+      <div class="account-form">
+        <label>
+          班级
+          <select id="profile-class">
+            <option value="1班">1班</option>
+            <option value="2班">2班</option>
+          </select>
+        </label>
+        <label>
+          学号
+          <input id="profile-no" type="text" maxlength="20" placeholder="如 S01" autocomplete="off" />
+        </label>
+        <label>
+          姓名
+          <input id="profile-name" type="text" maxlength="20" placeholder="真实姓名" autocomplete="off" />
+        </label>
+      </div>
+      <div class="btn-row">
+        <button id="profile-save" class="btn sm primary" type="button">保存档案</button>
+      </div>
+      <p id="profile-msg" class="report-hint" role="status" aria-live="polite"></p>
+    </section>
+
+    <section class="report-card">
+      <div class="report-card-title">学习记录云端同步</div>
+      <p class="report-hint">
+        上传会把本机课程进度、答题与错题合并保存到云端;在新设备登录后点「从云端恢复」即可取回,和本地记录自动去重。
+      </p>
+      <div class="btn-row">
+        <button id="snap-push" class="btn sm primary" type="button">上传到云端</button>
+        <button id="snap-pull" class="btn sm" type="button">从云端恢复</button>
+        <button id="snap-delete" class="btn sm danger" type="button">删除云端数据</button>
+      </div>
+      <p id="snap-msg" class="report-hint" role="status" aria-live="polite">尚未检查云端记录。</p>
+    </section>
+
+    <section class="report-card">
+      <div class="report-card-title">采集范围与删除</div>
+      <ul class="account-list">
+        <li>采集:微信登录产生的账号 uid、班级、学号、姓名、课程学习记录、考试作答与成绩。</li>
+        <li>用途:仅用于本课程的教学、学情分析与成绩登记,不做其他用途,不向第三方共享。</li>
+        <li>可见性:学生只能看到自己的数据;教师可查看本班数据;其他学生之间互相不可见。</li>
+        <li>删除:点「删除云端数据」可清除你的档案与学习快照;已提交的考试答卷作为教学存档保留,如需清除请联系教师。</li>
+        <li>本地备份:课程站的离线导出 / 导入始终可用,不依赖云端。</li>
+      </ul>
+    </section>
+  </div>
+</Site>
+
+<script>
+  import '../components/account-client';
+</script>

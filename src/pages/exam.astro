@@ -1,0 +1,113 @@
+---
+import Site from '../layouts/Site.astro';
+import { unitOptions } from '../lib/exam-data';
+---
+
+<Site title="在线考试" noindex>
+  <h1>在线考试</h1>
+  <p style="color: var(--text-2)">
+    独立于课程诊断题的正式测验:一卷一次提交、限时、服务端判分。诊断题仍可反复重做,两者成绩不混。
+  </p>
+
+  <div class="exam-tabs" role="tablist" aria-label="考试功能切换">
+    <button type="button" data-exam-tab="student" class="active" role="tab" aria-selected="true">参加考试</button>
+    <button type="button" data-exam-tab="teacher" role="tab" aria-selected="false" hidden>考试管理(教师)</button>
+  </div>
+
+  <section id="exam-student" role="tabpanel">
+    <div id="exam-locked" class="account-notice">
+      <h2>请先登录</h2>
+      <p>点击页面右上角「微信登录」。首次参加考试前,请到 <a href="/account/">我的档案</a> 绑定班级、学号和姓名。</p>
+    </div>
+
+    <div id="exam-student-body" hidden>
+      <div id="exam-profile-warn" class="account-notice" hidden>
+        还没有绑定班级 / 学号 / 姓名,交卷会被拒绝。请先到 <a href="/account/">我的档案</a> 保存。
+      </div>
+
+      <div id="exam-list-view">
+        <h2>可参加的考试</h2>
+        <div id="exam-list"></div>
+        <p id="exam-list-msg" class="report-hint" role="status" aria-live="polite"></p>
+      </div>
+
+      <div id="exam-runner" hidden>
+        <div class="exam-head">
+          <h2 id="exam-run-title"></h2>
+          <span class="exam-timer" id="exam-timer" aria-live="off"></span>
+        </div>
+        <p class="report-hint">交卷后不能修改,也不会显示正确答案;分数由服务端计算后返回。</p>
+        <form id="exam-form"></form>
+        <div class="btn-row">
+          <button id="exam-submit" type="button" class="btn primary">交卷</button>
+          <button id="exam-back" type="button" class="btn">返回列表</button>
+        </div>
+        <p id="exam-run-msg" class="report-hint" role="status" aria-live="polite"></p>
+      </div>
+
+      <div id="exam-result" class="report-card" hidden></div>
+    </div>
+  </section>
+
+  <section id="exam-teacher" role="tabpanel" hidden>
+    <div id="exam-admin-locked" class="account-notice">
+      <h2>需要教师权限</h2>
+      <p>教师权限由白名单控制。请先用微信登录,把「我的档案」里的 uid 发给管理员登记,然后刷新本页。</p>
+    </div>
+
+    <div id="exam-admin-body" hidden>
+      <section class="report-card">
+        <div class="report-card-title">创建考试</div>
+        <p class="report-hint">
+          从课程概念题库抽题生成试卷快照,答案单独加密保存在仅教师可读的答案表中。题库本身是公开教材,适合随堂测验,不建议用于高利害考试。
+        </p>
+        <div class="account-form">
+          <label>考试标题<input id="exam-new-title" type="text" maxlength="40" placeholder="如 第一单元随堂测验" /></label>
+          <label>考试代号<input id="exam-new-code" type="text" maxlength="24" placeholder="如 unit1-quiz-01" /></label>
+          <label>
+            适用班级
+            <select id="exam-new-class">
+              <option value="">全部班级</option>
+              <option value="1班">1班</option>
+              <option value="2班">2班</option>
+            </select>
+          </label>
+          <label>
+            抽题范围
+            <select id="exam-new-unit">
+              {unitOptions().map((u) => <option value={u.id}>{u.label}</option>)}
+            </select>
+          </label>
+          <label>题量<input id="exam-new-count" type="number" min="1" max="30" value="10" /></label>
+          <label>每题分值<input id="exam-new-points" type="number" min="1" max="20" value="10" /></label>
+          <label>时长(分钟)<input id="exam-new-duration" type="number" min="1" max="180" value="30" /></label>
+        </div>
+        <div class="btn-row">
+          <button id="exam-create" type="button" class="btn sm primary">创建并发布</button>
+        </div>
+        <p id="exam-create-msg" class="report-hint" role="status" aria-live="polite"></p>
+      </section>
+
+      <section class="report-card">
+        <div class="report-card-title">试卷列表</div>
+        <div id="exam-admin-list" class="table-scroll"></div>
+      </section>
+
+      <section class="report-card">
+        <div class="report-card-title">成绩册</div>
+        <div class="btn-row">
+          <select id="exam-grade-select" aria-label="选择考试"></select>
+          <button id="exam-grade-load" type="button" class="btn sm">加载成绩</button>
+          <button id="exam-grade-csv" type="button" class="btn sm">导出 CSV</button>
+        </div>
+        <div id="exam-grade-table" class="table-scroll"></div>
+        <p id="exam-grade-msg" class="report-hint" role="status" aria-live="polite"></p>
+      </section>
+    </div>
+  </section>
+</Site>
+
+<script>
+  import '../components/exam-client';
+  import '../components/exam-admin-client';
+</script>
