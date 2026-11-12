@@ -25,6 +25,17 @@ export type CloudSessionData = CloudSession | null;
 /** 页面级登录态变化事件,供档案页 / 考试页刷新界面。 */
 export const AUTH_EVENT = 'crawler-course:auth-changed';
 
+/**
+ * 该云环境的匿名上下文里 auth.uid() 返回字符串 'anon'。
+ * 把它当成真实用户会让档案 / 学习快照写进所有人共享的 'anon' 行,
+ * 也可能被用来抢注学号,因此前端一律按「未登录」处理。
+ */
+export function realUid(session: CloudSessionData): string | null {
+  const uid = session?.user?.id;
+  if (!uid || uid === 'anon' || uid === 'anonymous') return null;
+  return uid;
+}
+
 export async function currentSession(): Promise<CloudSessionData> {
   try {
     const { data, error } = await cloud.auth.getSession();
@@ -33,7 +44,7 @@ export async function currentSession(): Promise<CloudSessionData> {
       console.warn('[cloud] 会话恢复失败', error.kind ?? 'unknown');
       return null;
     }
-    return data;
+    return realUid(data) ? data : null;
   } catch (error) {
     // 本地预览 / 断网时数据面不可达,按"未登录"处理,页面其余功能不受影响。
     console.warn('[cloud] 会话恢复异常', errorMessage(error));
@@ -53,12 +64,13 @@ export function onAuthChange(handler: (session: CloudSessionData) => void): void
 
 /** 教师白名单判定:只读 teacher_roles 中自己的那一行,不依赖前端缓存。 */
 export async function isTeacher(session: CloudSessionData): Promise<boolean> {
-  if (!session) return false;
+  const uid = realUid(session);
+  if (!uid) return false;
   try {
     const { data, error } = await cloud.database
       .from('teacher_roles')
       .select('owner_id')
-      .eq('owner_id', session.user.id)
+      .eq('owner_id', uid)
       .maybeSingle();
     return !error && Boolean(data);
   } catch {

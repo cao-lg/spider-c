@@ -5,6 +5,7 @@
 """
 import os
 import sys
+from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -63,6 +64,35 @@ def main():
                all(page.locator(sel).count() == 1 for sel in
                    ["#exam-create", "#exam-new-unit", "#exam-grade-select", "#exam-grade-csv"]))
         record("T-209 云 SDK 在本地预览下无未捕获异常", len(errors) == 0, str(errors[:2]))
+
+        def wait_params_gone(key, timeout=12000):
+            try:
+                page.wait_for_function(
+                    "k => !new URL(location.href).searchParams.has(k)",
+                    arg=key, timeout=timeout)
+            except Exception:
+                pass
+            return parse_qs(urlparse(page.url).query)
+
+        page.goto(BASE + "/?sharecode=KEEP&error=access_denied"
+                 "&error_description=TEST_DENIED&code=FAKE_CODE",
+                 wait_until="domcontentloaded")
+        q1 = wait_params_gone("code")
+        record("T-210 授权失败时清理一次性 code/error 参数",
+               not any(k in q1 for k in ["code", "error", "error_description"]), q1)
+        record("T-211 清理回调参数时保留业务参数 sharecode",
+               q1.get("sharecode") == ["KEEP"], q1)
+        record("T-212 授权失败提示不被「未登录」覆盖",
+               "登录未完成" in (page.locator("#auth-status").text_content() or ""),
+               page.locator("#auth-status").text_content())
+
+        page.goto(BASE + "/?sharecode=KEEP&code=FAKE_CODE&state=FAKE_STATE&provider=wechat",
+                  wait_until="domcontentloaded")
+        q2 = wait_params_gone("code")
+        record("T-213 回调异常路径同样清理 code/state/provider",
+               not any(k in q2 for k in ["code", "state", "provider"]), q2)
+        record("T-214 sharecode 在异常路径仍保留",
+               q2.get("sharecode") == ["KEEP"], q2)
     finally:
         browser.close()
         p.stop()
