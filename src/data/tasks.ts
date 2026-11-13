@@ -25,11 +25,17 @@ export const lessonTasks: Record<string, TaskDef> = {
     skills: [],
     maxScore: 5,
     starter: `# 本任务:确认 requests 与 bs4 已经加载到 Pyodide 中
-import requests
-from bs4 import BeautifulSoup
+# 提示:第三方库导入后即可使用;requests.__version__ 暴露版本号
 
-# TODO 1: 打印 requests 库的版本号(库对象通常有 __version__ 属性)
-# TODO 2: 用 bool() 检查 BeautifulSoup 是否就绪,打印 "BeautifulSoup 就绪: True"
+# TODO 1: 导入 requests
+# import requests
+
+# TODO 2: 从 bs4 导入 BeautifulSoup
+# from bs4 import BeautifulSoup
+
+# TODO 3: 打印 requests 库的版本号(库对象通常有 __version__ 属性)
+
+# TODO 4: 用 bool() 检查 BeautifulSoup 是否就绪,打印 "BeautifulSoup 就绪: True"
 
 print("环境验证 OK")`,
     check: `assert requests.__version__, "requests 未正确导入"
@@ -197,14 +203,20 @@ print("抓到图书数:", len(rows))
 for row in rows[:3]:
     tds = row.select("td")
     print(tds[1].get_text(), "|", tds[5].get_text())`,
-    check: `assert isinstance(rows, list), "未找到变量 rows,请先把表格行存入 rows"
-assert len(rows) == 24, f"应抓到 24 本书,实际 {len(rows)} 本"
+    check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/level1-books/", timeout=10)
+_src.encoding = "utf-8"
+_soup = _bs(_src.text, "html.parser")
+_expect = _soup.select("tbody tr")
+assert isinstance(rows, list), "未找到变量 rows,请先把表格行存入 rows"
+assert len(rows) == len(_expect), f"应抓到 {len(_expect)} 本书,实际 {len(rows)} 本"
 first = rows[0].select("td")
+_expect_first = _expect[0].select("td")
 assert len(first) == 7, "每行应有 7 个单元格(编号/书名/作者/出版社/日期/价格/评分)"
-title = first[1].get_text().strip()
-price = first[5].get_text().strip()
-assert title.startswith("Java"), "第一本书应为 Java 相关图书,请检查选择器"
-assert price.startswith("¥"), "价格列提取有误,请确认第 6 个 td(价格)"`,
+assert first[1].get_text().strip() == _expect_first[1].get_text().strip(), "书名列与靶站真实数据不一致"
+assert first[5].get_text().strip() == _expect_first[5].get_text().strip(), "价格列与靶站真实数据不一致"
+assert first[5].get_text().strip().startswith("¥"), "价格列提取有误,请确认第 6 个 td(价格)"`,
     hintSteps: [
       '第一步永远是把"页面长什么样"翻译成"代码里是什么结构"。打开靶站 + 检查元素。',
       '看到 <table>→<tbody>→<tr>→<td> 四层,你要取的就是所有 <tr>。',
@@ -274,17 +286,24 @@ details = []
 
 print("详情页数量:", len(details))
 print("样例:", details[0] if details else None)`,
-    check: `import requests as _rq
+      check: `import requests as _rq
 from bs4 import BeautifulSoup as _bs
 _src = _rq.get(SITE_BASE + "/practice/level3-detail/" + "books.html", timeout=10)
 _src.encoding = "utf-8"
 _soup = _bs(_src.text, "html.parser")
-_expect = [a.get("href") for a in _soup.select("tbody tr td:first-child a")]
+_expect_links = [a.get("href") for a in _soup.select("tbody tr td:first-child a")]
 assert 'links' in globals() and isinstance(links, list), "请把详情链接存入变量 links"
-assert len(links) == len(_expect), f"应提取 {len(_expect)} 个详情链接,实际 {len(links)}"
-assert links == _expect, "详情链接与靶站真实数据不一致"
-assert 'details' in globals() and len(details) == 20, f"应抓取 20 个详情页,实际 {len(details)}"
-assert all(d["书名"] and d["价格"].startswith("¥") for d in details), "详情字段提取有误" `,
+assert len(links) == len(_expect_links), f"应提取 {len(_expect_links)} 个详情链接,实际 {len(links)}"
+assert links == _expect_links, "详情链接与靶站真实数据不一致"
+_expect = []
+for _href in _expect_links:
+    _d = _rq.get(SITE_BASE + "/practice/level3-detail/" + _href, timeout=10)
+    _d.encoding = "utf-8"
+    _doc = _bs(_d.text, "html.parser")
+    _expect.append({"书名": _doc.select_one("h2").get_text().strip(), "价格": _doc.select_one("td.price").get_text().strip()})
+assert 'details' in globals() and isinstance(details, list), "请把 (书名, 价格) 存入变量 details"
+assert len(details) == len(_expect), f"应抓取 {len(_expect)} 个详情页,实际 {len(details)}"
+assert details == _expect, "详情(书名 + 价格)与靶站真实数据不一致"`,
     hintSteps: [
       '第一个 TODO:列表推导式 [a.get("href") for a in soup.select("tbody tr td:first-child a")]。',
       '第二个 TODO 是循环 + 重复 ex-04 的单页解析套路。注意变量名不要冲突:循环外用 r,循环内建议用 r2。',
@@ -448,9 +467,26 @@ csv_text = out.getvalue()
 
 print("写入记录数:", len(records))
 print("文件行数(含表头):", len(csv_text.strip().splitlines()))`,
-    check: `assert 'records' in globals() and len(records) == 100, f"应抓取 100 条记录,实际 {len(records)}"
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+import csv as _csv
+import io as _io
+_expect_records = []
+for _p in range(1, 11):
+    _src = _rq.get(f"{SITE_BASE}/practice/level2-pagination/page/{_p}.html", timeout=10)
+    _src.encoding = "utf-8"
+    for _tr in _bs(_src.text, "html.parser").select("tbody tr"):
+        _td = _tr.select("td")
+        _expect_records.append({"编号": _td[0].get_text().strip(), "书名": _td[1].get_text().strip(), "价格": _td[5].get_text().strip()})
+assert 'records' in globals() and isinstance(records, list), "请把记录存入变量 records"
+assert len(records) == len(_expect_records), f"应抓取 {len(_expect_records)} 条,实际 {len(records)}"
+assert records == _expect_records, "records 与靶站真实数据不一致"
 assert 'csv_text' in globals() and csv_text.startswith("编号"), "CSV 缺少表头"
-assert len(csv_text.strip().splitlines()) == 101, "CSV 应为 1 行表头 + 100 行数据"`,
+_expect_csv = _io.StringIO()
+_w = _csv.DictWriter(_expect_csv, fieldnames=["编号", "书名", "价格"])
+_w.writeheader()
+_w.writerows(_expect_records)
+assert csv_text.strip() == _expect_csv.getvalue().strip(), "CSV 内容与 records 不一致(应为表头 + 100 行真实数据)"`,
     hintSteps: [
       '你已掌握 ex-07(分页)与 ex-06(单页解析),这里就是"分页 + 单页"的拼装。',
       'csv.DictWriter 必须先 writeheader(),再 writerows(rows)——顺序反了会写出空文件。',
@@ -546,8 +582,18 @@ r.encoding = "utf-8"
 soup = BeautifulSoup(r.text, "html.parser")
 rows = soup.select("tbody tr")
 # === TODO 补全 ===`,
-      check: `assert isinstance(expensive, list) and len(expensive) >= 1, "变量 expensive 应为非空列表"
-assert all(p > 60 for p in expensive), "expensive 中应全部是高于 60 的价格"`,
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/level1-books/", timeout=10)
+_src.encoding = "utf-8"
+_expect = []
+for _tr in _bs(_src.text, "html.parser").select("tbody tr"):
+    _p = float(_tr.select("td")[5].get_text().strip().replace("¥", ""))
+    if _p > 60:
+        _expect.append(_p)
+assert 'expensive' in globals() and isinstance(expensive, list), "请把价格存入变量 expensive"
+assert len(expensive) == len(_expect), f"高于 60 的价格应有 {len(_expect)} 个,实际 {len(expensive)} 个"
+assert expensive == _expect, "expensive 与靶站真实筛选结果不一致"`,
       hint: '遍历 rows,取每行第 6 个 td(价格,下标 5)的文本,去掉 ¥ 转 float,把高于 60 的价格存入变量 expensive。',
       explanation: '单元一实操 4 完成:数值清洗与条件筛选。',
     },
@@ -591,8 +637,15 @@ r = requests.get(SITE_BASE + "/practice/level1-books/", timeout=10)
 r.encoding = "utf-8"
 soup = BeautifulSoup(r.text, "html.parser")
 # === TODO 补全 ===`,
-      check: `assert len(books) == 24, f"应提取 24 条,实际 {len(books)}"
-assert all(t and p.startswith("¥") for t, p in books), "书名或价格提取有误"`,
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/level1-books/", timeout=10)
+_src.encoding = "utf-8"
+_expect = [(_tr.select("td")[1].get_text().strip(), _tr.select("td")[5].get_text().strip())
+           for _tr in _bs(_src.text, "html.parser").select("tbody tr")]
+assert 'books' in globals() and isinstance(books, list), "请把 (书名, 价格) 存入变量 books"
+assert len(books) == len(_expect), f"应提取 {len(_expect)} 条,实际 {len(books)}"
+assert books == _expect, "书名 + 价格与靶站真实数据不一致"`,
       hint: '遍历 tbody tr,每行取 td[1] 书名与 td[5] 价格组成元组,全部存入变量 books。',
       explanation: '单元二实操 1 完成:字段成对提取。',
     },
@@ -686,9 +739,15 @@ r.encoding = "utf-8"
 soup = BeautifulSoup(r.text, "html.parser")
 rows = soup.select("tbody tr")
 # === TODO 补全 ===`,
-      check: `assert len(records) == 24, f"应提取 24 条记录,实际 {len(records)}"
-t, a, p = records[0]
-assert isinstance(t, str) and isinstance(a, str) and p.startswith("¥"), "每条应为 (书名, 作者, 价格) 三元组"`,
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/level1-books/", timeout=10)
+_src.encoding = "utf-8"
+_expect = [(_tr.select("td")[1].get_text().strip(), _tr.select("td")[2].get_text().strip(), _tr.select("td")[5].get_text().strip())
+           for _tr in _bs(_src.text, "html.parser").select("tbody tr")]
+assert 'records' in globals() and isinstance(records, list), "请把 (书名, 作者, 价格) 存入变量 records"
+assert len(records) == len(_expect), f"应提取 {len(_expect)} 条,实际 {len(records)}"
+assert records == _expect, "三元组与靶站真实数据不一致"`,
       hint: '每条记录 = (书名 td[1], 作者 td[2], 价格 td[5]),遍历 rows 存入变量 records。',
       explanation: '单元二实操 5 完成:多字段组合提取,为后续数据落地打基础。',
     },
@@ -704,12 +763,12 @@ assert isinstance(t, str) and isinstance(a, str) and p.startswith("¥"), "每条
 from bs4 import BeautifulSoup
 
 total = 0
-for page in range(1, 11):
-    url = f"{SITE_BASE}/practice/level2-pagination/page/{page}.html"
-    r = requests.get(url, timeout=10)
-    r.encoding = "utf-8"
-    total += len(BeautifulSoup(r.text, "html.parser").select("tbody tr"))
-# === TODO 补全 ===`,
+# TODO: 写 for 循环遍历 page=1 到 10
+# 每个 page 拼 URL = f"{SITE_BASE}/practice/level2-pagination/page/{page}.html"
+# 请求 → r.encoding = "utf-8" → 用 BeautifulSoup 解析 → 统计每页 tbody tr 行数累加到 total
+# (参考 ex-07 的翻页写法)
+
+print("累计行数:", total)`,
       check: `assert total == 100, f"应累计 100 本,实际 {total}"`,
       hint: '把 total 打印出来即可(循环已统计每页行数)。',
       explanation: '单元三实操 1 完成:分页遍历。',
@@ -724,16 +783,18 @@ for page in range(1, 11):
 from bs4 import BeautifulSoup
 
 base = SITE_BASE + "/practice/level3-detail/"
-r = requests.get(base + "books.html", timeout=10)
-r.encoding = "utf-8"
-links = [a.get("href") for a in BeautifulSoup(r.text, "html.parser").select("tbody tr td:first-child a")]
-details = []
-for href in links:
-    r2 = requests.get(base + href, timeout=10)
-    r2.encoding = "utf-8"
-    doc = BeautifulSoup(r2.text, "html.parser")
-    details.append(doc.select_one("h2").get_text().strip())
-# === TODO 补全 ===`,
+
+# TODO 1: 请求 base + "books.html",修正编码,提取 20 个详情链接存入 links
+# links = [a.get("href") for a in BeautifulSoup(r.text, "html.parser").select("tbody tr td:first-child a")]
+
+# TODO 2: 遍历 links,逐个请求详情页,提取 h2 标题存入 details
+# details = []
+# for href in links:
+#     r2 = requests.get(base + href, timeout=10)
+#     r2.encoding = "utf-8"
+#     details.append(BeautifulSoup(r2.text, "html.parser").select_one("h2").get_text().strip())
+
+print("完成")`,
       check: `assert len(details) == 20, f"应抓取 20 个详情页,实际 {len(details)}"
 assert all(d for d in details), "存在空标题"`,
       hint: '把 details 打印出来即可(循环已抓取全部详情页标题)。',
@@ -748,10 +809,12 @@ assert all(d for d in details), "存在空标题"`,
       starter: `import requests
 
 books = []
-for page in range(1, 11):
-    url = f"{SITE_BASE}/practice/level4-json-api/api/books/page-{page}.json"
-    books.extend(requests.get(url, timeout=10).json()["data"]["list"])
-# === TODO 补全 ===`,
+# TODO: 写 for 循环遍历 page=1 到 10
+# 每个 page 请求 f"{SITE_BASE}/practice/level4-json-api/api/books/page-{page}.json"
+# 用 .json() 解析,把 data["data"]["list"] 累加进 books
+# (参考 ex-09 的 JSON 翻页写法)
+
+print("图书数:", len(books))`,
       check: `assert len(books) == 200, f"JSON 接口应返回 200 本,实际 {len(books)}"
 assert 'title' in books[0], "JSON 结构解析有误"`,
       hint: '把 len(books) 打印出来即可(循环已从 10 页接口取回全部图书)。',
@@ -805,8 +868,17 @@ for page in range(1, 11):
     r.encoding = "utf-8"
     rows = BeautifulSoup(r.text, "html.parser").select("tbody tr")
 # === TODO 补全 ===`,
-      check: `assert isinstance(ratings, list) and len(ratings) == 100, f"应收集 100 个评分,实际 {len(ratings)}"
-assert all(3.0 <= float(x) <= 5.0 for x in ratings), "评分应在 3.0~5.0 之间"`,
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_expect = []
+for _p in range(1, 11):
+    _src = _rq.get(f"{SITE_BASE}/practice/level2-pagination/page/{_p}.html", timeout=10)
+    _src.encoding = "utf-8"
+    for _tr in _bs(_src.text, "html.parser").select("tbody tr"):
+        _expect.append(float(_tr.select("td")[6].get_text().strip()))
+assert 'ratings' in globals() and isinstance(ratings, list), "请把评分存入变量 ratings"
+assert len(ratings) == len(_expect), f"应收集 {len(_expect)} 个评分,实际 {len(ratings)}"
+assert ratings == _expect, "评分与靶站真实数据不一致"`,
       hint: '评分是每行第 7 个 td(下标 6),在循环内把每行评分追加到 ratings 变量(注意缩进)。',
       explanation: '单元三实操 5 完成:分页 + 数值收集,综合进阶。',
     },
@@ -824,8 +896,13 @@ from bs4 import BeautifulSoup
 html_text = requests.get(SITE_BASE + "/practice/level5-dynamic/", timeout=10).text
 in_html = len(BeautifulSoup(html_text, "html.parser").select("#book-list li"))
 # === TODO 补全 ===`,
-      check: `assert in_html == 0, "HTML 源码中不应直接包含数据(动态渲染)"
-assert len(books) == 56, f"接口应返回 56 本,实际 {len(books)}"`,
+      check: `import requests as _rq
+assert in_html == 0, "HTML 源码中不应直接包含数据(动态渲染)"
+_exp = _rq.get(SITE_BASE + "/practice/level5-dynamic/api/books.json", timeout=10).json()
+_expect = _exp["data"]
+assert 'books' in globals() and isinstance(books, list), "请把接口数据存入变量 books"
+assert len(books) == len(_expect), f"接口应返回 {len(_expect)} 本,实际 {len(books)}"
+assert books == _expect, "books 与接口真实返回不一致"`,
       hint: '请求 /practice/level5-dynamic/api/books.json,取 data 存入变量 books。',
       explanation: '单元四实操 1 完成:看穿动态页面、直连底层接口。',
     },
@@ -855,12 +932,11 @@ assert 'Mozilla' in ua, "UA 应包含 Mozilla"`,
       maxScore: 10,
       starter: `import requests
 
-try:
-    r = requests.get(SITE_BASE + "/practice/nonexistent/", timeout=10)
-    not_found = r.status_code
-except requests.exceptions.RequestException as e:
-    not_found = -1
-# === TODO 补全 ===`,
+# TODO: 请求一个不存在的路径(例如 SITE_BASE + "/practice/nonexistent/"),
+# 把响应的状态码存入变量 not_found;若请求抛异常则 not_found = -1
+# (提示:用 try/except 包裹,捕获 requests.exceptions.RequestException)
+
+print("请求完成")`,
       check: `assert not_found == 404, f"访问不存在页面应返回 404,实际 {not_found}"`,
       hint: '把 not_found 打印出来即可(不存在的路径应返回 404)。',
       explanation: '单元四实操 3 完成:异常处理与状态码判断。',
@@ -893,8 +969,14 @@ for page in range(1, 11):
     url = f"{SITE_BASE}/practice/level4-json-api/api/books/page-{page}.json"
     data = requests.get(url, timeout=10).json()
 # === TODO 补全 ===`,
-      check: `assert isinstance(titles, list) and len(titles) == 200, f"应收集 200 个书名,实际 {len(titles)}"
-assert all(t for t in titles), "存在空书名"`,
+      check: `import requests as _rq
+_expect = []
+for _p in range(1, 11):
+    _e = _rq.get(f"{SITE_BASE}/practice/level4-json-api/api/books/page-{_p}.json", timeout=10).json()
+    _expect.extend([b["title"] for b in _e["data"]["list"]])
+assert 'titles' in globals() and isinstance(titles, list), "请把书名存入变量 titles"
+assert len(titles) == len(_expect), f"应收集 {len(_expect)} 个书名,实际 {len(titles)}"
+assert titles == _expect, "书名与接口真实返回不一致"`,
       hint: 'data["data"]["list"] 是当前页的图书列表,每本 b["title"] 追加到 titles 变量。',
       explanation: '单元四实操 5 完成:JSON 分页全量收集。',
     },
@@ -929,13 +1011,12 @@ assert not rp.can_fetch("Crawler", SITE_BASE + "/private/"), "应禁止 /private
 from bs4 import BeautifulSoup
 
 books = []
-for page in range(1, 11):
-    url = f"{SITE_BASE}/practice/level2-pagination/page/{page}.html"
-    r = requests.get(url, timeout=10)
-    r.encoding = "utf-8"
-    for row in BeautifulSoup(r.text, "html.parser").select("tbody tr"):
-        books.append(row.select("td")[1].get_text().strip())
-# === TODO 补全 ===`,
+# TODO: 写 for 循环遍历 page=1 到 10
+# 每个 page 请求 /practice/level2-pagination/page/{page}.html
+# 修正编码、解析、把每行第 2 个 td(书名)追加进 books
+# (参考 ex-07 的翻页写法)
+
+print("抓取数量:", len(books))`,
       check: `assert len(books) == 100, f"应抓取 100 本,实际 {len(books)}"
 assert len(set(books)) == 100, "书名存在重复,需要去重"`,
       hint: '用 set(books) 去重并打印总数与去重后的数量。',
@@ -952,16 +1033,18 @@ import csv
 import io
 
 books = []
-for page in range(1, 11):
-    url = f"{SITE_BASE}/practice/level4-json-api/api/books/page-{page}.json"
-    books.extend(requests.get(url, timeout=10).json()["data"]["list"])
+# TODO 1: 写 for 循环遍历 page=1 到 10,从 level4 JSON 接口收集全部 200 本到 books
+# (参考 ex-09 的 JSON 翻页写法)
 
-out = io.StringIO()
-w = csv.DictWriter(out, fieldnames=["title", "price"])
-w.writeheader()
-w.writerows([{"title": b["title"], "price": b["price"]} for b in books])
-csv_text = out.getvalue()
-# === TODO 补全 ===`,
+# TODO 2: 用 io.StringIO + csv.DictWriter 写入字段 ["title", "price"]
+# writeheader() 后 writerows(books 中每本的 title/price),结果存入 csv_text
+# out = io.StringIO()
+# w = csv.DictWriter(out, fieldnames=["title", "price"])
+# w.writeheader()
+# w.writerows([{"title": b["title"], "price": b["price"]} for b in books])
+# csv_text = out.getvalue()
+
+print("图书数:", len(books))`,
       check: `assert len(books) == 200, f"应抓取 200 本,实际 {len(books)}"
 assert csv_text.startswith("title"), "CSV 缺少表头"
 assert len(csv_text.strip().splitlines()) == 201, "CSV 应为 1 行表头 + 200 行数据"`,
@@ -984,8 +1067,17 @@ for page in range(1, 11):
     r.encoding = "utf-8"
     rows = BeautifulSoup(r.text, "html.parser").select("tbody tr")
 # === TODO 补全 ===`,
-      check: `assert isinstance(prices, list) and len(prices) == 100, f"应收集 100 个价格,实际 {len(prices)}"
-assert all(30 <= float(p) <= 150 for p in prices), "价格应在 30~150 之间"`,
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_expect = []
+for _p in range(1, 11):
+    _src = _rq.get(f"{SITE_BASE}/practice/level2-pagination/page/{_p}.html", timeout=10)
+    _src.encoding = "utf-8"
+    for _tr in _bs(_src.text, "html.parser").select("tbody tr"):
+        _expect.append(float(_tr.select("td")[5].get_text().strip().replace("¥", "")))
+assert 'prices' in globals() and isinstance(prices, list), "请把价格存入变量 prices"
+assert len(prices) == len(_expect), f"应收集 {len(_expect)} 个价格,实际 {len(prices)}"
+assert prices == _expect, "价格与靶站真实数据不一致"`,
       hint: '价格是每行第 6 个 td(下标 5),文本形如 ¥59,去掉 ¥ 转 float 后追加到 prices。',
       explanation: '单元五实操 4 完成:全量数值收集与范围校验。',
     },
@@ -1002,8 +1094,14 @@ for page in range(1, 11):
     url = f"{SITE_BASE}/practice/level4-json-api/api/books/page-{page}.json"
     data = requests.get(url, timeout=10).json()
 # === TODO 补全 ===`,
-      check: `assert isinstance(ratings, list) and len(ratings) == 200, f"应收集 200 个评分,实际 {len(ratings)}"
-assert all(3.0 <= r <= 5.0 for r in ratings), "评分应在 3.0~5.0 之间"`,
+      check: `import requests as _rq
+_expect = []
+for _p in range(1, 11):
+    _e = _rq.get(f"{SITE_BASE}/practice/level4-json-api/api/books/page-{_p}.json", timeout=10).json()
+    _expect.extend([b["rating"] for b in _e["data"]["list"]])
+assert 'ratings' in globals() and isinstance(ratings, list), "请把评分存入变量 ratings"
+assert len(ratings) == len(_expect), f"应收集 {len(_expect)} 个评分,实际 {len(ratings)}"
+assert ratings == _expect, "评分与接口真实返回不一致"`,
       hint: 'data["data"]["list"] 每本 b["rating"] 是评分,追加到 ratings 变量,最后打印 len(ratings) 验证。',
       explanation: '单元五实操 5 完成:JSON 全量 + 数值聚合,结课收官。',
     },
