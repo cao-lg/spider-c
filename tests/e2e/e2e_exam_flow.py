@@ -167,6 +167,26 @@ def main():
         page.evaluate('([k,v])=>localStorage.setItem(k,JSON.stringify(v))',
                       ['workbuddy-cloud.session.' + publishable_key, SESSION])
 
+        print('=== A0. 未绑定档案时不得开考 ===')
+        page.goto(BASE + '/exam/', wait_until='domcontentloaded', timeout=60000)
+        page.wait_for_timeout(1200)
+        record('考试页提示未绑定不能开考', page.locator('#exam-profile-warn').is_visible())
+        record('全站横幅引导补全班级学号姓名',
+               page.locator('#identity-banner').is_visible()
+               and '绑定班级' in (page.locator('#identity-banner-text').text_content() or ''))
+        # 临时放一份已发布试卷,验证「未绑定」时按钮被换成绑定入口,而不是能开考。
+        state['exams'].append({
+            'id': 999, 'code': 'BIND-GUARD', 'title': '绑定校验卷', 'class_id': None,
+            'paper': [], 'duration_min': 10, 'opens_at': None, 'closes_at': None,
+            'created_at': NOW, 'published': True,
+        })
+        page.locator('#exam-refresh').click()
+        page.wait_for_timeout(700)
+        record('未绑定时列表显示绑定入口',
+               '先绑定档案' in (page.locator('#exam-list').text_content() or ''))
+        record('未绑定时不出现开考按钮', page.locator('[data-exam-start]').count() == 0)
+        state['exams'].clear()
+
         print('=== A. 我的档案 ===')
         page.goto(BASE + '/account/', wait_until='domcontentloaded', timeout=60000)
         page.wait_for_timeout(1200)
@@ -177,6 +197,7 @@ def main():
         page.locator('#profile-save').click()
         page.wait_for_timeout(800)
         record('保存档案成功', '已保存到云端' in page.locator('#profile-msg').inner_text())
+        record('绑定成功后全站横幅自动消失', not page.locator('#identity-banner').is_visible())
         page.locator('#snap-push').click()
         page.wait_for_timeout(600)
         record('上传学习记录成功', '已上传' in page.locator('#snap-msg').inner_text())

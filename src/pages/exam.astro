@@ -18,11 +18,12 @@ import { unitOptions } from '../lib/exam-data';
     <div id="exam-locked" class="account-notice">
       <h2>请先登录</h2>
       <p>点击页面右上角「微信登录」。首次参加考试前,请到 <a href="/account/">我的档案</a> 绑定班级、学号和姓名。</p>
+      <p class="report-hint">只有正式考试需要登录;课程、练习、诊断题与错题本不登录也能照常使用,记录保存在本机。</p>
     </div>
 
     <div id="exam-student-body" hidden>
       <div id="exam-profile-warn" class="account-notice" hidden>
-        还没有绑定班级 / 学号 / 姓名,交卷会被拒绝。请先到 <a href="/account/">我的档案</a> 保存。
+        还没有绑定班级 / 学号 / 姓名,暂时不能开考。请先到 <a href="/account/">我的档案</a> 保存,再回本页刷新列表。
       </div>
 
       <div id="exam-list-view">

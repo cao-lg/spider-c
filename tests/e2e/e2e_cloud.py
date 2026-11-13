@@ -63,7 +63,38 @@ def main():
         record("T-208 教师端组卷与成绩册容器齐备",
                all(page.locator(sel).count() == 1 for sel in
                    ["#exam-create", "#exam-new-unit", "#exam-grade-select", "#exam-grade-csv"]))
-        record("T-209 云 SDK 在本地预览下无未捕获异常", len(errors) == 0, str(errors[:2]))
+        # ── 免登录学习链路:不登录也能上课、记录状态、带上身份导出备份 ──
+        page.goto(BASE + "/", wait_until="domcontentloaded")
+        page.wait_for_timeout(900)
+        record("T-215 未登录状态条说明本机记录可用",
+               page.locator("#identity-banner").is_visible()
+               and "未登录也能完整上课" in (page.locator("#identity-banner-text").text_content() or ""))
+        record("T-216 首页明确不登录可完整学习",
+               "不用登录就能完整学习" in (page.locator(".hero").text_content() or ""))
+
+        page.goto(BASE + "/report/", wait_until="domcontentloaded")
+        page.wait_for_timeout(700)
+        record("T-217 学习中心提供免登录的本机班级/学号",
+               all(page.locator(sel).count() == 1 for sel in
+                   ["#local-class", "#local-no", "#local-roster-save", "#local-roster-clear"]))
+        record("T-218 学习中心说明本机/微信/口令三种用法",
+               "三种用法" in (page.locator(".callout.info").first.text_content() or ""))
+        page.locator("#local-class").select_option(label="2班")
+        page.locator("#local-no").fill("S88")
+        page.locator("#local-roster-save").click()
+        roster = page.evaluate("() => JSON.parse(localStorage.getItem('crawler-course:v2') || '{}').roster || {}")
+        record("T-219 免登录身份写进本机学习数据(导出备份自带)",
+               roster.get("studentId") == "S88" and roster.get("classId") == "2班", roster)
+        page.reload(wait_until="domcontentloaded")
+        page.wait_for_timeout(600)
+        record("T-220 刷新后本机身份自动回填",
+               page.locator("#local-no").input_value() == "S88"
+               and page.locator("#local-class").input_value() == "2班")
+        page.locator("#local-roster-clear").click()
+        roster2 = page.evaluate("() => JSON.parse(localStorage.getItem('crawler-course:v2') || '{}').roster || {}")
+        record("T-221 共用电脑可一键清除本机身份", not roster2.get("studentId"), roster2)
+
+        record("T-222 免登录链路无未捕获异常", len(errors) == 0, str(errors[:2]))
 
         def wait_params_gone(key, timeout=12000):
             try:

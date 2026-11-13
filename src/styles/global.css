@@ -3295,6 +3295,37 @@ button {
   user-select: all;
 }
 
+/* ── 全站身份状态条 ───────────────────────────────── */
+.identity-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  padding: 0.55rem 1rem;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: var(--text-2);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+}
+
+.identity-banner #identity-banner-text {
+  flex: 1 1 320px;
+}
+
+.identity-banner[data-kind='warning'] {
+  color: var(--text);
+  background: var(--warning-soft);
+  border-bottom-color: var(--warning);
+}
+
+.identity-banner .btn {
+  text-decoration: none;
+  white-space: nowrap;
+}
+
 /* ── 档案 / 通用表单 ─────────────────────────────────── */
 .account-notice {
   background: var(--warning-soft);

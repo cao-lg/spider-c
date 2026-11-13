@@ -8,6 +8,7 @@
  */
 import { cloud, currentSession, onAuthChange, isTeacher, errorMessage } from '../lib/cloud';
 import type { CloudSessionData } from '../lib/cloud';
+import { onProfileChange } from '../lib/profile';
 import type { ExamQuestion } from '../lib/exam-data';
 import { answerValuesFor } from '../lib/exam-data';
 
@@ -47,6 +48,8 @@ let session: CloudSessionData = null;
 let exams: ExamRow[] = [];
 let submissions = new Map<number, SubmissionRow>();
 let active: ExamRow | null = null;
+/** 没有班级 / 学号 / 姓名,交卷成绩无法归属到本人,因此不允许开考。 */
+let profileBound = false;
 let endsAt = 0;
 let timer: number | null = null;
 let focusLoss = 0;
@@ -92,6 +95,8 @@ function renderList(classId: string): void {
       let action = '';
       if (done) {
         action = `<span class="exam-done">已交卷 · ${done.score ?? '-'} 分</span>`;
+      } else if (!profileBound) {
+        action = '<a class="btn sm" href="/account/">先绑定档案</a>';
       } else if (!open) {
         action = '<span class="exam-done">不在开放时间内</span>';
       } else {
@@ -164,6 +169,10 @@ function startExam(exam: ExamRow): void {
 
 async function submitExam(auto = false): Promise<void> {
   if (!active || !session) return;
+  if (!profileBound) {
+    msg('尚未绑定班级 / 学号 / 姓名,成绩无法归属。请先到「我的档案」保存,再刷新本页。', 'error');
+    return;
+  }
   if (!auto && !window.confirm('交卷后不能修改答案,确定提交吗?')) return;
   const button = el<HTMLButtonElement>('exam-submit');
   button.disabled = true;
@@ -208,7 +217,15 @@ async function refresh(): Promise<void> {
     cloud.database.from('student_profiles').select('class_id').eq('owner_id', uid).maybeSingle(),
   ]);
 
-  el('exam-profile-warn').hidden = Boolean(profileResult.data);
+  profileBound = !profileResult.error && Boolean(profileResult.data);
+  const warn = el('exam-profile-warn');
+  warn.hidden = profileBound;
+  if (!warn.hidden) {
+    // 固定模板,不含任何用户数据;保留直达档案页的链接。
+    warn.innerHTML = profileResult.error
+      ? '档案状态读取失败,暂时不能开考。请检查网络后点「刷新列表」重试。'
+      : '还没有绑定班级 / 学号 / 姓名,暂时不能开考。请先到 <a href="/account/">我的档案</a> 保存,再回本页刷新列表。';
+  }
   if (examResult.error) {
     el('exam-list-msg').textContent = `读取考试列表失败:${errorMessage(examResult.error)}`;
     exams = [];
@@ -279,6 +296,9 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 window.addEventListener('focus', () => refreshIfIdle());
+
+// 在档案页保存 / 删除档案后回到本页时,立即重判能否开考。
+onProfileChange(() => refreshIfIdle(true));
 
 onAuthChange(render);
 void currentSession().then(render);

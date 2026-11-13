@@ -4,8 +4,10 @@
  * 所有查询都受 RLS 约束,前端不发送 owner_id(数据库用 DEFAULT auth.uid() 填),
  * 也不缓存"我是教师"之类的权限结论。
  */
-import { cloud, currentSession, onAuthChange, errorMessage } from '../lib/cloud';
+import { cloud, currentSession, onAuthChange, errorMessage, realUid } from '../lib/cloud';
 import type { CloudSessionData } from '../lib/cloud';
+import { invalidateProfile, loadProfile as loadCloudProfile } from '../lib/profile';
+import type { StudentProfile } from '../lib/profile';
 import { store } from '../lib/store';
 
 function el<T extends HTMLElement = HTMLElement>(id: string): T {
@@ -27,24 +29,24 @@ function errorText(error: unknown): string {
 
 let session: CloudSessionData = null;
 
+function fillProfileForm(profile: StudentProfile | null): void {
+  if (!profile) return;
+  el<HTMLSelectElement>('profile-class').value = profile.class_id;
+  el<HTMLInputElement>('profile-no').value = profile.student_no;
+  el<HTMLInputElement>('profile-name').value = profile.real_name;
+}
+
 async function loadProfile(): Promise<void> {
-  if (!session) return;
-  const { data, error } = await cloud.database
-    .from('student_profiles')
-    .select('id, class_id, student_no, real_name')
-    .eq('owner_id', session.user.id)
-    .maybeSingle();
-  if (error) {
-    msg('profile-msg', `读取档案失败:${errorMessage(error)}`, 'error');
+  const state = await loadCloudProfile(session);
+  if (!state.known) {
+    msg('profile-msg', '读取档案失败,请检查网络后刷新本页。', 'error');
     return;
   }
-  if (!data) {
+  if (!state.profile) {
     msg('profile-msg', '还没有档案,请填写后保存。');
     return;
   }
-  el<HTMLSelectElement>('profile-class').value = data.class_id;
-  el<HTMLInputElement>('profile-no').value = data.student_no;
-  el<HTMLInputElement>('profile-name').value = data.real_name;
+  fillProfileForm(state.profile);
   msg('profile-msg', '已加载云端档案。');
 }
 
@@ -94,17 +96,54 @@ async function saveProfile(): Promise<void> {
   }
   // 离线导出备份也带上身份,教师做离线汇总时不必再手填。
   store.setRoster(studentNo, classId);
-  msg('profile-msg', '档案已保存到云端。');
+  const uid = realUid(session);
+  const savedId = (result.data?.[0] as { id?: number | string } | undefined)?.id ?? '';
+  if (uid) {
+    invalidateProfile(uid, {
+      id: savedId,
+      class_id: classId,
+      student_no: studentNo,
+      real_name: realName,
+    });
+  }
+  msg('profile-msg', '档案已保存到云端。在线考试成绩现在可以记到你名下了。');
 }
 
+/**
+ * 上传前先做双向合并。
+ * 直接把本机 payload 整份 upsert 会覆盖另一台设备刚上传的较新记录
+ * (典型场景:机房电脑登录后,家里电脑的记录就"消失"了)。
+ * 这里先把云端快照 merge 进本机,再把合并结果写回,与教师端 / D1 同步同一套口径。
+ */
 async function pushSnapshot(): Promise<void> {
-  if (!session) return;
-  const payload = store.getData();
+  const uid = realUid(session);
+  if (!uid) return;
+  msg('snap-msg', '正在合并并上传…');
+
+  const { data: remote, error: readError } = await cloud.database
+    .from('learning_snapshots')
+    .select('payload')
+    .eq('owner_id', uid)
+    .maybeSingle();
+  if (readError) {
+    msg('snap-msg', `读取云端记录失败,已中止上传以免覆盖:${errorMessage(readError)}`, 'error');
+    return;
+  }
+
+  if (remote?.payload) {
+    const merged = store.importJSON(JSON.stringify(remote.payload), 'merge');
+    if (!merged.ok) {
+      msg('snap-msg', `云端记录格式不兼容,已中止上传:${merged.error ?? ''}`, 'error');
+      return;
+    }
+  }
+
+  const payload = JSON.parse(store.exportJSON());
   const { error } = await cloud.database
     .from('learning_snapshots')
     .upsert({ payload, revision: 1, updated_at: new Date().toISOString() }, { onConflict: 'owner_id' })
     .select('id');
-  msg('snap-msg', error ? `上传失败:${errorMessage(error)}` : '学习记录已上传到云端。', error ? 'error' : 'info');
+  msg('snap-msg', error ? `上传失败:${errorMessage(error)}` : '本机与云端记录已合并,已上传到云端。', error ? 'error' : 'info');
 }
 
 async function pullSnapshot(): Promise<void> {
@@ -135,6 +174,12 @@ async function deleteCloud(): Promise<void> {
   if (!window.confirm('将删除云端的档案与学习记录(本机数据不受影响)。已提交的考试答卷会作为教学存档保留。确定继续吗?')) return;
   const a = await cloud.database.from('learning_snapshots').delete().eq('owner_id', session.user.id).select('id');
   const b = await cloud.database.from('student_profiles').delete().eq('owner_id', session.user.id).select('id');
+  if (!b.error) {
+    invalidateProfile(session.user.id);
+    el<HTMLInputElement>('profile-no').value = '';
+    el<HTMLInputElement>('profile-name').value = '';
+    msg('profile-msg', '还没有档案,请填写后保存。');
+  }
   msg('snap-msg', a.error || b.error ? `删除未完全成功:${errorMessage(a.error ?? b.error)}` : '云端档案与学习记录已删除。', a.error || b.error ? 'error' : 'info');
 }
 

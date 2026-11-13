@@ -9,8 +9,9 @@
  * 4. 按 provider 精确分发到对应 handler,不要无条件调用两个回调。
  * 5. render() 会重写状态文案,错误提示必须在 render() 之后设置,否则会被「未登录」覆盖。
  */
-import { cloud, currentSession, emitAuth, errorMessage } from '../lib/cloud';
+import { cloud, currentSession, emitAuth, errorMessage, realUid } from '../lib/cloud';
 import type { CloudSessionData } from '../lib/cloud';
+import { invalidateProfile, loadProfile, onProfileChange } from '../lib/profile';
 
 function el<T extends HTMLElement = HTMLElement>(id: string): T {
   const node = document.getElementById(id);
@@ -24,17 +25,57 @@ function status(text: string, kind: 'info' | 'error' = 'info'): void {
   node.dataset.kind = kind;
 }
 
+let activeSession: CloudSessionData = null;
+
+/**
+ * 全站身份状态条。
+ *  - 未登录:不是错误状态,明确告诉学生「可以照常学、记录在本机」,并给出去填本机身份的入口;
+ *  - 已登录未绑定:只提示、不阻断课程学习(在线考试会单独拦截,因为成绩无法归属);
+ *  - 查询失败:隐藏,不把网络问题误报成「你没绑定」。
+ */
+async function refreshIdentityBanner(session: CloudSessionData): Promise<void> {
+  const banner = document.getElementById('identity-banner');
+  const text = document.getElementById('identity-banner-text');
+  const link = document.getElementById('identity-banner-link') as HTMLAnchorElement | null;
+  if (!banner || !text || !link) return;
+
+  if (!session) {
+    banner.hidden = false;
+    banner.dataset.kind = 'info';
+    text.textContent = '未登录也能完整上课 · 进度、答题与错题自动保存在本机浏览器 · 填好班级/学号,导出备份即可交给教师';
+    link.href = '/report/';
+    link.textContent = '填写本机身份';
+    return;
+  }
+
+  const state = await loadProfile(session);
+  // 等数据库返回期间用户可能已经退出或换了账号,丢弃过期结果。
+  if (realUid(activeSession) !== realUid(session)) return;
+  if (!state.known || state.profile) {
+    banner.hidden = true;
+    return;
+  }
+
+  banner.hidden = false;
+  banner.dataset.kind = 'warning';
+  text.textContent = '登录成功,还差一步:绑定班级 / 学号 / 姓名,在线考试成绩才能记到你名下。课程学习不受影响。';
+  link.href = '/account/';
+  link.textContent = '去绑定档案';
+}
+
 function render(session: CloudSessionData): void {
   const loginBtn = el<HTMLButtonElement>('auth-login');
   const userBox = el('auth-user');
   const uidBox = el('auth-uid');
+  activeSession = session;
 
   if (!session) {
-    status('未登录 · 课程可照常浏览');
+    status('未登录 · 可照常学习(记录存本机)');
     loginBtn.hidden = false;
     userBox.hidden = true;
     el('auth-uid-box').hidden = true;
     emitAuth(null);
+    void refreshIdentityBanner(null);
     return;
   }
 
@@ -45,6 +86,7 @@ function render(session: CloudSessionData): void {
   uidBox.textContent = uid;
   el('auth-uid-box').hidden = false;
   emitAuth(session);
+  void refreshIdentityBanner(session);
 }
 
 const CALLBACK_KEYS = ['code', 'state', 'provider', 'error', 'error_code', 'error_description'];
@@ -170,14 +212,20 @@ function bind(): void {
   el<HTMLButtonElement>('auth-copy').addEventListener('click', () => void copyUid());
 
   el<HTMLButtonElement>('auth-logout').addEventListener('click', async () => {
+    const uid = realUid(activeSession);
     const { error } = await cloud.auth.signOut();
     if (error) {
       status(`退出失败:${errorMessage(error)}`, 'error');
       return;
     }
+    // 退出后本机课程数据保留,只丢弃「这个账号已绑定」的临时结论。
+    if (uid) invalidateProfile(uid);
     render(null);
   });
 }
+
+/** 档案页保存 / 删除后,状态条立即跟着变,不用等刷新页面。 */
+onProfileChange(() => void refreshIdentityBanner(activeSession));
 
 bind();
 void restoreAuth().catch((error) => {

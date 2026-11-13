@@ -76,6 +76,12 @@ function navActive(prefix: string): boolean {
       </div>
     </header>
 
+    <!-- 身份状态条:未登录说明「本机记录」,已登录未绑定档案引导补全,已绑定自动隐藏。 -->
+    <div class="identity-banner" id="identity-banner" role="status" aria-live="polite" hidden>
+      <span id="identity-banner-text"></span>
+      <a id="identity-banner-link" class="btn sm" href="/report/">了解本机记录</a>
+    </div>
+
     <main id="main" class={sidebar ? 'layout' : 'layout single'}>
       {sidebar && (
         <aside class="sidebar">
@@ -108,7 +114,7 @@ function navActive(prefix: string): boolean {
       <div class="footer-inner">
         <span>© 2026 {siteName} · 仅供学习,请遵守 robots.txt 与相关法律法规</span>
         <span>
-          学习数据默认保存在浏览器本地,登录后可在「我的档案」同步到云端 ·
+          不登录也能完整学习,记录默认保存在本机;微信登录后可在「我的档案」绑定身份并同步到云端 ·
           <a href="/design/">教学设计说明(教师)</a> ·
           <a href="/teacher/">学情报告(教师)</a>
         </span>
