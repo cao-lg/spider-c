@@ -26,9 +26,13 @@ import { unitOptions } from '../lib/exam-data';
       </div>
 
       <div id="exam-list-view">
-        <h2>可参加的考试</h2>
+        <div class="exam-list-head">
+          <h2>可参加的考试</h2>
+          <button id="exam-refresh" type="button" class="btn sm">刷新列表</button>
+        </div>
         <div id="exam-list"></div>
         <p id="exam-list-msg" class="report-hint" role="status" aria-live="polite"></p>
+        <p class="report-hint">教师刚发布试卷时若列表没更新,点「刷新列表」或切回本页即可。</p>
       </div>
 
       <div id="exam-runner" hidden>

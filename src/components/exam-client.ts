@@ -223,6 +223,21 @@ async function refresh(): Promise<void> {
   }
 }
 
+let lastRefreshAt = 0;
+
+/**
+ * 教师发布新试卷时,学生页面可能还停在旧列表。切回标签页、窗口获得焦点、
+ * 点「刷新列表」以及教师端派发的 exam-list-changed 都会重新拉取。
+ * 答题过程中不刷新,避免重建列表打断作答;3 秒内的重复触发合并为一次。
+ */
+function refreshIfIdle(force = false): void {
+  if (!session || active) return;
+  const now = Date.now();
+  if (!force && now - lastRefreshAt < 3000) return;
+  lastRefreshAt = now;
+  void refresh();
+}
+
 function render(next: CloudSessionData): void {
   session = next;
   el('exam-locked').hidden = Boolean(next);
@@ -236,17 +251,34 @@ function render(next: CloudSessionData): void {
   void isTeacher(next).then((teacher) => {
     if (teacher && teacherTab) teacherTab.hidden = false;
   });
-  void refresh();
+  refreshIfIdle(true);
 }
 
 document.querySelectorAll<HTMLButtonElement>('[data-exam-tab]').forEach((button) => {
-  button.addEventListener('click', () => switchTab(button.dataset.examTab === 'teacher' ? 'teacher' : 'student'));
+  button.addEventListener('click', () => {
+    const name: 'student' | 'teacher' = button.dataset.examTab === 'teacher' ? 'teacher' : 'student';
+    switchTab(name);
+    if (name === 'student') refreshIfIdle(true);
+  });
 });
 el<HTMLButtonElement>('exam-submit').addEventListener('click', () => void submitExam());
 el<HTMLButtonElement>('exam-back').addEventListener('click', showList);
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden && active) focusLoss += 1;
+el<HTMLButtonElement>('exam-refresh').addEventListener('click', () => {
+  el('exam-list-msg').textContent = '正在刷新考试列表…';
+  refreshIfIdle(true);
 });
+
+// 同一页面里教师发布 / 停止发布试卷后,学生端列表立刻同步。
+window.addEventListener('exam-list-changed', () => refreshIfIdle(true));
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    if (active) focusLoss += 1;
+  } else {
+    refreshIfIdle();
+  }
+});
+window.addEventListener('focus', () => refreshIfIdle());
 
 onAuthChange(render);
 void currentSession().then(render);

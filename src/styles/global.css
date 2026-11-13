@@ -3383,6 +3383,18 @@ button {
   font-weight: 600;
 }
 
+.exam-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.exam-list-head h2 {
+  margin: 0;
+}
+
 .exam-list-item {
   display: flex;
   justify-content: space-between;

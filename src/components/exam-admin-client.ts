@@ -111,6 +111,7 @@ async function togglePublish(id: number): Promise<void> {
     return;
   }
   await loadExams();
+  window.dispatchEvent(new Event('exam-list-changed'));
 }
 
 async function createExam(): Promise<void> {
@@ -189,6 +190,7 @@ async function createExam(): Promise<void> {
     published.error ? 'error' : 'info',
   );
   await loadExams();
+  window.dispatchEvent(new Event('exam-list-changed'));
 }
 
 async function loadGrades(): Promise<void> {
