@@ -4,17 +4,26 @@ id: 08-multi-level
 
 import CodeRunner from '../../components/CodeRunner.astro';
 
-很多数据「列表页看概要、点进去才看全」。比如图书列表只显示书名,详情页才有作者、简介、评分。这就是**两级爬取**:先抓列表拿链接,再逐个进详情页抓细数据。
+很多数据「列表页看概要、点进去才看全」。比如图书列表只显示书名，详情页才有作者、简介、评分。这就是**两级爬取**：先抓列表拿链接，再逐个进详情页抓细数据。
+
+> **两级爬取是爬虫中最经典的结构**。几乎所有复杂数据（电商商品详情、新闻全文、用户信息）都采用这种「列表 → 详情」的两级架构。掌握它，你就掌握了 60% 的爬虫模式。
 
 ## 一、两级结构长这样
 
 ```
-列表页  →  提取每条的详情链接  →  逐条请求详情页  →  解析细数据  →  合并
+列表页 → 提取每条的详情链接 → 逐条请求详情页 → 解析细数据 → 合并
 ```
 
-## 二、可运行:列表取链接 + 详情二次解析
+| 层级 | 做什么 | 输出 |
+| --- | --- | --- |
+| **第一级：列表页** | 抓链接 + 概要（标题、摘要） | `{"url": "/book/1", "title": "Python 入门", ...}` |
+| **第二级：详情页** | 逐条请求详情页 → 抓细数据 | `{"url": ..., "title": ..., "author": "张三", "rating": 4.5}` |
 
-下面模拟一个两级场景——先从列表抽链接和书名,再从「详情页」取作者,合并成完整记录:
+> 理解了这个架构，你就知道：**先别急着请求详情页**。第一步只干一件事——把列表页上所有详情页链接收集成一张清单。等清单齐了，再统一请求。这样的好处是：如果某个详情页挂了，不影响其他详情页的数据。
+
+## 二、可运行：列表取链接 + 详情二次解析
+
+下面模拟一个两级场景——先从列表抽链接和书名，再从「详情页」取作者，合并成完整记录：
 
 <CodeRunner
   variant="guided"
@@ -52,7 +61,7 @@ for it in items:
 
 ## 三、用 set 去重
 
-列表页之间常有重复条目(尤其翻页重叠)。用 `set` 存已抓过的链接,遇到重复就跳过:
+列表页之间常有重复条目（尤其翻页重叠）。用 `set` 存已抓过的链接，遇到重复就跳过：
 
 <CodeRunner
   variant="challenge"
@@ -71,9 +80,20 @@ for link in links:
 
 print("去重后:", unique)`} />
 
-## 四、并发提速(进阶)
+> **为什么用 set 去重而不是 list？** `set` 的 `in` 操作是 O(1) 常数时间（哈希查找），`list` 的 `in` 是 O(n) 线性搜索。翻页量大时差距巨大。
 
-详情页一多,串行请求会很慢。可用线程池并发(本地运行):
+## 四、常见坑与排查
+
+| 问题 | 原因 | 解决方案 |
+| --- | --- | --- |
+| 详情页 404 | 列表页的链接过期或不存在 | 加入 `try/except` 跳过失败页，继续抓 |
+| 详情页结构变化 | 某些详情页没有 `.author` 标签 | 用 `.get("author", "未知")` 兜底 |
+| 重复抓取 | 翻页重叠导致同一链接被抓多次 | 用 `set` 维护 `seen` 集合去重 |
+| 太慢 | 详情页一多，串行请求会很慢 | 用 `ThreadPoolExecutor` 并发（见下） |
+
+## 五、并发提速(进阶)
+
+详情页一多，串行请求会很慢。可用线程池并发（本地运行）：
 
 ```python
 from concurrent.futures import ThreadPoolExecutor
@@ -86,12 +106,65 @@ with ThreadPoolExecutor(max_workers=5) as pool:
     details = pool.map(fetch_detail, detail_urls)
 ```
 
-> 并发不是越快越好——`max_workers` 别太大,配合 `time.sleep` 才礼貌。
+> **并发不是越快越好**——`max_workers` 别太大（建议 5-10），配合 `time.sleep` 才礼貌。太多并发不仅容易压垮服务器，也容易被反爬识别。
 
-## 五、小结
+### 串行 vs 并发对比
 
-- 两级爬取:列表页抽链接 → 详情页抓细数据 → 合并。
-- 先把链接和概要收集成列表,再统一进详情页,结构更清晰。
-- `set` 去重:用「已见集合」跳过重复链接。
-- 量大用 `ThreadPoolExecutor` 并发,但务必控制频率。
+| 方式 | 速度 | 代码复杂度 | 适用场景 |
+| --- | --- | --- | --- |
+| 串行（for 循环） | 慢 | 简单 | 少量详情页（50 以内） |
+| 线程池并发 | 快 | 中等 | 中等量（50-500） |
+| `aiohttp` 异步 | 最快 | 复杂 | 大量（500+），需进阶 |
+
+## 六、完整两级爬取代码
+
+下面是一个**完整**的两级爬取示例——包含异常处理、去重和控频：
+
+```python
+import requests
+from bs4 import BeautifulSoup
+import time
+
+headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)..."}
+base_url = "https://books.example.com"
+seen = set()
+results = []
+
+# 步骤 1: 抓取列表页
+resp = requests.get(base_url + "/list", headers=headers, timeout=5)
+soup = BeautifulSoup(resp.text, "lxml")
+
+links = [a.get("href") for a in soup.select("li a")]
+
+# 步骤 2: 逐条请求详情页
+for url in links:
+    if url in seen:  # 去重
+        continue
+    seen.add(url)
+    
+    try:
+        detail_resp = requests.get(base_url + url, headers=headers, timeout=5)
+        detail_resp.raise_for_status()
+        
+        # 解析详情页
+        d_soup = BeautifulSoup(detail_resp.text, "lxml")
+        title = d_soup.select_one(".title").get_text(strip=True)
+        author = d_soup.select_one(".author").get_text(strip=True) or "未知"
+        
+        results.append({"url": url, "title": title, "author": author})
+    except requests.exceptions.RequestException:
+        print(f"详情页 {url} 失败,跳过")
+    
+    time.sleep(1)  # 控频
+
+print(f"抓取完成,共 {len(results)} 本")
+```
+
+## 七、小结
+
+- 两级爬取：列表页抽链接 → 详情页抓细数据 → 合并。
+- 先把链接和概要收集成列表，再统一进详情页，结构更清晰。
+- `set` 去重：用「已见集合」跳过重复链接。
+- 量大用 `ThreadPoolExecutor` 并发，但务必控制频率。
+- 异常处理：详情页挂了不影响其他页，用 `try/except` 跳过。
 - 去 [Level 3 靶站](/practice/level3-detail/) 实战列表 + 详情。

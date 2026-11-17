@@ -4,7 +4,9 @@ id: 04-beautifulsoup
 
 import CodeRunner from '../../components/CodeRunner.astro';
 
-拿到网页字符串只是开始,真正的功夫在**解析**——把杂乱的 HTML 变成你能按规则提取数据的结构。BeautifulSoup(BS4)是 Python 里最友好的解析库。
+拿到网页字符串只是开始，真正的功夫在**解析**——把杂乱的 HTML 变成你能按规则提取数据的结构。BeautifulSoup(BS4)是 Python 里最友好的解析库。
+
+> **为什么需要解析？** HTML 就像一锅乱码，`<div><p><span class="title">Python 入门</span></p></div>` 层层嵌套。BeautifulSoup 把 HTML 变成一棵「树」，你可以按标签名、类名、属性、层级关系来定位数据。
 
 ## 一、解析器怎么选
 
@@ -14,15 +16,44 @@ soup = BeautifulSoup(html, "html.parser")   # Python 内置,零依赖
 soup = BeautifulSoup(html, "lxml")          # 更快,需装 lxml(推荐)
 ```
 
-教程统一用 `"lxml"`(快),它也能解析不规范的 HTML。下面所有示例都基于它。
+| 解析器 | 速度 | 容错性 | 依赖 | 推荐场景 |
+| --- | --- | --- | --- | --- |
+| `lxml` | ⚡ 最快 | 好 | 需安装 lxml | 生产环境、大页面（推荐） |
+| `html.parser` | 中等 | 好 | 零依赖 | 快速实验、不想装库 |
+| `html5lib` | 最慢 | 最好 | 需安装 html5lib | 解析严重不规范的老站 HTML |
+
+教程统一用 `"lxml"`（快），它也能解析不规范的 HTML。下面所有示例都基于它。
 
 ## 二、三种定位方式
 
-1. **按标签名**:`soup.find('title')` 找第一个,`soup.find_all('a')` 找全部。
-2. **按属性**:`soup.find('div', class_='book')`(`class` 要写成 `class_`,因为 class 是 Python 关键字)。
-3. **CSS 选择器**(最常用):`soup.select('div.book > span.title')` 返回列表,`select_one` 返回单个。
+BeautifulSoup 提供三种定位方式，各有适用场景：
 
-下面需要你补全提取逻辑——给定一段图书列表 HTML,用 CSS 选择器取出每本书的书名和价格:
+### 2.1 按标签名
+
+```python
+soup.find('title')          # 找第一个 title 标签（只返回第一个）
+soup.find_all('a')          # 找所有 <a> 标签（返回列表）
+soup.find('div', class_='book')  # 找第一个 class=book 的 div
+```
+
+### 2.2 按属性
+
+```python
+soup.find('div', class_='book')       # class 必须用 class_（因为 class 是 Python 关键字）
+soup.find('img', attrs={'src': 'a.jpg'})  # 更灵活的属性匹配
+img_tag.get('alt')                    # 用 get 安全取属性,没有时返回 None
+```
+
+### 2.3 CSS 选择器（最常用）
+
+```python
+soup.select('div.book > span.title')  # 返回所有匹配的标签列表
+soup.select_one('div.book .title')    # 返回第一个匹配,等价于 find
+```
+
+> **CSS 选择器语法**和前端开发用的完全一样：`tag.class`、`tag.class.sub`、`tag > child`（直接子）、`tag descendant`（后代）、`tag[attr]`（有某属性）。熟练掌握 CSS 选择器，是高效提取数据的关键。
+
+下面需要你补全提取逻辑——给定一段图书列表 HTML，用 CSS 选择器取出每本书的书名和价格：
 
 <CodeRunner
   variant="guided"
@@ -47,22 +78,39 @@ for li in soup.select("li.book"):
 
 ## 三、遍历节点树
 
-HTML 是树,BS4 让你上下左右走:
+HTML 是树，BS4 让你上下左右走：
 
-- **父**:`tag.parent`
-- **子**:`tag.contents`(列表)/ `tag.children`(迭代器)
-- **兄弟**:`tag.next_sibling` / `tag.previous_sibling`
-- **后代文本**:`tag.get_text()` 把所有嵌套文字拼起来
+| 方向 | 属性/方法 | 示例 |
+| --- | --- | --- |
+| 父节点 | `tag.parent` | `li.parent` → 找 `<li>` 的父标签 |
+| 子节点 | `tag.contents`（列表）/ `tag.children`（迭代器） | `ul.contents` → 所有子元素 |
+| 兄弟 | `tag.next_sibling` / `tag.previous_sibling` | `a.next_sibling` → 下一个兄弟 |
+| 后代文本 | `tag.get_text()` | `soup.get_text()` → 所有嵌套文字拼起来 |
 
-> 提取文字用 `.get_text()`,不要直接 `str(tag)`——后者会把标签也带进去。
+> 提取文字用 `.get_text()`，不要直接 `str(tag)`——后者会把标签也带进去，比如 `<span>Python 入门</span>` 变成 `[<span>Python 入门</span>]`。
+
+### 节点树实战示例
+
+```python
+# 从 <li> 向上找父节点 <ul>
+parent = li.parent          # <ul class="books">
+
+# 遍历 <ul> 下所有 <li> 子节点
+for child in ul.children:
+    if child.name == 'li':
+        print(child.get_text())
+
+# 找下一个兄弟节点
+next_li = li.next_sibling
+```
 
 ## 四、属性与文本的正确姿势
 
-- 取属性:`tag['href']` 或 `tag.get('href')`(推荐 `get`,没有时返回 None 不报错)。
-- 取文本:`tag.get_text(strip=True)` 的 `strip=True` 能顺手去掉首尾空白,实战必加。
-- 批量属性:`[a.get('href') for a in soup.select('a')]`。
+- 取属性：`tag['href']` 或 `tag.get('href')`（推荐 `get`，没有时返回 None 不报错）。
+- 取文本：`tag.get_text(strip=True)` 的 `strip=True` 能顺手去掉首尾空白，实战必加。
+- 批量属性：`[a.get('href') for a in soup.select('a')]`。
 
-再来一个练习,这次链接文字前后有多余空格和换行,你需要正确清洗:
+再来一个练习，这次链接文字前后有多余空格和换行，你需要正确清洗：
 
 <CodeRunner
   variant="challenge"
@@ -83,18 +131,30 @@ for a in soup.select("a"):
     text = a.get_text(strip=True)
     print(href, "=>", text)`} />
 
-## 五、BS4 vs lxml/XPath
+## 五、BS4 vs lxml/XPath：怎么选
 
-- BS4 胜在**容错好、API 直观**,新手友好。
-- 纯 XPath(`lxml`)在「按文字定位、向上找父节点」时更省事(见下一章 XPath)。
-- 实战常组合:BS4 做主解析,遇到 BS4 不擅长的定位再切到 `lxml` 的 XPath。
+- BS4 胜在**容错好、API 直观**，新手友好。
+- 纯 XPath（lxml）在「按文字定位、向上找父节点」时更省事（见下一章 XPath）。
+- 实战常组合：BS4 做主解析，遇到 BS4 不擅长的定位再切到 `lxml` 的 XPath。
+
+### 对比表
+
+| 维度 | BS4 `select` | BS4 `find` | XPath |
+| --- | --- | --- | --- |
+| 按 class 找 | `select(".book")` ✅直观 | `find("div", class_="book")` ⚠️ class_ 特殊 | `.xpath("//div[@class='book']")` |
+| 按文本过滤 | ❌不支持 | ❌不支持 | `//a[contains(text(),'详情')]` ✅ |
+| 向上找父节点 | ⚠️`.parent` 只能一层 | 同上 | `.xpath("ancestor::div")` ✅ |
+| 容错性 | 好（自动修复标签） | 好 | 中等 |
+| 性能 | 慢（Python 实现） | 慢 | 快（C 实现） |
+
+> **经验法则**：简单「按 class/id 取一批标签」→ BS4 更直观；需要「按文字内容定位」「向上找父节点」→ XPath 更省力。
 
 ## 六、小结
 
-- `BeautifulSoup(html, "lxml")` 解析;`class` 参数要写 `class_`。
-- 定位三件套:`find` / `find_all` / `select`(CSS)。
-- 取文本用 `get_text(strip=True)`,取属性用 `get('href')`。
-- 节点树可上下遍历:`.parent`、`.children`、`.next_sibling`。
-- 练手:[Level 1 靶站](/practice/level1-books/) 用 `select("tbody tr")` 抓 24 行。
+- `BeautifulSoup(html, "lxml")` 解析；`class` 参数要写 `class_`。
+- 定位三件套：`find` / `find_all` / `select`（CSS）。
+- 取文本用 `get_text(strip=True)`，取属性用 `get('href')`。
+- 节点树可上下遍历：`.parent`、`.children`、`.next_sibling`。
+- 练手：[Level 1 靶站](/practice/level1-books/) 用 `select("tbody tr")` 抓 24 行。
 
 本页底部「代码实战」让你在靶站上完成一次真实提取。

@@ -4,11 +4,13 @@ id: 07-pagination
 
 import CodeRunner from '../../components/CodeRunner.astro';
 
-单个列表页往往装不下全部数据,网站会用「分页」把它们拆成多页。爬虫要做的,就是找到翻页规律,把每一页都抓回来。
+单个列表页往往装不下全部数据，网站会用「分页」把它们拆成多页。爬虫要做的，就是找到翻页规律，把每一页都抓回来。
+
+> **分页是爬虫最常用的模式之一**。几乎所有列表页都有分页：电商商品、新闻列表、搜索结果。掌握分页爬取，你就掌握了 80% 的爬虫场景。
 
 ## 一、找分页 URL 规律
 
-最常见的分页是 `?page=1`、`?page=2`……把页数换成变量即可:
+最常见的分页是 `?page=1`、`?page=2`……把页数换成变量即可：
 
 ```python
 base = "https://books.example.com/list"
@@ -18,16 +20,35 @@ for page in range(1, 6):          # 1 到 5 页
     # ...解析这一页
 ```
 
-有些站点用路径分页(`/list/1`、`/list/2`),规律一样,只是拼法不同。先翻两三页,确认「变的是哪一段」。
+有些站点用路径分页（`/list/1`、`/list/2`），规律一样，只是拼法不同：
 
-## 二、可运行:循环解析多页并汇总
+```python
+# 路径分页
+url = f"{base}/{page}"
+```
 
-下面模拟 3 页 HTML 数据,你需要补全「逐页解析 + 汇总到一个列表」的逻辑:
+> **如何发现分页规律？** 手动翻 2-3 页，对比 URL 变化：
+> - 变化的是 `?page=1` → `?page=2` → 参数是 `page`
+> - 变化的是 `/page/1` → `/page/2` → 路径末尾是页码
+> - 变化的是 `?offset=0` → `?offset=20` → 偏移量分页
+
+### 常见分页模式对比
+
+| 模式 | URL 示例 | 参数变化 |
+| --- | --- | --- |
+| 页码分页 | `?page=1` / `?page=2` | 直接替换页码 |
+| 偏移分页 | `?offset=0&limit=20` | 增加 offset |
+| 路径分页 | `/page/1` / `/page/2` | 拼接路径 |
+| 加载更多 | JS 触发 AJAX | 需模拟点击（第 10 章） |
+
+## 二、可运行：循环解析多页并汇总
+
+下面模拟 3 页 HTML 数据，你需要补全「逐页解析 + 汇总到一个列表」的逻辑：
 
 <CodeRunner
   variant="guided"
   title="循环翻页并汇总数据"
-  prompt="任务:pages 列表里存了 3 页的 HTML,遍历每一页,用 BS4 解析出书名,extend 到 all_books 里。最后打印总数和全部书名。"
+  prompt="任务:pages 列表里存了 3 页的 HTML,遍历每一页,用 BS4 解析出书名,extend 进 all_books 里。最后打印总数和全部书名。"
   code={`from bs4 import BeautifulSoup
 
 pages = [
@@ -48,7 +69,7 @@ print("合计:", len(all_books), "本 ->", all_books)`} />
 
 ## 三、控制请求频率
 
-翻页意味着短时间内发很多请求,太快会被当成攻击。每页之间 `sleep` 一下:
+翻页意味着短时间内发很多请求，太快会被当成攻击。每页之间 `sleep` 一下：
 
 ```python
 import time
@@ -59,29 +80,80 @@ for page in range(1, 6):
     time.sleep(1)   # 每秒最多 1 个请求,对服务器友好
 ```
 
+> **为什么控频很重要？** 一个正常人浏览网页不会一秒点 10 次翻页。如果你一秒发 100 个请求，服务器一看就知道是机器人。控频不仅是**礼貌**，也是**保护自己不被封 IP**。
+
 ## 四、何时停手
 
-两种常见终止条件:
+两种常见终止条件：
 
-- **已知总页数**:`range(1, total + 1)`。
-- **未知总页数**:解析本页,若「没有数据」或「下一页按钮不存在」就 `break`。
+### 4.1 已知总页数
 
 ```python
-while True:
+total_pages = 10
+for page in range(1, total_pages + 1):
+    url = f"{base}?page={page}"
     resp = requests.get(url, timeout=5)
-    items = parse(resp.text)
-    if not items:        # 空页,到底了
-        break
-    # ...收集
-    if not has_next_page(resp.text):
-        break
-    url = next_page_url(resp.text)
+    # ...解析
+    time.sleep(1)
 ```
 
-## 五、小结
+### 4.2 未知总页数（更常见）
 
-- 翻页先找规律:`?page=N` 还是 `/page/N`,把变的部分参数化。
-- 核心是 `for` / `while` 循环,每页解析后 `extend` 进总列表。
-- 每页之间 `time.sleep` 控频,避免压垮服务器、也避免被封。
+```python
+page = 1
+while True:
+    url = f"{base}?page={page}"
+    resp = requests.get(url, timeout=5)
+    items = parse(resp.text)
+    
+    if not items:        # 空页,到底了
+        print("空页,停止翻页")
+        break
+    
+    # ...收集
+    if not has_next_page(resp.text):  # 检查「下一页」按钮是否存在
+        print("无下一页,停止翻页")
+        break
+    
+    time.sleep(1)
+    page += 1
+```
+
+> **最佳实践**：未知总页数用「空页 / 无下一页按钮」作为终止信号 `break`，避免死循环。
+
+## 五、综合练习：翻页 + 去重 + 控频
+
+下面模拟一个完整的翻页场景——你需要补全翻页循环、控频和去重：
+
+<CodeRunner
+  variant="challenge"
+  title="翻页 + 汇总 + 去重"
+  prompt="任务:pages 里有多页 HTML,可能包含重复书名。用 for 循环逐页解析,extend 进 total,再用 set 去重。补全翻页循环。"
+  code={`from bs4 import BeautifulSoup
+
+pages = [
+    '''<ul class="books"><li class="book">Python</li><li class="book">爬虫</li></ul>''',
+    '''<ul class="books"><li class="book">爬虫</li><li class="book">数据分析</li></ul>''',
+    '''<ul class="books"><li class="book">数据分析</li><li class="book">算法</li></ul>''',
+]
+
+total = []
+# TODO 1: 遍历 pages,每页用 BS4 解析出书名,extend 进 total
+for i, html in enumerate(pages, start=1):
+    soup = BeautifulSoup(html, "lxml")
+    titles = [li.get_text(strip=True) for li in soup.select("li.book")]
+    print(f"第 {i} 页抓到 {len(titles)} 本: {titles}")
+    total.extend(titles)
+
+# TODO 2: 用 set 去重,打印去重后的结果
+unique = list(set(total))
+print("去重后:", len(unique), "本 ->", unique)`} />
+
+## 六、小结
+
+- 翻页先找规律：`?page=N` 还是 `/page/N`，把变的部分参数化。
+- 核心是 `for` / `while` 循环，每页解析后 `extend` 进总列表。
+- 每页之间 `time.sleep` 控频，避免压垮服务器、也避免被封。
 - 未知页数用「空页 / 无下一页」作为终止信号 `break`。
+- 去重：`set` 去重，`list(set(total))` 恢复列表。
 - 去 [Level 2 靶站](/practice/level2-pagination/) 实战多页汇总。

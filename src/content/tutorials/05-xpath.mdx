@@ -4,11 +4,13 @@ id: 05-xpath
 
 import CodeRunner from '../../components/CodeRunner.astro';
 
-XPath(XML Path Language)原本是为在 XML 文档里定位节点而设计的,因为它能表达**层级关系、谓词过滤、轴(父子/兄弟)**,在复杂页面上比 CSS 选择器更灵活。爬虫里我们通常用 `lxml` 这个高性能解析库来执行 XPath。
+XPath(XML Path Language)原本是为在 XML 文档里定位节点而设计的，因为它能表达**层级关系、谓词过滤、轴(父子/兄弟)**，在复杂页面上比 CSS 选择器更灵活。爬虫里我们通常用 `lxml` 这个高性能解析库来执行 XPath。
+
+> **为什么学 XPath？** BS4 的 CSS 选择器已经很好用了，但有一类定位它做不到——「按文本内容找标签」和「向上找父节点」。比如你想找「包含文字「Python」的 `<span>` 标签的**父元素**」，XPath 一句话搞定，BS4 则需要多层嵌套。
 
 ## 一、XPath 路径语法
 
-XPath 用「路径」描述你要找的节点,核心符号只有四个:
+XPath 用「路径」描述你要找的节点，核心符号只有四个：
 
 | 符号 | 含义 | 示例 |
 | --- | --- | --- |
@@ -17,20 +19,20 @@ XPath 用「路径」描述你要找的节点,核心符号只有四个:
 | `[]` | **谓词(过滤条件)** | `//li[@class='book']`(class 为 book 的 li) |
 | `@` | 取**属性** | `//a/@href`(所有链接的 href) |
 
-还有几个高频用法:
+还有几个高频用法：
 
-- `*` 通配任意标签:`//div/*` 取 div 的所有直接子元素
-- `text()` 取文本节点:`//span/text()`
-- 下标从 **1** 开始:`//li[1]` 是第一个 li,`//li[last()]` 是最后一个
-- 多个条件:`//li[@class='book' and @data-id]` 同时满足
+- `*` 通配任意标签：`//div/*` 取 div 的所有直接子元素
+- `text()` 取文本节点：`//span/text()`
+- 下标从 **1** 开始：`//li[1]` 是第一个 li，`//li[last()]` 是最后一个
+- 多个条件：`//li[@class='book' and @data-id]` 同时满足
 
-> ⚠️ 和 CSS 不同,XPath 的索引从 **1** 开始,且 `//` 表示「后代」而非「当前层级」。
+> ⚠️ **和 CSS 不同，XPath 的索引从 1 开始**！这是新手最常踩的坑——CSS 选择器下标从 0 开始，XPath 从 1 开始。
 
 ## 二、用 lxml 解析
 
-`lxml.html.fromstring()` 把 HTML 字符串变成可查询的文档对象,再用 `.xpath("表达式")` 提取,返回**字符串列表**(对 `text()`/`@属性`)或**元素列表**(对标签)。
+`lxml.html.fromstring()` 把 HTML 字符串变成可查询的文档对象，再用 `.xpath("表达式")` 提取，返回**字符串列表**（对 `text()`/`@属性`）或**元素列表**（对标签）。
 
-下面需要你补全 XPath 提取逻辑——给定一段 HTML,用 XPath 同时取出书名和链接:
+下面需要你补全 XPath 提取逻辑——给定一段 HTML，用 XPath 同时取出书名和链接：
 
 <CodeRunner
   variant="guided"
@@ -55,11 +57,11 @@ for t, h in zip(titles, links):
 
 ## 三、文本提取与属性定位
 
-- **取文本**:`//span/text()` 返回文本列表;若要「把整段文字拼成一个」,用 `element.text_content()`(lxml 元素方法)或 `' '.join(...)`。
-- **取属性**:`//img/@src` 直接拿到图片地址列表,常用于批量抓图。
-- **按文本过滤**:`//a[contains(text(),'详情')]` 选中文字含「详情」的链接;`contains()` 也常用于属性:`//div[contains(@class,'book')]`(class 含 book 即可,避免完整匹配)。
+- **取文本**：`//span/text()` 返回文本列表；若要「把整段文字拼成一个」，用 `element.text_content()`（lxml 元素方法）或 `' '.join(...)`。
+- **取属性**：`//img/@src` 直接拿到图片地址列表，常用于批量抓图。
+- **按文本过滤**：`//a[contains(text(),'详情')]` 选中文字含「详情」的链接；`contains()` 也常用于属性：`//div[contains(@class,'book')]`(class 含 book 即可，避免完整匹配)。
 
-再来一个练习——这次 class 属性是多值的(`book hot`),精确匹配会漏掉,你需要用 `contains`:
+再来一个练习——这次 class 属性是多值的(`book hot`)，精确匹配会漏掉，你需要用 `contains`：
 
 <CodeRunner
   variant="challenge"
@@ -76,7 +78,30 @@ doc = html.fromstring('''<ul>
 items = doc.xpath("//li[contains(@class,'book')]/span/text()")
 print("抓到:", items)`} />
 
-## 四、XPath 与 CSS 选择器怎么选
+## 四、XPath 高级用法
+
+### 4.1 按文本内容查找
+
+```python
+# 找到包含「Python 入门」文字的 <span> 标签
+titles = doc.xpath("//span[contains(text(), 'Python')]/text()")
+```
+
+### 4.2 向上找父节点
+
+```python
+# 找到所有 <span> 的父 <li> 标签
+parents = doc.xpath("//span/parent::li")
+```
+
+### 4.3 获取兄弟节点
+
+```python
+# 找到所有 <a> 的下一个兄弟 <li>
+siblings = doc.xpath("//a/following-sibling::li[1]")
+```
+
+## 五、XPath 与 CSS 选择器怎么选
 
 | 维度 | CSS 选择器 | XPath |
 | --- | --- | --- |
@@ -85,20 +110,33 @@ print("抓到:", items)`} />
 | 按文本过滤 | 不支持 | 支持 `contains(text(),...)` |
 | 按属性模糊 | `[class*='book']` | `[contains(@class,'book')]` |
 | 取父/兄弟 | 不方便 | 原生支持 |
-| 性能 | 快 | 略快(lxml 下) |
+| 性能 | 快(lxml 实现) | 略快(lxml 下) |
 
-**经验法则**:
+**经验法则**：
 
 - 简单「按 class/id 取一批标签」→ CSS(`soup.select`)更直观。
 - 需要「按文字内容定位」「向上找父节点」「跨层级兄弟」→ XPath 更省力。
-- BeautifulSoup 本身不原生支持 XPath,要配合 `lxml` 使用。
+- BeautifulSoup 本身不原生支持 XPath，要配合 `lxml` 使用。
 
-## 五、小结
+## 六、常见 XPath 表达式速查
 
-- XPath 四件套:`/` 子级、`//` 后代、`[]` 过滤、`@` 属性;索引从 1 开始。
+| 需求 | XPath 表达式 |
+| --- | --- |
+| 所有 `<a>` 标签的 `href` | `//a/@href` |
+| 所有 `<img>` 的 `src` | `//img/@src` |
+| 第一个 `<li>` | `//li[1]` |
+| 最后一个 `<li>` | `//li[last()]` |
+| 包含文字「详情」的 `<a>` | `//a[contains(text(),'详情')]` |
+| class 含 `book` 的 `<div>` | `//div[contains(@class,'book')]` |
+| `<li>` 的父节点 | `//li/parent::*` |
+| `<a>` 的下一个 `<li>` 兄弟 | `//a/following-sibling::li[1]` |
+
+## 七、小结
+
+- XPath 四件套：`/` 子级、`//` 后代、`[]` 过滤、`@` 属性；索引从 1 开始。
 - `lxml.html.fromstring()` + `.xpath()` 是爬虫里最快的 XPath 方案。
 - `text()` 取文本、`@属性` 取属性、`contains()` 做模糊匹配。
-- 和 CSS 不是替代关系:简单结构用 CSS,复杂定位用 XPath。
+- 和 CSS 不是替代关系：简单结构用 CSS，复杂定位用 XPath。
 - 练手去 [Level 1 靶站](/practice/level1-books/) 用 XPath 把 24 行书名抓出来。
 
 本页底部的「代码实战」会让你在靶站上用 XPath 完成一次真实提取。

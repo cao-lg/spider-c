@@ -4,9 +4,9 @@ id: 03-requests-basics
 
 import CodeRunner from '../../components/CodeRunner.astro';
 
-上一章把 HTTP 讲清楚了,这一章用 `requests` 把它变成代码。`requests` 是 Python 里最流行的 HTTP 库,把「发请求」从十几行收成了两三行。
+上一章把 HTTP 讲清楚了，这一章用 `requests` 把它变成代码。`requests` 是 Python 里最流行的 HTTP 库，把「发请求」从十几行收成了两三行。
 
-> 浏览器运行器里已经预装 `requests`,但下面凡涉及**真实联网**的示例都用代码块展示(浏览器内的联网受跨域限制),可运行示例集中在「参数拼装」这类纯逻辑部分。
+> **为什么要用 requests 而不是 urllib？** urllib 是 Python 标准库，功能完整但 API 繁琐——拼接 URL、处理编码、管理 Cookie 都要手动写。`requests` 是第三方库，API 优雅、参数化清晰，一行 `requests.get(url)` 搞定一切。虽然它多了一个安装步骤，但它是爬虫事实上的标准。
 
 ## 一、第一个 GET 请求
 
@@ -19,20 +19,22 @@ print(resp.url)           # 实际访问的地址(含重定向后的)
 print(len(resp.text))     # 网页 HTML 文本长度
 ```
 
-`resp`(Response 对象)是你最该熟悉的东西:
+`resp`（Response 对象）是你最该熟悉的东西：
 
-| 属性 | 含义 |
-| --- | --- |
-| `resp.status_code` | 状态码(200/403/404...) |
-| `resp.text` | 解码后的网页文本(字符串) |
-| `resp.content` | 原始字节(下载图片/文件用) |
-| `resp.headers` | 响应头字典 |
-| `resp.url` | 最终 URL(跟随重定向后) |
-| `resp.encoding` | 编码,乱码时手动设 `resp.encoding = "utf-8"` |
+| 属性 | 含义 | 何时用 |
+| --- | --- | --- |
+| `resp.status_code` | 状态码(200/403/404...) | 判断请求成功还是失败 |
+| `resp.text` | 解码后的网页文本(字符串) | 解析 HTML / JSON 文本 |
+| `resp.content` | 原始字节(下载图片/文件用) | 二进制内容（图片、PDF） |
+| `resp.headers` | 响应头字典 | 检查编码、内容类型 |
+| `resp.url` | 最终 URL(跟随重定向后) | 确认是否被重定向 |
+| `resp.encoding` | 编码,乱码时手动设 `resp.encoding = "utf-8"` | 中文乱码时强制指定编码 |
 
-## 二、查询参数:用 params 代替手拼 URL
+> **`resp.text` vs `resp.content` 怎么选？** 看你要什么：要**字符串**用 `.text`（直接 `.get_text()` 或 `.json()`），要**原始字节**用 `.content`（下载图片、文件、音频等二进制文件）。
 
-别手写 `?q=python&page=2`,交给 `params` 字典,`requests` 会自动编码:
+## 二、查询参数：用 params 代替手拼 URL
+
+别手写 `?q=python&page=2`，交给 `params` 字典，`requests` 会自动编码：
 
 ```python
 resp = requests.get(
@@ -42,7 +44,9 @@ resp = requests.get(
 print(resp.url)  # https://books.example.com/search?q=python&page=2
 ```
 
-下面这段在浏览器里就能跑——你需要补全「把字典拼成查询串」的逻辑,这正是 `requests.params` 在背后做的事:
+`params` 的妙处在于**自动处理 URL 编码**——中文参数会被转成 `%xx` 格式，特殊字符如 `&`、`=` 也会被安全转义。手动拼 URL 时很容易漏掉这些细节，导致请求被拒绝或拿不到数据。
+
+下面这段在浏览器里就能跑——你需要补全「把字典拼成查询串」的逻辑，这正是 `requests.params` 在背后做的事：
 
 <CodeRunner
   variant="guided"
@@ -63,7 +67,9 @@ print("解析回参数:", parse_qs(urlparse(url).query))`} />
 
 ## 三、请求头与 UA 伪装
 
-很多站点看到「没有 User-Agent 的请求」就直接 403。`requests` 默认 UA 是 `python-requests/x.x`,很容易露馅:
+很多站点看到「没有 User-Agent 的请求」就直接 403。`requests` 默认 UA 是 `python-requests/x.x`，很容易露馅。
+
+> **User-Agent 的潜规则**：`User-Agent` 是服务器用来「识别客户端身份」的标识。浏览器发的 UA 通常包含操作系统、浏览器引擎、版本号。爬虫默认 UA 是 `python-requests`，一看就知道不是浏览器。
 
 ```python
 headers = {
@@ -73,32 +79,53 @@ headers = {
 resp = requests.get("https://books.example.com/list", headers=headers)
 ```
 
-> 把浏览器 F12 → Network 里看到的真实 `User-Agent` 抄过来,是最快的方式。
+> 把浏览器 F12 → Network 里看到的真实 `User-Agent` 抄过来，是最快的方式。
 
-## 四、POST 请求:提交数据
+### 常用请求头一览
 
-登录、搜索表单多用 POST,参数放在请求体里:
+| 请求头 | 值示例 | 作用 |
+| --- | --- | --- |
+| `User-Agent` | `Mozilla/5.0 (Windows NT 10.0; Win64; x64)...` | 告诉服务器「我是谁」 |
+| `Accept` | `text/html,application/json,*/*;q=0.9` | 告诉服务器「我想要什么格式」 |
+| `Accept-Language` | `zh-CN,zh;q=0.9` | 想要的语言 |
+| `Referer` | `https://books.example.com/list` | 从哪个页面来的 |
+| `Cookie` | `session_id=abc123...` | 登录态 / 会话标识 |
+
+> 生产环境建议**每页换一个 UA**（随机从一组真实浏览器 UA 里挑），增加隐蔽性。第 11 章会讲到随机 UA。
+
+## 四、POST 请求：提交数据
+
+登录、搜索表单多用 POST，参数放在请求体里：
 
 ```python
-# 表单格式
+# 表单格式（application/x-www-form-urlencoded）
 resp = requests.post(url, data={"username": "u", "password": "p"})
-# JSON 格式(接口常见)
+
+# JSON 格式（application/json，接口最常见）
 resp = requests.post(url, json={"key": "value"})
 ```
 
-## 五、Session:保持登录态
+> **`data=` vs `json=` 的区别**：
+> - `data=`：把字典编码为 `key=value&key2=value2` 格式，Content-Type 为 `application/x-www-form-urlencoded`（传统表单）
+> - `json=`：把字典转为 JSON 字符串，Content-Type 自动设为 `application/json`（现代 API）
+>
+> 大多数现代网站的 API 都用 `json=`，老式表单用 `data=`。
 
-每次 `requests.get` 都是「新会话」,不带 Cookie。要维持登录,用 `Session`,它会自动保存并带上 Cookie:
+## 五、Session：保持登录态
+
+每次 `requests.get()` 都是「新会话」，不带 Cookie。要维持登录，用 `Session`，它会自动保存并带上 Cookie：
 
 ```python
 s = requests.Session()
-s.post(login_url, data={"user": "u", "pwd": "p"})  # 拿到登录 Cookie
+s.post(login_url, data={"user": "u", "pwd": "p"})  # 登录,拿到 Cookie
 resp = s.get(protected_url)                         # 同一会话,自动带 Cookie
 ```
 
+> **Session 不只是登录**：它还会保持连接池（复用 TCP 连接，提升性能）、自动管理 Cookie jar。如果你的爬虫需要**反复访问同一个域名**，用 Session 比裸调 `requests.get()` 更高效。
+
 ## 六、超时与异常处理
 
-**永远给请求加超时**,否则网站卡住你的脚本会一直挂起:
+**永远给请求加超时**，否则网站卡住你的脚本会一直挂起，永远等不到响应：
 
 ```python
 try:
@@ -106,16 +133,55 @@ try:
     resp.raise_for_status()               # 状态码非 2xx 时主动抛异常
 except requests.exceptions.Timeout:
     print("超时,稍后重试")
+except requests.exceptions.HTTPError:
+    print("HTTP 错误:", resp.status_code)
 except requests.exceptions.RequestException as e:
     print("请求失败:", e)
 ```
 
-`raise_for_status()` 是把「静默的 4xx/5xx」变成异常的好习惯,配合 `try/except` 才能写出健壮爬虫。
+`raise_for_status()` 是把「静默的 4xx/5xx」变成异常的好习惯。配合 `try/except` 才能写出健壮爬虫——**不让一个失败请求搞掉整条流水线**。
 
-## 七、小结
+### 常见异常一览
+
+| 异常类 | 触发条件 | 应对 |
+| --- | --- | --- |
+| `requests.exceptions.Timeout` | 超过 timeout 秒无响应 | 加 sleep 重试 |
+| `requests.exceptions.HTTPError` | `raise_for_status()` 发现非 2xx | 检查状态码，判断是否需要重试 |
+| `requests.exceptions.ConnectionError` | 网络断开、DNS 解析失败 | 检查网络，稍后重试 |
+| `requests.exceptions.TooManyRedirects` | 重定向超过 10 次 | URL 有循环重定向，放弃或手动处理 |
+
+## 七、可运行：requests 参数实战
+
+下面这段模拟了「拼 URL 参数 → 加请求头 → 加超时」的完整请求流程：
+
+<CodeRunner
+  variant="challenge"
+  title="拼装一个完整的 requests 请求"
+  prompt="任务:补全一个包含 URL 参数、请求头、超时的完整请求。注意 headers 里的 User-Agent 要怎么写。"
+  code={`import requests
+
+base_url = "https://books.example.com/search"
+params = {"q": "python", "page": "1"}
+headers = {
+    # TODO 1: 补全 User-Agent 请求头,伪装浏览器
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+}
+
+# TODO 2: 用 requests.get 发请求,参数用 params 传,加上 timeout
+try:
+    resp = requests.get(base_url, params=params, headers=headers, timeout=5)
+    print("状态码:", resp.status_code)
+    print("最终 URL:", resp.url)
+except requests.exceptions.RequestException as e:
+    print("请求失败:", e)`} />
+
+## 八、小结
 
 - `requests.get(url)` / `requests.post(url, data=, json=)` 发请求。
-- 响应对象 `resp`:`status_code` / `text` / `content` / `headers` / `url`。
-- 参数用 `params=`,别手拼;请求头用 `headers=` 伪装 UA。
-- 需要登录态用 `Session()`;联网务必加 `timeout` + `try/except`。
-- `resp.raise_for_status()` 让错误显式化,是健壮爬虫的第一步。
+- 响应对象 `resp`：`status_code` / `text` / `content` / `headers` / `url`。
+- 参数用 `params=`,别手拼；请求头用 `headers=` 伪装 UA。
+- `data=` 表单格式、`json=` JSON 格式，API 多用 `json=`。
+- 需要登录态用 `Session()`；联网务必加 `timeout` + `try/except`。
+- `resp.raise_for_status()` 让错误显式化，是健壮爬虫的第一步。
+
+下一章：HTML 拿到了，接下来要「解析」——BeautifulSoup 是 Python 最友好的解析库。
