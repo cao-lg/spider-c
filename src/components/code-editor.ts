@@ -129,8 +129,10 @@ export function createCodeEditor(opts: CodeEditorOptions): CodeEditor {
     // 结尾补一个换行,避免最后一行空行时高亮层高度不足
     codeEl.innerHTML = highlightPython(input.value + '\n');
     const lines = input.value.split('\n').length;
+    // 补一个空行号,匹配高亮层多出的 \n 产生的最后一行
     let nums = '';
     for (let i = 1; i <= lines; i++) nums += `<div>${i}</div>`;
+    nums += '<div></div>'; // 空行号对齐高亮层
     gutter.innerHTML = nums;
     applyReadOnly();
     grow();
