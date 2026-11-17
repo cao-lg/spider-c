@@ -4,70 +4,309 @@ id: 10-dynamic-pages
 
 import CodeRunner from '../../components/CodeRunner.astro';
 
-前面所有解析都假设：数据已经写在 HTML 源码里。但很多网站用 JavaScript 动态生成内容——你「查看源代码」看不到数据，只有浏览器跑完 JS 后才出现。这类页面，`requests` 抓不到，得上**真实浏览器**。
+你在电商站搜索"Python 书"，页面上明明有 60 件商品；可 `requests.get()` 拿回来的 HTML 里只有 20 件——剩下 40 件是你往下滚动时，浏览器偷偷发请求再塞进页面的。更极端的情况：HTML 里一件商品都没有，只有一个空的 `<div id="app"></div>`，所有内容全靠 JavaScript 现场生成。
 
-> **为什么有些页面 requests 抓不到数据？** 因为这些页面把 HTML 作为「壳」，数据靠 JS 在浏览器里**实时渲染**。`requests` 只拿原始 HTML，不跑 JS，所以拿到的是空壳。
+这一章就解决"数据不在源码里"怎么办。核心不是教你无脑上 Playwright，而是教你**像工程师一样定位数据到底在哪，再选最划算的工具**。
 
-## 一、怎么判断页面是动态的
+## 一、先定位：数据到底在哪
 
-三种判断方法，优先级从高到低：
+别一上来就装浏览器。按下面三层顺序排查，越靠前成本越低。
 
-1. **右键 → 查看网页源代码** → 搜不到关键词 → 数据靠 JS 注入。
-2. **F12 → Network** 里，真正的接口藏在 XHR/Fetch 中（这时**优先直接抓接口**，见第 9 章）。
-3. 如果数据既不在源码、也没有独立接口，那就是纯前端渲染，必须上浏览器自动化。
+| 层级 | 排查动作 | 看到什么 | 对应方案 |
+| --- | --- | --- | --- |
+| ① 看源码 | 页面右键 → 查看网页源代码，搜目标关键词 | 搜得到 → 数据在 HTML 里 | `requests` + BS4（第 4-6 章） |
+| ② 看网络 | F12 → Network → 勾 Fetch/XHR，刷新页面 | 有返回 JSON 的请求 → 数据有接口 | `requests` 直接调接口（第 9 章）⭐ |
+| ③ 看渲染 | 源码和接口都找不到 | 数据靠 JS 计算/拼接/交互产生 | Playwright（本章，最后手段） |
 
-> **判断口诀**：
-> - 有接口（Network → XHR/Fetch）→ 优先抓接口（第 9 章）
-> - 有源码（右键查看）→ 用 requests + BS4（第 4-6 章）
-> - 都没？→ 上浏览器自动化（本章）
+> **专业习惯**：先花 3 分钟做①②，再决定要不要花 30 分钟做③。很多"看起来必须上浏览器"的页面，其实接口就摆在 Network 面板里。
 
-## 二、Playwright：把浏览器交给代码
+### 动手实验：一分钟判断是不是空壳
 
-Playwright 能启动一个真实（无头）浏览器，像人一样打开页面、等 JS 跑完、再读内容。
+拿真实的教学站点 `https://quotes.toscrape.com/js/` 试（这是 Zyte 官方专门用来演示 JS 渲染的公开练习站）：
+
+```python
+import requests
+html = requests.get("https://quotes.toscrape.com/js/", timeout=10).text
+print("HTML 长度:", len(html))
+print("源码里有 Einstein 吗:", "Einstein" in html)   # False
+print(html[:300])                                     # 只有框架标签和 <script>
+```
+
+你在浏览器里能看到 10 条名言，但源码里连作者名字都搜不到——这就是**客户端渲染（CSR）**：服务器只给一个空壳和一段 JS，数据由 JS 再请求回来填进去。
+
+> **注意**：本站是合法的教学沙盒，专门开放给爬虫练习。真实商业站点请先看 `robots.txt` 和服务条款，见第七节。
+
+## 二、真实案例 1：Quotes to Scrape（JS 版）——别急着上 Playwright
+
+### 2.1 页面现象
+
+打开 `https://quotes.toscrape.com/js/`，浏览器显示 10 条名言，底部有 Next 分页。但我们刚验证过：源码里搜不到名言。
+
+### 2.2 F12 找出真正的接口
+
+打开 F12 → Network → 只勾选 `Fetch/XHR` → 刷新页面。你会看到浏览器自己去请求了：
+
+```
+GET https://quotes.toscrape.com/api/quotes?page=1
+```
+
+点开 `Response`，是干净的 JSON（我已实测确认字段）：
+
+```json
+{
+  "has_next": true,
+  "page": 1,
+  "quotes": [
+    {
+      "text": "“The world as we have created it ...”",
+      "author": {"name": "Albert Einstein", "slug": "Albert-Einstein"},
+      "tags": ["change", "deep-thoughts", "thinking", "world"]
+    }
+  ],
+  "top_ten_tags": [["love", 14], ["inspirational", 13]]
+}
+```
+
+**关键发现**：页面是 JS 渲染的，但数据有一个标准 JSON 接口。这时候完全不需要 Playwright。
+
+### 2.3 直接用 requests 拿数据（推荐写法）
+
+```python
+import requests
+
+BASE = "https://quotes.toscrape.com/api/quotes"
+page = 1
+all_quotes = []
+
+while True:
+    data = requests.get(f"{BASE}?page={page}", timeout=10).json()
+    for q in data["quotes"]:
+        all_quotes.append({
+            "text": q["text"],
+            "author": q["author"]["name"],   # 嵌套字段：author 是对象
+            "tags": q["tags"],
+        })
+    print(f"第 {page} 页: {len(data['quotes'])} 条")
+
+    if not data["has_next"]:   # 接口自己告诉你还有没有下一页
+        break
+    page += 1
+
+print("共采集:", len(all_quotes), "条")
+print("第一条:", all_quotes[0]["author"], "—", all_quotes[0]["text"][:40])
+```
+
+这段代码在**本地 Python 环境**跑，10 页数据秒级完成，无浏览器、无渲染等待、无 DOM 解析。
+
+> **专业要点**：`has_next` 是接口提供的翻页信号，比"数不够 10 条就停"更可靠。永远优先用接口给出的元信息判断结束条件。
+
+### 2.4 如果硬用 Playwright 呢？
+
+同样的结果，用浏览器渲染再解析：
+
+```python
+from playwright.sync_api import sync_playwright
+from bs4 import BeautifulSoup
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(headless=True)
+    page = browser.new_page()
+    page.goto("https://quotes.toscrape.com/js/", wait_until="networkidle")
+    page.wait_for_selector(".quote")          # 等 JS 把名言填进去
+    html = page.content()                     # 渲染后的完整 HTML
+    browser.close()
+
+soup = BeautifulSoup(html, "html.parser")
+for div in soup.select("div.quote"):
+    print(div.select_one("span.text").get_text(strip=True))
+```
+
+结果一样，但要启动 Chromium、等网络空闲、等元素出现、最后解析 DOM——**慢几十倍，还更容易因页面结构调整而崩**。
+
+| 写法 | 耗时量级 | 稳定性 | 维护成本 |
+| --- | --- | --- | --- |
+| 直接调 `/api/quotes` | 毫秒级 | 高（字段固定） | 低 |
+| Playwright 渲染 + BS4 | 秒级 | 中（CSS 选择器易变） | 高 |
+
+**结论：能抓接口就别渲染页面。** Playwright 真正的价值，是帮你**发现接口**和**处理必须交互的场景**。
+
+## 三、真实案例 2：Scrape This Site（AJAX 奥斯卡）——用浏览器抓包找接口
+
+### 3.1 页面现象
+
+`https://www.scrapethissite.com/pages/ajax-javascript/` 是另一个公开爬取沙盒（数据来自维基百科）。页面顶部有一排年份按钮，点 `2015`，下方才出现当年的奥斯卡获奖影片表格——这就是典型的 AJAX：点击 → 发请求 → 局部刷新。
+
+### 3.2 专业技巧：让 Playwright 替你"抓包"
+
+不用肉眼盯着 Network 面板，可以直接让 Playwright 在点击时把请求录下来：
+
+```python
+from playwright.sync_api import sync_playwright
+
+captured = []
+with sync_playwright() as p:
+    browser = p.chromium.launch(headless=True)
+    page = browser.new_page()
+
+    # 注册响应监听器：记录所有 XHR/Fetch 的 URL 和状态码
+    page.on("response", lambda r: captured.append((r.status, r.url))
+            if "ajax" in r.url or "api" in r.url else None)
+
+    page.goto("https://www.scrapethissite.com/pages/ajax-javascript/",
+              wait_until="networkidle")
+    page.get_by_text("2015", exact=True).click()   # 点击年份按钮
+    page.wait_for_selector(".film")                # 等表格行出现
+    browser.close()
+
+print("抓到的请求:", captured)
+# 你会看到: (200, 'https://www.scrapethissite.com/pages/ajax-javascript/?ajax=true&year=2015')
+```
+
+> `page.on("response", ...)` 是网络监听器；`get_by_text(..., exact=True)` 用文本定位按钮，比写 CSS 选择器更稳。这两招在真实项目里非常常用。
+
+### 3.3 拿到接口后，扔掉浏览器
+
+我已实测该接口直接返回 JSON，字段为 `title` / `year` / `awards` / `nominations` / `best_picture`：
+
+```python
+import requests
+
+url = "https://www.scrapethissite.com/pages/ajax-javascript/"
+films = requests.get(url, params={"ajax": "true", "year": 2015}, timeout=10).json()
+
+for f in films:
+    print(f["title"].strip(), "| 获奖", f["awards"], "| 提名", f["nominations"])
+```
+
+**这就是完整工作流**：
+
+```
+Playwright 观察交互 → 监听器抓到真实接口 → requests 直接调用 → 生产脚本里不再需要浏览器
+```
+
+> **记住这句话**：Playwright 经常是"发现接口的工具"，而不是"天天干活的苦力"。
+
+## 四、什么时候真的必须上 Playwright
+
+以下情况没有干净的接口可用，才值得付浏览器的成本：
+
+| 场景 | 为什么 requests 搞不定 | Playwright 做什么 |
+| --- | --- | --- |
+| 无限滚动 | 没有页码，滚动到底才加载下一批 | 循环 `mouse.wheel` 直到条目数不再增加 |
+| 登录后才可见 | 接口需要完整会话和动态令牌 | 走一遍登录流程，导出 `storage_state` 复用 |
+| 需要复杂交互 | 要先选日期、勾筛选、点弹窗才出数据 | 模拟真人操作序列 |
+| Canvas / 图形渲染 | 数据画在 canvas 里，DOM 里没有文本 | 截图 OCR，或拦截绘图用的数据请求 |
+
+### 4.1 无限滚动通用模板
 
 ```python
 from playwright.sync_api import sync_playwright
 
 with sync_playwright() as p:
-    browser = p.chromium.launch(headless=True)  # headless=True = 无头模式
-    page = browser.new_page()
-    page.goto("https://example.com/list", timeout=30000)
-    page.wait_for_selector(".book")             # 等元素出现
-    html = page.content()                        # 拿到渲染后的 HTML
+    browser = p.chromium.launch(headless=True)
+    page = browser.new_page(viewport={"width": 1280, "height": 900})
+    page.goto("https://example.com/feed", wait_until="domcontentloaded")
+
+    last_count = 0
+    for _ in range(50):                      # 设上限，防止死循环
+        page.mouse.wheel(0, 5000)            # 向下滚动一屏
+        page.wait_for_timeout(600)           # 这里硬等是合理的：等 AJAX 回来
+        count = page.locator(".item").count()
+        if count == last_count:              # 连续两轮数量不变 = 到底了
+            break
+        last_count = count
+
+    items = page.locator(".item").all_text_contents()
     browser.close()
+
+print("采集条目:", len(items))
 ```
 
-> Playwright 需要本地安装，**无法在浏览器运行器里执行**——请在电脑上跑。
->
-> 安装命令：`pip install playwright`，然后 `playwright install` 下载浏览器内核。
+### 4.2 复用登录态（避免每次重新登录）
 
-### Playwright 流程图解
+```python
+# 第一次：人工登录一次，把 Cookie/localStorage 存下来
+context = browser.new_context()
+page = context.new_page()
+page.goto("https://example.com/login")
+page.fill("input[name=username]", "你的账号")
+page.fill("input[name=password]", "你的密码")
+page.click("button[type=submit]")
+page.wait_for_url("**/dashboard")
+context.storage_state(path="state.json")     # 导出登录态
 
+# 之后：直接加载登录态，跳过登录步骤
+context = browser.new_context(storage_state="state.json")
 ```
-launch()        → 启动浏览器实例
-new_page()      → 打开新标签页
-goto()          → 导航到目标 URL
-wait_for_selector() → 等待目标元素出现（等 JS 渲染）
-content()       → 获取渲染后的完整 HTML
-```
 
-## 三、等待与交互
+> `state.json` 含敏感凭据，务必加入 `.gitignore`，不要提交到仓库。
 
-Playwright 提供丰富的等待和交互方法：
+## 五、Playwright 专业用法速查
 
-| 方法 | 含义 | 示例 |
+### 5.1 同步还是异步
+
+| API | 导入方式 | 适合场景 |
 | --- | --- | --- |
-| `wait_for_selector` | 等元素出现 | `page.wait_for_selector(".book")` |
-| `wait_for_timeout` | 硬等 N 毫秒（兜底） | `page.wait_for_timeout(1000)` |
-| `click` | 点击按钮 | `page.click(".load-more")` |
-| `fill` | 填写表单 | `page.fill("input[name='q']", "搜索词")` |
-| `evaluate` | 执行 JS | `page.evaluate("document.title")` |
+| 同步 `sync_api` | `from playwright.sync_api import sync_playwright` | 脚本简单、顺序执行，**入门首选** |
+| 异步 `async_api` | `from playwright.async_api import async_playwright` | 并发抓多个页面，配合 `asyncio` |
 
-> **优先用 `wait_for_selector` 而不是 `wait_for_timeout`**。前者是条件等待（等元素出现就继续），后者是硬等固定时间（不管元素出来没都得等）。
+### 5.2 等待策略（这是最容易踩坑的地方）
 
-## 四、可运行：解析渲染后的 HTML
+| 方法 | 机制 | 建议 |
+| --- | --- | --- |
+| `wait_for_selector(".item")` | 条件等待，元素出现即继续 | ⭐ 首选 |
+| `expect(locator).to_have_count(10)` | 自动重试断言 | ⭐ 更专业的写法 |
+| `wait_for_load_state("networkidle")` | 等 500ms 无网络活动 | 谨慎：有长连接的站点永远不 idle |
+| `wait_for_timeout(1000)` | 死等 1 秒 | 仅作兜底，能不用就不用 |
 
-Playwright 拿到的 `page.content()` 和静态页一样用 BS4 解析。补全下面的提取逻辑：
+```python
+from playwright.sync_api import expect
+
+expect(page.locator(".quote")).to_have_count(10)   # 自动等到 10 个或超时
+```
+
+> **坑**：`networkidle` 在带 WebSocket、轮询心跳的页面上会一直等，最后超时。遇到这种情况改用 `wait_for_selector` 等具体元素。
+
+### 5.3 定位元素的优先级
+
+1. `get_by_role("button", name="下一页")` —— 语义定位，最抗改版
+2. `get_by_text("2015", exact=True)` —— 文本定位，适合按钮/标签
+3. `[data-testid="price"]` —— 测试专用属性，网站不改就一直有效
+4. `.list > .item:nth-child(2)` —— CSS 结构定位，最脆弱，放最后
+
+### 5.4 资源一定要关
+
+```python
+from playwright.sync_api import sync_playwright
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(headless=True)
+    try:
+        context = browser.new_context()
+        page = context.new_page()
+        # ... 你的操作
+    finally:
+        context.close()
+        browser.close()      # 不关会留下僵尸进程，越跑越卡
+```
+
+### 5.5 常见报错速查
+
+| 报错 / 现象 | 常见原因 | 排查方向 |
+| --- | --- | --- |
+| `TimeoutError: waiting for locator` | 选择器写错、元素在 iframe 里、页面没加载完 | 先用 `page.content()` 存下 HTML 检查 |
+| 抓到 0 条数据 | JS 还没跑完就取值 | 加 `wait_for_selector` 或 `expect` |
+| `networkidle` 超时 | 页面有长连接 | 换成等具体元素 |
+| `headless` 下正常、有头模式不同 | 字体/视口差异 | 固定 `viewport` 参数 |
+| 浏览器启动失败 | 没下载内核 | 执行 `playwright install chromium` |
+| 跑久了内存暴涨 | 浏览器没关闭 | 用 `try/finally` 或 `with` 管理 |
+
+> **环境安装**（本地执行，浏览器运行器里跑不了 Playwright）：
+> `pip install playwright` → `playwright install chromium`
+
+## 六、可运行练习：解析渲染后的 HTML
+
+Playwright 的 `page.content()` 拿到的仍是标准 HTML，交给 BS4 处理即可。下面这段在课程运行器里可以真实执行：
 
 <CodeRunner
   variant="guided"
@@ -84,29 +323,56 @@ soup = BeautifulSoup(rendered, "lxml")
 for li in soup.select("li.book"):
     print(li.select_one(".title").get_text(strip=True))`} />
 
-## 五、什么时候才上 Playwright
+再来一个贴近真实接口的练习——给定第 2 节 API 返回的 JSON 结构，统计高产作者。先自己想思路，再点运行对照：
 
-| 场景 | 推荐方案 | 理由 |
+<CodeRunner
+  variant="guided"
+  title="统计 API 返回里的高产作者"
+  prompt="任务:data 是从 /api/quotes?page=1 拿到的真实结构。统计每位作者的名言数，按数量降序打印 '作者: 数量'。想想 author 是嵌套对象，怎么取到 name？"
+  code={`import json
+from collections import Counter
+
+data = json.loads('{"quotes":[{"text":"q1","author":{"name":"Albert Einstein"},"tags":["a"]},{"text":"q2","author":{"name":"Jane Austen"},"tags":["b"]},{"text":"q3","author":{"name":"Albert Einstein"},"tags":["c"]}]}')
+
+# 思路:逐条取出 author.name 累加计数,再用 most_common 降序排列
+counts = Counter()
+for q in data["quotes"]:
+    counts[q["author"]["name"]] += 1
+
+for name, n in counts.most_common():
+    print(f"{name}: {n}")`} />
+
+## 七、合规与礼节（真实站点必读）
+
+技术能做，不代表可以做。对真实网站动手前，按这个清单自查：
+
+| 检查项 | 具体做法 |
+| --- | --- |
+| 看 `robots.txt` | 访问 `https://站点/robots.txt`，确认目标路径没有被 `Disallow` |
+| 看服务条款 | 商业站点常明确禁止自动化抓取，尤其登录后的内容 |
+| 控制频率 | 加 `time.sleep()` 或用随机间隔；别让爬虫把人家服务器打满 |
+| 不碰个人信息 | 用户名、手机号、私信、订单等数据不要抓，更不要存 |
+| 不当免费劳动力 | 能公开接口拿到的就别模拟登录绕限制 |
+| 优先官方 API | 有开放 API 就用 API，这是又快又体面的路 |
+
+> **练习推荐**：本章两个案例站（`quotes.toscrape.com`、`scrapethissite.com`）都是公开声明用于爬取教学练习的沙盒，放心拿它们练手。真实商业站点请遵守上述准则。
+
+## 八、方案选择速查表
+
+| 页面特征 | 首选方案 | 备选 |
 | --- | --- | --- |
-| 有 JSON 接口 | 第 9 章：`requests` + `resp.json()` | 最快、最稳定 |
-| 数据在 HTML 源码 | requests + BS4 | 直接解析，无需浏览器 |
-| 纯 JS 渲染，无接口 | Playwright | 必须，但重且慢 |
+| 源码里就有数据 | requests + BS4 | — |
+| Network 里有 JSON 接口 | requests + `resp.json()` ⭐ | — |
+| 点击后才出数据，能找到 AJAX 接口 | 找到接口 + requests | Playwright 抓包定位接口 |
+| 无限滚动 / 必须登录 / 复杂交互 | Playwright | 先看有没有隐藏接口 |
+| 数据在 Canvas 里 | 拦截绘图请求 | 截图 + OCR |
 
-> **能不用 Playwright 就不用**。它比 `requests` 慢 10-100 倍，因为要启动完整浏览器。只有当你没有其他选择时才用它。
+## 九、小结
 
-### 方案对比
+- **三层定位法**：源码 → Network 接口 → 渲染，按顺序排查，成本从低到高。
+- **真实案例一**：`quotes.toscrape.com/js/` 是 JS 渲染页，但有 `/api/quotes?page=N` 接口，用 `has_next` 翻页，根本不用浏览器。
+- **真实案例二**：`scrapethissite.com` 点年份触发 AJAX，用 `page.on("response")` 抓到 `?ajax=true&year=2015` 接口，再改用 requests。
+- **Playwright 的正确定位**：发现接口的工具 + 处理无限滚动/登录态等必须交互的场景，不是默认选项。
+- **工程习惯**：条件等待优先、元素定位按语义优先级、浏览器必须关闭、真实站点先查合规。
 
-| 方案 | 速度 | 稳定性 | 适用场景 |
-| --- | --- | --- | --- |
-| 抓接口（requests） | ⚡⚡⚡ 最快 | ⭐⭐⭐ 最稳 | 有 JSON API 的现代站 |
-| 静态 HTML（BS4） | ⚡⚡ 快 | ⭐⭐ 好 | 老式静态页 |
-| Playwright（浏览器） | 🐢 慢 | ⭐ 中等 | 纯 JS 渲染页 |
-
-## 六、小结
-
-- 判断动态：源码搜不到 + 无接口 → 需浏览器自动化。
-- Playwright 流程：launch → goto → wait → content → BS4。
-- 能用接口/静态就别用 Playwright，重且慢。
-- 本地安装：`pip install playwright` + `playwright install`。
-
-下一章：反爬——即使你的爬虫写得再好，也会被站点拦。怎么绕过？
+下一章：反爬——即使你的爬虫写得再好，也会被站点拦。怎么应对？
