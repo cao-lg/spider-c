@@ -86,6 +86,8 @@ export interface CodeEditor {
   setValue(v: string): void;
   focus(): void;
   setReadOnly(v: boolean): void;
+  /** 容器从隐藏变为可见(如 <details> 展开)后重新测量高度 */
+  resize(): void;
 }
 
 const INDENT = '    ';
@@ -127,12 +129,12 @@ export function createCodeEditor(opts: CodeEditorOptions): CodeEditor {
 
   function paint() {
     // 结尾补一个换行,避免最后一行空行时高亮层高度不足
+    // 注意:高亮层是 position:absolute + overflow:hidden,不参与布局高度,
+    // 所以这里多出的 \n 不需要在行号列补空 div(补了反而撑高容器造成下方空白)。
     codeEl.innerHTML = highlightPython(input.value + '\n');
     const lines = input.value.split('\n').length;
-    // 补一个空行号,匹配高亮层多出的 \n 产生的最后一行
     let nums = '';
     for (let i = 1; i <= lines; i++) nums += `<div>${i}</div>`;
-    nums += '<div></div>'; // 空行号对齐高亮层
     gutter.innerHTML = nums;
     applyReadOnly();
     grow();
@@ -145,10 +147,15 @@ export function createCodeEditor(opts: CodeEditorOptions): CodeEditor {
   }
 
   function grow() {
-    const lineHeight = parseFloat(getComputedStyle(input).lineHeight) || 22;
-    const minH = lineHeight * minRows;
-    input.style.height = 'auto';
-    input.style.height = `${Math.max(minH, input.scrollHeight)}px`;
+    const cs = getComputedStyle(input);
+    const lineHeight = parseFloat(cs.lineHeight) || 22;
+    const padV = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+    // 按「行数 × 行高 + 上下内边距」直接算高度,而不是读 scrollHeight。
+    // 原因:编辑器可能被包在 <details> 里,创建时处于 display:none,
+    // 此时 scrollHeight === 0,会把 textarea 压到 minRows 高度;
+    // 而行号 gutter 有全部行号、撑高了外层容器,两者不一致 => 代码下方出现大片空白 + 多余滚动条。
+    const lines = Math.max(minRows, input.value.split('\n').length);
+    input.style.height = `${Math.ceil(lineHeight * lines + padV)}px`;
   }
 
   function syncScroll() {
@@ -244,6 +251,12 @@ export function createCodeEditor(opts: CodeEditorOptions): CodeEditor {
     setReadOnly: (v: boolean) => {
       input.readOnly = v;
       applyReadOnly();
+    },
+    resize: () => {
+      // 此时容器已可见,scrollHeight 可靠:直接用内容真实高度,确保填满容器、无空白、无多余滚动条。
+      input.style.height = 'auto';
+      input.style.height = `${input.scrollHeight}px`;
+      syncScroll();
     },
   };
 }

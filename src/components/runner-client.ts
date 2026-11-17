@@ -171,7 +171,11 @@ class PyRunner extends HTMLElement {
           : this.variant === 'challenge'
             ? '查看参考代码(先自己尝试)'
             : '展开代码';
-        if (this.revealed) this.editor.focus();
+        if (this.revealed) {
+          // 从 display:none 变为可见后重新测量,避免 textarea 高度停留在创建时的错误值
+          this.editor.resize();
+          this.editor.focus();
+        }
       });
     }
   }
