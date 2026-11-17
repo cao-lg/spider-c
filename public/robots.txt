@@ -24,4 +24,4 @@ User-agent: *
 Disallow: /private/
 Disallow: /admin/
 
-Sitemap: https://crawler-course.app.workbuddy.host/sitemap.xml
+Sitemap: https://spider-c.pages.dev/sitemap.xml

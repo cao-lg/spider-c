@@ -5,7 +5,7 @@ import { lessons, units, courseTests } from '../data/course';
 export const prerender = true;
 
 // 单一来源:跟随 astro.config.mjs 的 site,换域名时不必再改这里。
-const SITE = (import.meta.env.SITE ?? 'https://crawler-course.app.workbuddy.host').replace(/\/$/, '');
+const SITE = (import.meta.env.SITE ?? 'https://spider-c.pages.dev').replace(/\/$/, '');
 
 export const GET: APIRoute = () => {
   const paths: string[] = [
