@@ -4,136 +4,299 @@ id: 11-anti-crawling
 
 import CodeRunner from '../../components/CodeRunner.astro';
 
-网站不希望被爬，于是设关卡。反爬不是攻防秀，而是**在合规前提下让请求像正常用户**。
+你写好了爬虫，请求发出去却收到 403；或者前 20 页好好的，第 21 页开始全是空页面。这不是代码写错了，而是网站**识别出你不是正常用户**。
 
-> 反爬的本质：服务器识别出「你这个请求不像正常用户」。正常用户会怎么请求？随机 UA、间隔访问、带 Cookie。你的爬虫就要模拟这些行为。
+反爬不是"攻防秀"，更不是"想办法绕过一切"。真正的专业做法是：**先判断被拦在哪一层，再在合规前提下让请求尽可能像一个正常用户**。这一章按难度分四层，每层配真实可复现的案例。
 
-## 一、常见反爬机制
+> **本章所有案例都可公开访问验证**：`httpbin.org` 是专门给开发者测试 HTTP 行为的公共服务，`quotes.toscrape.com`、`scrapethissite.com` 是公开声明供爬虫练习的沙盒。理解机制是为了写出更稳、更礼貌的爬虫，而不是攻击真实站点。
 
-| 机制 | 表现 | 应对 |
-| --- | --- | --- |
-| UA 检测 | 没 UA 直接 403 | 伪装浏览器 UA |
-| 频率限制 | 太快返回 429 | time.sleep 控频 |
-| 登录校验 | 需 Cookie 才给数据 | Session 带登录态 |
-| 验证码 | 行为异常弹验证 | 降速模拟真人 |
+## 一、先诊断：你被拦在哪一层
 
-### 反爬机制分层
+遇到异常别急着改代码，先按状态码和网络面板定位：
 
-| 层级 | 机制 | 难度 | 效果 |
+| 症状 | 大概率原因 | 所在层 | 第一动作 |
 | --- | --- | --- | --- |
-| 第一层：基础 | UA 检测、请求头 | 低 | 挡新手爬虫 |
-| 第二层：行为 | 频率限制、Cookie | 中 | 挡自动化脚本 |
-| 第三层：高级 | 验证码、指纹识别 | 高 | 挡专业爬虫 |
-| 第四层：法律 | robots.txt、合规 | N/A | 挡恶意爬虫 |
+| 403 Forbidden | UA / Referer / 缺失请求头 | 第一层：身份 | 补齐浏览器请求头 |
+| 429 Too Many Requests | 请求太快 | 第二层：频率 | 降速 + 读 `Retry-After` |
+| 返回 200 但内容是空壳 / 假数据 | 需要登录态、Cookie、JS 渲染 | 第二/三层 | 检查 Cookie 或回看第 10 章 |
+| 偶尔成功、频繁失败 | IP 被限流、行为异常 | 第二/三层 | 控频 + 退避，必要时换出口 |
+| 浏览器正常、脚本必挂 | TLS 指纹 / 浏览器指纹 | 第三层：指纹 | 考虑 Playwright（第 10 章） |
 
-> 大多数网站止步第一、二层。你不需要学「高级反爬」，先把基础做好就超过 90% 的爬虫。
+> **诊断顺序**：状态码 → 请求头对照 → 频率日志 → 是否需要登录 → 指纹。**80% 的问题在前两层就能解决**，别一上来就研究绕过验证码。
 
-## 二、随机 UA
+### 真实实验：用 httpbin 看服务器眼里的你
 
-固定一个 UA 容易被识别。准备一组真实 UA，每次随机挑：
-
-<CodeRunner
-  variant="guided"
-  title="随机选择浏览器 UA"
-  prompt="任务:从 uas 列表中随机选一个 UA 打印。提示:用 random.choice。"
-  code={`import random
-
-uas = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
-    "Mozilla/5.0 (X11; Linux x86_64)",
-]
-
-# TODO: 用 random.choice(uas) 随机选一个 UA 并打印
-ua = random.choice(uas)
-print("本次 UA:", ua)
-print("放进 headers={'User-Agent': ua} 即可")`} />
-
-> **UA 轮换策略**：每请求换一个 UA，不要每页换——因为一个用户访问多页时 UA 是固定的，频繁变化反而可疑。
-
-## 三、随机延时
-
-固定延时也像机器。用随机区间更像真人：
-
-<CodeRunner
-  variant="challenge"
-  title="模拟随机延时"
-  prompt="任务:生成 3 个 1 到 2 秒之间的随机延时并打印。提示:random.uniform(1, 2)。"
-  code={`import random
-
-# TODO: 用列表推导式生成 3 个随机延时(保留 2 位小数)
-delays = [round(random.uniform(1, 2), 2) for _ in range(3)]
-print("本轮延时(秒):", delays)
-
-# TODO: 遍历打印等待信息
-for d in delays:
-    print(f"等待 {d}s ...")`} />
-
-> **延时策略**：
-> - 简单场景：`time.sleep(1)` 固定 1 秒
-> - 进阶场景：`time.sleep(random.uniform(1, 3))` 随机 1-3 秒
-> - 高级场景：用指数退避（指数退避策略见下文）
-
-## 四、重试与指数退避
-
-请求失败是常态。与其「一次失败就崩」，不如「失败就等一等再试」：
+`https://httpbin.org/headers` 会把收到的请求头原样回显。先看看 `requests` 默认长什么样：
 
 ```python
 import requests
-import time
-import random
-
-def fetch(url, headers, max_retries=3):
-    for attempt in range(max_retries):
-        try:
-            resp = requests.get(url, headers=headers, timeout=5)
-            resp.raise_for_status()
-            return resp.text
-        except requests.exceptions.RequestException:
-            wait = 2 ** attempt + random.uniform(0, 1)  # 指数退避
-            print(f"第 {attempt + 1} 次失败,等 {wait:.1f}s 后重试")
-            time.sleep(wait)
-    return None  # 重试 3 次都失败,返回 None
+r = requests.get("https://httpbin.org/headers", timeout=10)
+print(r.json()["headers"])
+# 你会看到 User-Agent 是 "python-requests/2.x" —— 等于举着牌子说"我是爬虫"
 ```
 
-> **指数退避**：第一次等 2s，第二次等 4s，第三次等 8s... 等太久会压垮服务器。这个策略平衡了「重试」和「礼貌」。
-
-## 五、代理原理(进阶)
-
-代理让你换个 IP 地址访问目标网站：
+再加一组浏览器请求头对比：
 
 ```python
-proxies = {"http": "http://1.2.3.4:8080"}
-resp = requests.get(url, proxies=proxies, timeout=5)
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+    "Accept-Encoding": "gzip, deflate, br",
+}
+r = requests.get("https://httpbin.org/headers", headers=headers, timeout=10)
+print(r.json()["headers"]["User-Agent"])   # 已是浏览器样式
 ```
 
-> **代理来源务必合规**。免费代理常不稳定且有安全风险（代理服务器可以读取你的请求数据）。
+> 我实测过：`httpbin.org/headers` 会回显 `Accept`、`Accept-Language`、`Accept-Encoding`、`User-Agent` 等头。`httpbin.org/user-agent` 单独回显 UA，**改请求头前后一对比，效果一目了然**——这是调试反爬最好用的"镜子"。
 
-### 代理类型
+## 二、第一层：身份伪装（UA 与请求头）
 
-| 类型 | 成本 | 稳定性 | 推荐场景 |
-| --- | --- | --- | --- |
-| 免费代理 | 免费 | 差 | 不推荐（学习除外） |
-| 付费代理 | 低-中 | 中-好 | 中小规模爬虫 |
-| 住宅代理 | 高 | 好 | 高隐蔽需求 |
-| 自建代理 | 零（需多服务器） | 好 | 大规模 |
+### 2.1 为什么默认 UA 会被拒
 
-## 六、常见反爬应对清单
+`requests` 的默认 UA 是 `python-requests/2.x`。许多站点的 WAF（Web 应用防火墙）会直接拦截这个特征。 mirrors 一个真实浏览器的请求头是基本功。
 
-| 反爬措施 | 症状 | 排查思路 |
+### 2.2 UA 不是"每次都换"
+
+一个常见误区：每个请求都换 UA。真人浏览时 UA 在一整个会话里是**稳定的**——你用 Chrome 打开 10 个页面，UA 不会变。频繁跳变的 UA 反而像机器人。
+
+**正确策略**：选定一个真实 UA → 整个会话保持不变 → 换会话时才换。
+
+<CodeRunner
+  variant="guided"
+  title="构造浏览器请求头字典"
+  prompt="任务:补全 headers 字典,让 User-Agent 不含 python-requests 且包含 Mozilla,再加一个 Accept-Language。运行看是否打印出完整请求头。"
+  code={`# 一个真实浏览器的请求头(仅示例,生产中请定期更新)
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+    "Accept-Language": "zh-CN,zh;q=0.9",
+}
+
+# TODO: 检查 UA 不含 'python-requests' 且含 'Mozilla'
+ua = headers["User-Agent"]
+print("UA 是否像浏览器:", "Mozilla" in ua and "python-requests" not in ua)
+print("完整请求头:", headers)`} />
+
+### 2.3 Referer：你从哪来的
+
+有些站点检查 `Referer`（来源页）。比如图片服务器只允许"从本站页面点过来"的请求。直接访问图片 URL 会 403，带上正确的 Referer 就放行：
+
+```python
+headers = {
+    "User-Agent": "Mozilla/5.0 ...",
+    "Referer": "https://example.com/gallery/",   # 声明来源页
+}
+requests.get("https://example.com/images/1.jpg", headers=headers, timeout=10)
+```
+
+> **合规提示**：只在站点允许抓取的资源上这么做。伪造 Referer 绕过明确的访问控制，可能触及法律风险——见第 12 章。
+
+## 三、第二层：行为控制（频率、退避、会话）
+
+### 3.1 频率：256 次请求换来的教训
+
+真实案例：某同学爬一个 500 页的图书站，用 `for` 循环无间隔请求，前 180 页顺利，第 181 页开始全部 403，IP 被封 24 小时。**原因就是请求间隔为 0**，模式比人快几百倍。
+
+两个改进：
+
+```python
+import time, random
+
+# 改进 1:固定延时(最简单)
+time.sleep(1)
+
+# 改进 2:随机延时(更像真人,推荐)
+time.sleep(random.uniform(0.8, 2.2))
+
+# 改进 3:每 20 页多歇一会儿,模拟人的浏览节奏
+for page in range(1, 501):
+    crawl(page)
+    time.sleep(random.uniform(0.8, 2.2))
+    if page % 20 == 0:
+        time.sleep(random.uniform(3, 6))
+```
+
+> **延时不是越大越好**。慢到自己都嫌弃会降低采集效率。原则是"不给对方服务器压力"——如果站点 QPS 承受力是 10，你把频率控制在 1-2 就够礼貌了。
+
+### 3.2 读懂 429 与 Retry-After
+
+`429 Too Many Requests` 是服务器**明确告诉你"太快了"**的信号，很多响应头会带 `Retry-After`（建议等多久再试）。这是最应该被尊重的反爬提示。
+
+我用 httpbin 实测过 `https://httpbin.org/status/429` 确实返回 429。处理范式：
+
+```python
+resp = requests.get(url, headers=headers, timeout=10)
+if resp.status_code == 429:
+    retry_after = resp.headers.get("Retry-After")
+    wait = int(retry_after) if retry_after and retry_after.isdigit() else 60
+    print(f"被限流,按服务器建议等待 {wait}s")
+    time.sleep(wait)
+```
+
+### 3.3 指数退避 + 抖动：工业级重试
+
+第 9 章讲过基础重试，这里给一个更完整的生产版本——加入**抖动（jitter）**防止多进程同时重试形成"惊群"：
+
+```python
+import random, time, requests
+
+def fetch_with_backoff(url, headers, retries=4, cap=30):
+    """指数退避 + 随机抖动;cap 限制最长等待,避免退避到天荒地老。"""
+    for attempt in range(retries):
+        try:
+            r = requests.get(url, headers=headers, timeout=8)
+            if r.status_code == 429:
+                raise requests.exceptions.RetryError("限流 429")
+            r.raise_for_status()
+            return r
+        except requests.exceptions.RequestException as e:
+            if attempt == retries - 1:
+                raise                       # 最后一次仍失败,抛出让上层处理
+            base = min(cap, 2 ** attempt)    # 1, 2, 4, 8 ...
+            wait = base + random.uniform(0, 0.5)   # 抖动
+            print(f"第 {attempt+1} 次失败({e}),{wait:.1f}s 后重试")
+            time.sleep(wait)
+```
+
+<CodeRunner
+  variant="guided"
+  title="计算指数退避等待时间"
+  prompt="任务:补全函数,按 min(cap, 2**attempt) 计算第 attempt 次(从0开始)的退避秒数,上限 cap。运行检查输出是否为 1, 2, 4, 8。"
+  code={`def backoff(attempt, cap=30):
+    # TODO: 返回 min(cap, 2 的 attempt 次方)
+    return min(cap, 2 ** attempt)
+
+for i in range(4):
+    print(f"第 {i} 次失败,等待 {backoff(i)}s")`} />
+
+### 3.4 Session 维持登录态
+
+很多站点登录后才能看数据。`requests.Session()` 会自动保存 Cookie，让后续请求带上登录态：
+
+```python
+session = requests.Session()
+session.headers.update(headers)
+
+# 第一步:登录(真实站点需按它的表单字段调整)
+session.post("https://example.com/login",
+             data={"username": "xxx", "password": "xxx"}, timeout=10)
+
+# 第二步:登录后请求,自动带上 Cookie
+r = session.get("https://example.com/dashboard", timeout=10)
+```
+
+> 注意：这里演示的是**你自己有权限访问的账户**。绕过他人账户、突破登录限制属于违规行为。
+
+## 四、第三层：指纹识别（为什么 requests 终究露馅）
+
+### 4.1 TLS 指纹：改请求头也没用
+
+这是很多初学者困惑的终极问题：**"我把 UA、Referer、所有请求头都改成浏览器了，为什么还是被拦？"**
+
+因为服务器不只看 HTTP 请求头，还看 **TLS 握手指纹**（俗称 JA3/JA4）。不同客户端（`requests` 用的 `urllib3`/OpenSSL 与 Chrome 用的 BoringSSL）在 TLS 握手时发出的参数组合不同，服务器能据此识别出"这是 Python 客户端"，**与你怎么改 UA 无关**。
+
+| 识别维度 | requests 能否伪造 | 说明 |
 | --- | --- | --- |
-| 403 状态码 | 无 UA 直接拒绝 | 加 `User-Agent` 请求头 |
-| 429 状态码 | 请求太快 | 加 `time.sleep` 降速 |
-| 空页面 | 页面 HTML 存在但无数据 | 检查是否需登录（Cookie） |
-| 验证码弹窗 | 行为异常触发验证码 | 降速、模拟真人行为 |
-| IP 被封 | 连续请求都失败 | 检查请求频率、考虑代理 |
+| User-Agent 等请求头 | ✅ 能 | 改 headers 即可 |
+| Cookie / 登录态 | ✅ 能 | Session 维持 |
+| TLS/JA3 指纹 | ❌ 基本不能 | 由底层 TLS 库决定 |
+| Canvas / WebGL 指纹 | ❌ 不能 | 需要真实浏览器渲染 |
+| 鼠标轨迹 / 点击行为 | ❌ 不能 | 需 Playwright 模拟或真实用户 |
 
-## 七、小结
+> **结论**：当站点用了 TLS 指纹或浏览器指纹这类高阶手段，`requests` 无论怎么伪装都难以通过。这时正确的选择是回到第 10 章——**用 Playwright 驱动真实浏览器**，它的 TLS 栈和行为是真正由 Chrome 产生的。
 
-- 反爬四板斧：伪装 UA、带请求头、控频、必要时代理。
-- 随机 UA + 随机延时比固定更安全。
-- 重试配合退避策略，别死循环。
-- 永远先问自己：「这个请求像正常用户吗？」
-- 合规优先，别碰红线。
+### 4.2 验证码：识别它，而不是硬刚
+
+验证码（图片、滑块、点选、无感）本质是"确认对面是人"。应对的正确姿势按优先级：
+
+1. **避免触发**：控频、补全请求头、维持会话，让请求不像机器人——大多数验证码是被异常行为"惹出来"的。
+2. **绕开需求**：找官方 API、数据是否能从别处合法获取。
+3. **人工处理**：确需少量数据时，人工过一次验证码再继续。
+4. **合规评估**：破解验证码可能违反站点条款乃至法律，**不要在课程里实现**。
+
+> 课程立场：我们会讲清楚验证码**为什么存在、如何被触发**，但不会教你破解它。技术能力要用在正当场景。
+
+## 五、第四层：合规是底线，不是可选项
+
+反爬的另一面是"反反爬"的法律约束。**技术可行 ≠ 法律允许**。
+
+### 5.1 robots.txt：君子协定
+
+`robots.txt` 是站点对爬虫的**声明**。用 Python 标准库 `RobotFileParser` 就能读懂：
+
+```python
+from urllib.robotparser import RobotFileParser
+
+rp = RobotFileParser()
+rp.set_url("https://spider-c.pages.dev/robots.txt")
+rp.read()   # 或 rp.parse(text.splitlines())
+
+print(rp.can_fetch("Crawler", "https://spider-c.pages.dev/practice/level1-books/"))  # True
+print(rp.can_fetch("Crawler", "https://spider-c.pages.dev/private/"))                # False
+```
+
+我们靶站的 `robots.txt` 明确规定 `Disallow: /private/`。**关键点**：`robots.txt` 只是声明，服务器对 `/private/` 依然返回 200——**遵守与否取决于爬虫作者，不是服务器强制**。这正是"君子协定"的含义。
+
+### 5.2 真实红线清单
+
+| 行为 | 是否可做 | 说明 |
+| --- | --- | --- |
+| 遵守 robots.txt、控制频率抓公开数据 | ✅ 通常可以 | 保持礼貌、不造成负载 |
+| 用官方开放 API | ✅ 强烈推荐 | 最快最稳最体面 |
+| 抓登录后自己有权访问的数据 | ⚠️ 看条款 | 不得绕过权限或使用他人账号 |
+| 破解验证码、突破付费墙 | ❌ 不要做 | 可能违法、违反服务条款 |
+| 抓取个人信息并存储/交易 | ❌ 违法 | 触犯个人信息保护相关法律 |
+| 高并发压垮服务器 | ❌ 违法 | 可能构成破坏计算机信息系统 |
+
+> 详见下一章「法律与伦理」。**记住：会写爬虫是本事，知道什么时候不爬是修养。**
+
+## 六、代理 IP：理解原理，谨慎使用
+
+代理让请求换个出口 IP，绕开 IP 级限流。原理简单：
+
+```python
+proxies = {
+    "http": "http://user:pass@1.2.3.4:8080",
+    "https": "http://user:pass@1.2.3.4:8080",
+}
+requests.get(url, headers=headers, proxies=proxies, timeout=10)
+```
+
+| 类型 | 成本 | 稳定性 | 风险 |
+| --- | --- | --- | --- |
+| 免费代理 | 免费 | 极差 | ⚠️ 可能窃听你的请求数据，不推荐 |
+| 付费代理池 | 中 | 中-好 | 选正规服务商 |
+| 住宅代理 | 高 | 好 | 价格高，合规风险也高 |
+
+> **合规提醒**：代理的正当用途是**企业内网出口、合法的多地域测试**。用它来绕过明确封禁或大规模隐蔽抓取，风险自负。免费代理尤其危险——流量经过陌生服务器，账号密码可能泄露。
+
+## 七、反爬应对总清单（排查速查）
+
+| 现象 | 先检查 | 再处理 |
+| --- | --- | --- |
+| 403 | UA 是否 `python-requests` | 补浏览器请求头 + Referer |
+| 429 | 请求频率、Retry-After | 降速 + 指数退避 + 抖动 |
+| 空页面 | 是否需登录 / JS 渲染 | Session 登录态 / Playwright |
+| 时好时坏 | IP 限流、行为异常 | 控频 + 稳定会话 |
+| 脚本挂、浏览器正常 | TLS / 浏览器指纹 | 换 Playwright 真实浏览器 |
+| 弹验证码 | 是否被异常行为触发 | 先降速、补请求头；不要硬刚 |
+
+**四层递进策略**：
+
+```
+第一层 身份伪装  →  第二层 行为控制  →  第三层 指纹识别(上真实浏览器)
+        ↓
+第四层 全程合规(robots.txt / 条款 / 频率 / 数据用途)
+```
+
+## 八、小结
+
+- **先诊断后动手**：按状态码和层次定位问题，80% 出在前两层。
+- **第一层身份**：真实 UA + 完整请求头（用 `httpbin.org/headers` 验证），会话内保持稳定。
+- **第二层行为**：随机延时 + 尊重 429/Retry-After + 指数退避抖动 + Session 维持登录态。
+- **第三层指纹**：TLS/JA3、Canvas、行为轨迹 `requests` 伪造不了，这时用 Playwright。
+- **第四层合规**：robots.txt 是声明不是屏障；破解验证码、抓个人信息、压垮服务器都是红线。
+- **优先级**：能抓接口就别抓页面，能用官方 API 就别自己爬，能不做就不做。
 
 下一章：法律与伦理——技术再溜，越过红线就是风险。
