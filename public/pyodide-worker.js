@@ -55,8 +55,9 @@ async function ensureInit() {
       'except Exception:\n' +
       '    SITE_BASE = ""\n',
   );
-  // 把靶站资源注入 Python 全局字典(JS 对象自动转为 dict)
-  pyodide.globals.set('_PRACTICE_STATIC', PRACTICE_DATA);
+  // 以 JSON 字符串注入,Python 侧 json.loads 转成纯 dict。
+  // 直接 set JS 对象会被 Pyodide 转成 JsProxy,其 .get 不可用(曾触发 AttributeError: get)。
+  pyodide.globals.set('_PRACTICE_STATIC_JSON', JSON.stringify(PRACTICE_DATA));
   // 给 requests 打补丁:命中预载路径时返回本地 Response,不依赖目标域是否服务静态文件。
   await pyodide.runPython(REQUESTS_PATCH);
   emit('ready', {});
@@ -69,6 +70,12 @@ async function ensureInit() {
 // 路径时,返回一份真实的 requests.Response(内容为打包的靶站 HTML/JSON)。
 // 这样学生在任何托管域下写 requests.get(...) 都能拿到真实靶站数据用于解析练习。
 const REQUESTS_PATCH = `
+import json
+try:
+    _PRACTICE_STATIC = json.loads(_PRACTICE_STATIC_JSON)
+except Exception:
+    _PRACTICE_STATIC = {}
+
 import requests as __ce_rq
 __ce_orig = __ce_rq.sessions.Session.request
 
