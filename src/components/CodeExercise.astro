@@ -15,6 +15,8 @@ interface Props {
   maxScore?: number;
   recordKey?: RecordKind;
   lesson?: string;
+  /** 防硬编码规则:变量名 -> 允许的来源调用/属性名 */
+  guard?: Record<string, string[]>;
 }
 
 const {
@@ -30,6 +32,7 @@ const {
   maxScore = 10,
   recordKey = 'exercise',
   lesson = '',
+  guard = {},
 } = Astro.props;
 ---
 
@@ -46,6 +49,7 @@ const {
   data-max-score={maxScore}
   data-record-key={recordKey}
   data-lesson={lesson}
+  data-guard={JSON.stringify(guard)}
 ></py-code-exercise>
 
 <script>

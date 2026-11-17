@@ -14,6 +14,12 @@ export interface TaskDef {
   explanation?: string;
   skills: string[];
   maxScore: number;
+  /**
+   * 防硬编码规则(可选):键为"必须由真实计算得到的变量名",值为允许出现在其赋值
+   * 右值中的属性/函数名。判分前用 Python AST 校验,若该变量被写死为字面量或
+   * 使用了非指定来源,直接判失败。例:{ status: ['status_code'], rows: ['select'] }
+   */
+  guard?: Record<string, string[]>;
 }
 
 /** 课程代码实战:刻意练习骨架(每个 starter 都含 # TODO 占位符) */
@@ -65,8 +71,11 @@ URL = SITE_BASE + "/practice/level1-books/"
 # TODO 2: 从响应对象里取出状态码,存入变量 status
 # status = ...`,
     check: `assert 'r' in globals(), "未发起请求"
-assert 'status' in globals() and status == 200, f"状态码应为 200,实际 {status}"
+assert 'status' in globals(), "请把状态码存入变量 status"
+assert status == r.status_code, f"status 应取自 r.status_code(真实值 {r.status_code}),实际 {status}"
+assert status == 200, f"靶站状态码应为 200,实际 {status}"
 assert len(r.text) > 0, "响应体为空"`,
+    guard: { status: ['status_code'] },
     hintSteps: [
       'requests.get(url, timeout=N) 这个签名你记得吗?返回值是什么类型?',
       '响应对象上哪个属性是 HTTP 状态码?(不是 r.text、不是 r.content)',
@@ -511,10 +520,19 @@ r = requests.get(SITE_BASE + "/practice/level1-books/", timeout=10)
 r.encoding = "utf-8"
 rows = BeautifulSoup(r.text, "html.parser").select("tbody tr")
 # === TODO 补全 ===`,
-      check: `assert 'status' in globals() and status == 200, f"状态码应为 200,实际 {status}"
-assert len(rows) == 24, f"应抓到 24 行,实际 {len(rows)}"`,
-      hint: '把 r.status_code 保存到变量 status,再 print 出来。',
-      explanation: '单元一实操 1 完成:请求 + 状态码 + 行数统计。',
+      check: `import requests as _rq
+from bs4 import BeautifulSoup as _bs
+_src = _rq.get(SITE_BASE + "/practice/level1-books/", timeout=10)
+_src.encoding = "utf-8"
+_expect = [_tr.select("td")[1].get_text().strip() for _tr in _bs(_src.text, "html.parser").select("tbody tr")]
+assert 'status' in globals(), "请把状态码存入变量 status"
+assert status == _src.status_code, f"status 应为真实响应状态码 {_src.status_code},实际 {status}"
+assert isinstance(rows, list), "请把表格行存入变量 rows(列表)"
+_got = [row.select("td")[1].get_text().strip() for row in rows]
+assert _got == _expect, f"rows 书名与靶站真实数据不一致(期望 {len(_expect)} 行,实际 {len(rows)} 行)"`,
+      guard: { status: ['status_code'], rows: ['select', 'find_all', 'find'] },
+      hint: '把 r.status_code 保存到变量 status,再 print 出来;rows 由 BeautifulSoup 的 select/find 解析得到,不能凭空造列表。',
+      explanation: '单元一实操 1 完成:请求 + 状态码 + 行数统计。status 必须取自 r.status_code,rows 必须来自真实解析——判分器会独立抓取靶站逐项比对,写死 200 或伪造行数都无法通过。',
     },
     {
       id: 'unit-test-1-t2',
@@ -938,7 +956,8 @@ assert 'Mozilla' in ua, "UA 应包含 Mozilla"`,
 
 print("请求完成")`,
       check: `assert not_found == 404, f"访问不存在页面应返回 404,实际 {not_found}"`,
-      hint: '把 not_found 打印出来即可(不存在的路径应返回 404)。',
+      guard: { not_found: ['status_code'] },
+      hint: '把 not_found 打印出来即可(不存在的路径应返回 404,值必须来自 r.status_code)。',
       explanation: '单元四实操 3 完成:异常处理与状态码判断。',
     },
     {

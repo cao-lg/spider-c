@@ -59,6 +59,7 @@ const conceptPoints = concept.reduce((s, q) => s + q.points, 0);
         explanation={task.explanation ?? ''}
         skills={task.skills}
         maxScore={task.maxScore}
+        guard={task.guard ?? {}}
         recordKey="unitTest"
       />
     </div>

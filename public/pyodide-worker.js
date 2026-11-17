@@ -107,12 +107,16 @@ def __ce_patched(self, method, url, **kwargs):
     body = __ce_practice_body(url)
     if body is not None and m in ('GET', 'HEAD'):
         from requests import Response as __ce_resp
+        # 用学生传入的 headers 构造真实的 PreparedRequest,使 r.request.headers
+        # 可被 UA/请求头类题目正确校验(否则 r.request 为 None 触发 AttributeError)。
+        _prep = __ce_rq.Request(method=m, url=url, headers=kwargs.get('headers')).prepare()
         r = __ce_resp()
         r.status_code = 200
         r._content = body.encode('utf-8')
         r.encoding = 'utf-8'
         r.url = url
         r.headers = {}
+        r.request = _prep
         return r
     return __ce_orig(self, method, url, **kwargs)
 

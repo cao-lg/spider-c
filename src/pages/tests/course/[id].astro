@@ -51,6 +51,7 @@ const next = courseTests.find((c) => c.number === test.number + 1);
         explanation={task.explanation ?? ''}
         skills={task.skills}
         maxScore={task.maxScore}
+        guard={task.guard ?? {}}
         recordKey="unitTest"
       />
     </div>

@@ -112,6 +112,7 @@ const goalItems = objectives.length > 0 ? objectives.map((o) => o.statement) : l
         explanation={task.explanation ?? ''}
         skills={task.skills}
         maxScore={task.maxScore}
+        guard={task.guard ?? {}}
         recordKey="practice"
         lesson={lesson.id}
       />

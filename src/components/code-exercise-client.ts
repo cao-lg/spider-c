@@ -11,6 +11,56 @@ import { createCodeEditor, type CodeEditor } from './code-editor';
 const PASS_MARK = '__GRADE__PASS';
 const FAIL_MARK = '__GRADE__FAIL:';
 
+/**
+ * 防硬编码的 Python 前缀校验。
+ * 学生源码以 JSON 字符串注入 __STUDENT_SRC__,规则注入 __GUARD_RULES__。
+ * 用 ast 检查:凡是 guard 声明的变量,必须至少有一处赋值右值来自规则的
+ * 属性/函数(如 r.status_code、soup.select);若全部是字面量/凭空构造则判失败。
+ * 这样"写死 status=200""伪造 rows=[...]"都无法蒙混过关。
+ * 无 guard 规则时本段为空操作,不影响原有判分。
+ */
+const GUARD_PY_DEF = `
+import ast as _ce_ast, json as _ce_json
+def _ce_anti_hardcode(src, rules):
+    if not rules:
+        return
+    try:
+        tree = _ce_ast.parse(src)
+    except SyntaxError:
+        return  # 语法错误交给正常执行流程去报错,不在此误判
+    assigns = {}
+    for node in _ce_ast.walk(tree):
+        if isinstance(node, _ce_ast.Assign):
+            for tgt in node.targets:
+                if isinstance(tgt, _ce_ast.Name):
+                    assigns.setdefault(tgt.id, []).append(node.value)
+        elif isinstance(node, _ce_ast.AugAssign) and isinstance(node.target, _ce_ast.Name):
+            assigns.setdefault(node.target.id, []).append(node.value)
+        elif isinstance(node, _ce_ast.AnnAssign) and isinstance(node.target, _ce_ast.Name):
+            assigns.setdefault(node.target.id, []).append(node.value)
+    for var, allowed in rules.items():
+        vals = assigns.get(var, [])
+        ok = False
+        for value in vals:
+            names = set()
+            for n in _ce_ast.walk(value):
+                if isinstance(n, _ce_ast.Attribute):
+                    names.add(n.attr)
+                elif isinstance(n, _ce_ast.Call):
+                    if isinstance(n.func, _ce_ast.Name):
+                        names.add(n.func.id)
+                    elif isinstance(n.func, _ce_ast.Attribute):
+                        names.add(n.func.attr)
+            if any(a in names for a in allowed):
+                ok = True
+                break
+        if not ok:
+            raise AssertionError(
+                "变量 " + var + " 必须真实获取(应通过 " + "/".join(allowed) +
+                " 得到),不能写死固定值或凭空构造"
+            )
+`;
+
 class PyCodeExercise extends HTMLElement {
   /** 题目 id。不能叫 id:会遮蔽 HTMLElement.id */
   private exerciseId = '';
@@ -23,6 +73,7 @@ class PyCodeExercise extends HTMLElement {
   private hint = '';
   private hintSteps: string[] = [];
   private explanation = '';
+  private guard: Record<string, string[]> = {};
   private skills: string[] = [];
   private maxScore = 10;
   private recordKey: RecordKind = 'exercise';
@@ -53,6 +104,7 @@ class PyCodeExercise extends HTMLElement {
     this.check = this.decode(attr('data-check'));
     this.hint = this.decode(attr('data-hint'));
     this.explanation = this.decode(attr('data-explanation'));
+    this.guard = this.decode(attr('data-guard') || '{}') || {};
     const stepsRaw = this.decode(attr('data-hint-steps') || '[]');
     try {
       this.hintSteps = Array.isArray(stepsRaw) ? stepsRaw.filter((s) => typeof s === 'string') : [];
@@ -253,7 +305,18 @@ class PyCodeExercise extends HTMLElement {
 
   private async run() {
     const student = this.editor.getValue();
-    const full = `${student}\n\n# ==== 自动判题(隐藏) ====\ntry:\n    ${this.check
+    // 防硬编码:注入学生源码与规则(JSON 字符串,Python 兼容其转义),AST 校验放在最前面。
+    // 校验失败抛 AssertionError,由下方 except 统一打印为 __GRADE__FAIL。
+    const hasGuard = Object.keys(this.guard).length > 0;
+    // 函数定义与数据注入放在学生代码前(仅定义,不执行校验);校验调用放进 try 内,
+    // 这样硬编码被拦截时会打印 __GRADE__FAIL,走"未通过"反馈而非"运行出错"。
+    const guardPrefix = hasGuard
+      ? `${GUARD_PY_DEF}\n` +
+        `__STUDENT_SRC__ = ${JSON.stringify(student)}\n` +
+        `__GUARD_RULES__ = ${JSON.stringify(JSON.stringify(this.guard))}\n`
+      : '';
+    const guardCall = hasGuard ? '    _ce_anti_hardcode(__STUDENT_SRC__, _ce_json.loads(__GUARD_RULES__))\n' : '';
+    const full = `${guardPrefix}${student}\n\n# ==== 自动判题(隐藏) ====\ntry:\n${guardCall}    ${this.check
       .split('\n')
       .join('\n    ')}\n    print("${PASS_MARK}")\nexcept Exception as __ce_err__:\n    print("${FAIL_MARK}", __ce_err__)`;
 
