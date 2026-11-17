@@ -11,6 +11,8 @@ export interface RunOptions {
   timeout?: number;
   onStatus?: (status: string) => void;
   onOutput?: (chunk: OutputChunk) => void;
+  /** 靶站可达性/托管网关诊断(非代码错误,仅提示) */
+  onDiagnostic?: (d: { kind: string; message: string }) => void;
 }
 
 export interface RunResult {
@@ -27,6 +29,7 @@ let current: {
   resolve: (r: RunResult) => void;
   onStatus?: (s: string) => void;
   onOutput?: (c: OutputChunk) => void;
+  onDiagnostic?: (d: { kind: string; message: string }) => void;
 } | null = null;
 
 let tail: Promise<unknown> = Promise.resolve();
@@ -70,6 +73,11 @@ function ensureWorker(): Promise<Worker> {
         }
         case 'status':
           current?.onStatus?.(m.text);
+          break;
+        case 'diagnostic':
+          current?.onDiagnostic?.({ kind: m.kind, message: m.message });
+          // 兜底:没有订阅诊断时也往输出区提示,避免学生看不懂
+          current?.onOutput?.({ text: m.message, isError: true });
           break;
         case 'output':
           current?.onOutput?.({ text: m.text, isError: !!m.isError });
@@ -143,6 +151,7 @@ async function executeRun(code: string, opts: RunOptions): Promise<RunResult> {
       },
       onStatus: opts.onStatus,
       onOutput: opts.onOutput,
+      onDiagnostic: opts.onDiagnostic,
     };
 
     workerInstance.postMessage({ type: 'run', code });
