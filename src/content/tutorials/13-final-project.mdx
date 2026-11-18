@@ -4,54 +4,190 @@ id: 13-final-project
 
 import CodeRunner from '../../components/CodeRunner.astro';
 
-学完所有章节，是时候串成**完整项目**了。这一章以「爬取图书榜存 CSV + SQLite」为例走完全流程。
+学完所有章节，是时候串成**完整项目**了。前面每章都是一个零件：第 3 章请求、第 4-5 章解析、第 6 章存储、第 9 章接口、第 11 章稳定性、第 12 章合规。这一章把零件装成一台能跑、能交付的机器。
 
-> **这个项目包含全书所有核心技能**：请求、解析、提取、存储、异常处理、日志、robots 检查、频率控制。做完它，你就具备了开发独立爬虫项目的能力。
+> **这个项目包含全书核心技能**：请求、解析、提取、存储、校验、可视化、异常处理、日志、robots 检查、频率控制。做完它，你就具备独立开发爬虫项目的能力。
 
-## 一、需求分析
+## 一、真实案例：图书采集项目端到端实测
 
-- **数据源**：图书榜列表页（书名、价格）
-- **输出**：books.csv + books.db
-- **约束**：守 robots.txt、控频率、出错不中断
+先看一个我实测过的公开教学站点：**`books.toscrape.com`**（Zyte 官方提供的爬取沙盒，明确用于练习）。
 
-### 项目拆解
+- 列表页每页 **20 本书**，每本是一个 `article.product_pod` 卡片；
+- 卡片含书名（`h3 a` 的 `title` 属性）、价格（如 `£51.77`）、评分（`p.star-rating` 的 class）；
+- 详情页有书名、价格、`In stock` 库存状态、产品描述；
+- 分页通过 `catalogue/page-2.html` 递增，最后一页"下一页"按钮消失。
+
+最小骨架如下（**本地运行**，公网请求在课程运行器里不可用）：
+
+```python
+import requests
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin
+BASE = "http://books.toscrape.com/catalogue/"
+def parse_list(html, page_url):
+    soup = BeautifulSoup(html, "html.parser")
+    books = []
+    for card in soup.select("article.product_pod"):
+        a = card.select_one("h3 a")
+        books.append({
+            "title": a["title"],
+            "price": card.select_one("p.price_color").get_text(strip=True),
+            "rating": card.select_one("p.star-rating")["class"][1],
+            "detail_url": urljoin(page_url, a["href"]),
+        })
+    return books
+all_books = []
+for page in range(1, 6):
+    url = urljoin(BASE, f"page-{page}.html")
+    resp = requests.get(url, timeout=10)
+    resp.raise_for_status()
+    batch = parse_list(resp.text, url)
+    all_books.extend(batch)
+    print(f"第 {page} 页: {len(batch)} 本")
+print("共采集:", len(all_books), "本")
+```
+
+> **实测提醒**：价格以 `£` 开头，解析后先去掉符号再转 float。"库存"只在详情页有——要库存就得进详情页，成本翻倍，先问自己真的需要吗？
+
+课程靶站还有两个轻量入口适合先跑通逻辑：`/practice/level1-books/` 是约 24 行的静态 HTML 表格，练 CSS 选择器；`/practice/level4-json-api/` 是分页 JSON 接口，练翻页参数与 `resp.json()`。
+
+**专业流程**：先在靶站把解析调通，再切到沙盒站，最后才考虑真实商业站点（按第 12 章做完合规评估）。
+
+## 二、需求分析与数据建模
+
+项目起步最忌讳"边写边想"。先把需求写清楚：
+
+- **数据源**：图书榜列表页（书名、价格、评分），详情页补充库存；
+- **输出**：`books.csv` + `books.db` + 一份统计报告；
+- **约束**：守 robots.txt、控频率、出错不中断、不碰个人信息。
 
 | 步骤 | 技能 | 章节 |
 | --- | --- | --- |
 | 检查 robots.txt | 合规 | 第 12 章 |
-| 请求列表页 | requests | 第 3 章 |
-| 解析 HTML | BeautifulSoup | 第 4 章 |
-| 提取数据 | CSS/XPath | 第 4-5 章 |
-| 写入 CSV | csv 模块 | 第 6 章 |
-| 落 SQLite | sqlite3 | 第 9 章 |
-| 异常处理 | try/except + 重试 | 第 3 章 |
-| 控频 | time.sleep | 第 7 章 |
+| 请求列表页 / 详情页 | requests | 第 3 章 |
+| 解析 HTML / JSON | BeautifulSoup、`resp.json()` | 第 4、9、10 章 |
+| 提取字段 | CSS / XPath | 第 4-5 章 |
+| 写入 CSV / SQLite | `csv`、`sqlite3` | 第 6、9 章 |
+| 异常处理 + 控频 | `try/except`、退避、`time.sleep` | 第 7、11 章 |
+| 校验 / 统计 / 可视化 | `assert`、`collections` | 本章 |
 
-## 二、项目结构
+**数据建模：先把字段定死**——字段名、类型、单位要在写第一行解析代码前确定：
 
+| 字段 | 类型 | 来源 | 校验规则 |
+| --- | --- | --- | --- |
+| `title` | 字符串 | `article.product_pod h3 a[title]` | 非空 |
+| `price` | 浮点 | `p.price_color` 去 `£` 后转 float | 大于 0 |
+| `rating` | 整数 1-5 | `p.star-rating` 的 class | 在 1~5 之间 |
+| `availability` | 布尔 | 详情页 `In stock` 文本 | 必须是是/否之一 |
+| `detail_url` | 字符串 | `urljoin` 拼出的绝对地址 | 以 http 开头 |
+
+## 三、项目模块划分与架构决策
+
+| 模块 | 职责 | 典型实现 |
+| --- | --- | --- |
+| 采集 Fetch | 发请求、重试、控频、守合规 | `fetch_page(url)` 返回 HTML 或 None |
+| 解析 Parse | HTML / JSON 转成干净记录 | `parse_list(html)` 返回字典列表 |
+| 存储 Store | 写入 CSV / SQLite / JSON | `save_csv()`、`save_sqlite()` |
+| 分析 Analyze | 统计、分组、排序、校验 | `Counter`、`statistics` |
+| 展示 Present | 报告、图表、控制台输出 | `print`、matplotlib |
+
+模块之间只通过**数据契约**（记录字典的字段）通信：解析改了存储不用动，存储从 CSV 换成数据库，采集模块无感。
+
+**决策 1：硬编码 vs 配置化**
+
+| 写法 | 示例 | 问题 / 优点 |
+| --- | --- | --- |
+| 硬编码 | `for page in range(1, 51)`、`url` 散落各处 | 改页数要翻遍代码，换站点等于重写 |
+| 配置化 | 顶部集中 `BASE`、`MAX_PAGE`、`HEADERS`、`SLEEP_RANGE` | 一处修改全局生效 ✅ |
+
+把易变的东西（URL、页数、UA、延时、文件名）集中到常量区，甚至抽到 `config.py`。
+
+**决策 2：单体脚本 vs 分层架构**
+
+| 维度 | 单体脚本 | 分层架构 |
+| --- | --- | --- |
+| 代码组织 | 一个 `main()` 写到底 | `fetch` / `parse` / `store` 各自成函数 |
+| 调试 | 出问题整体重跑 | 单独测 `parse`，喂一段 HTML 即可 |
+| 适合场景 | 一次性抓几十条 | 长期维护、多站点复用 ✅ |
+
+> **经验法则**：超过 100 行、或以后可能再改的爬虫，就该分层。核心是**每个模块都能单独验证**——这是排查问题的前提。
+
+## 四、分步实现：项目结构与完整骨架
+
+项目骨架：`crawler/` 下有 `crawler.py`（主程序）、`config.py`（配置常量，可选）、产出 `books.csv` 与 `books.db`、日志 `crawler.log`。`crawler.py` 内部分八步：检查 robots → 请求 → 解析 → 校验 → 存 CSV / SQLite → 异常与日志 → 控频重试。
+
+完整架构模板（**本地运行**，每个函数职责单一）：
+
+```python
+"""图书榜爬虫 - 完整版模板：请求、解析、校验、存储、异常、日志、控频"""
+import requests
+from bs4 import BeautifulSoup
+import csv, sqlite3, time, logging, random
+logging.basicConfig(filename="crawler.log", level=logging.WARNING)
+
+def fetch_page(url, headers):
+    for attempt in range(3):
+        try:
+            resp = requests.get(url, headers=headers, timeout=5)
+            resp.raise_for_status()
+            return resp.text
+        except requests.exceptions.RequestException as e:
+            logging.warning(f"失败: {e}")
+            time.sleep(random.uniform(1, 3))
+    return None
+
+def parse_page(html):
+    soup = BeautifulSoup(html, "lxml")
+    records = []
+    for li in soup.select("li.book"):
+        records.append({
+            "title": li.select_one(".title").get_text(strip=True),
+            "price": li.select_one(".price").get_text(strip=True),
+        })
+    return records
+
+def save_csv(records, filename="books.csv"):
+    with open(filename, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=["title", "price"])
+        writer.writeheader()
+        writer.writerows(records)
+    logging.info(f"已保存 {filename}")
+
+def save_sqlite(records, filename="books.db"):
+    conn = sqlite3.connect(filename)
+    c = conn.cursor()
+    c.execute("CREATE TABLE IF NOT EXISTS book (title TEXT, price TEXT)")
+    c.executemany("INSERT INTO book VALUES (?, ?)",
+                   [(r["title"], r["price"]) for r in records])
+    conn.commit()
+    conn.close()
+    logging.info(f"已保存 {filename}")
+
+def main():
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)..."}
+    all_records = []
+    for page in range(1, 4):
+        url = f"https://books.example.com/list?page={page}"
+        html = fetch_page(url, headers)
+        if not html:
+            continue
+        records = parse_page(html)
+        all_records.extend(records)
+        logging.info(f"第 {page} 页抓到 {len(records)} 条")
+        time.sleep(random.uniform(1, 3))
+    save_csv(all_records)
+    save_sqlite(all_records)
+    logging.info(f"全部完成,共 {len(all_records)} 条")
+
+if __name__ == "__main__":
+    main()
 ```
-crawler/
-├── crawler.py      # 主程序
-├── books.csv       # 产出
-└── books.db        # 产出
-```
 
-### 代码文件规划
+模板的价值在于**结构**：每个函数职责单一，可单独拿一段 HTML 测 `parse_page`，测通了再联网。
 
-```
-crawler.py:
-    1. 检查 robots.txt
-    2. 请求列表页
-    3. 解析 + 提取
-    4. 存储 CSV
-    5. 存储 SQLite
-    6. 异常处理 + 日志
-    7. 控频 + 重试
-```
+## 五、可运行：端到端迷你爬虫
 
-## 三、可运行：迷你爬虫端到端
-
-下面是一个缩微版全流程，你需要补全三个核心步骤：
+缩微版全流程——解析、存 CSV、落 SQLite 一气呵成，课程运行器里可直接执行，补全三个核心步骤：
 
 <CodeRunner
   variant="guided"
@@ -92,16 +228,16 @@ for row in c.execute("SELECT * FROM book"):
     print(row)
 conn.close()`} />
 
-## 四、异常处理与日志
+> **从这里到真实项目**：把 `html` 换成 `fetch_page(url)` 的返回，把 `li.book` 换成 `article.product_pod`，加上翻页循环，就是第一节骨架。逻辑完全同构。
 
-健壮爬虫的标配——异常处理让爬虫不会因一个失败就崩掉，日志让问题可追溯：
+## 六、异常处理、日志与数据校验
+
+健壮爬虫的标配——异常让爬虫不因一个失败就崩掉，日志让问题可追溯：
 
 ```python
 import logging, time, random
 import requests
-
 logging.basicConfig(filename="crawler.log", level=logging.INFO)
-
 def fetch(url, headers, max_retries=3):
     """带重试的请求函数"""
     for attempt in range(max_retries):
@@ -117,19 +253,100 @@ def fetch(url, headers, max_retries=3):
     return None
 ```
 
-> **日志级别**：`DEBUG`（调试信息）、`INFO`（一般信息）、`WARNING`（警告）、`ERROR`（错误）。爬虫中用 `WARNING` 和 `ERROR` 就够了。
+> **日志级别**：`DEBUG`（调试）、`INFO`（一般）、`WARNING`（警告）、`ERROR`（错误）。爬虫中用 `WARNING` 和 `ERROR` 就够。
 
-## 五、交付清单
+抓取成功不等于数据可用，入库前过这几关：
+
+| 检查项 | 含义 | 实现方式 |
+| --- | --- | --- |
+| 完整性 | 必填字段有没有缺失 | `if not all(r.values()): skip` |
+| 唯一性 | 有无重复（翻页重复、重试重复） | 用 `set(title)` 去重 |
+| 类型正确 | 价格是不是数字、评分是不是整数 | `float(str.replace("£",""))` |
+| 范围合理 | 价格大于 0、评分在 1~5 | `assert 1 <= rating <= 5` |
+| 一致性 | 字段格式统一（日期、货币单位） | 统一转 ISO 格式 |
+| 数量校验 | 条数与页面显示是否吻合 | 对比分页元信息 |
+
+```python
+def validate(r):
+    if not r["title"].strip(): return False
+    try: r["price"] = float(str(r["price"]).replace("£", ""))
+    except ValueError: return False
+    return r["price"] > 0 and 1 <= int(r.get("rating", 0)) <= 5
+```
+
+> **中间检查点**：每抓完一页 `print` 条数、每存一次记录行数。别等 500 页全跑完才发现第 3 页开始就错了——**早失败早发现**。
+
+## 七、可运行练习：数据清洗 + 统计
+
+把"校验 + 清洗 + 统计"串起来练一次。内置模拟数据、无网络请求，直接运行：
+
+<CodeRunner
+  variant="guided"
+  title="图书数据清洗与统计"
+  prompt="任务:raw 混有脏数据(带货币符号、空书名、重复)。请:1)过滤空书名 2)价格转浮点 3)按 title 去重 4)统计数量、平均价格、最贵的书并打印。"
+  code={`raw = [
+    {"title": "Python 入门", "price": "59.0"},
+    {"title": "爬虫实战", "price": "69.5"},
+    {"title": "", "price": "10.0"},
+    {"title": "数据分析", "price": "79.0"},
+    {"title": "Python 入门", "price": "59.0"},
+    {"title": "机器学习", "price": "bad"},
+]
+
+clean = []
+seen = set()
+for r in raw:
+    if not r["title"].strip():
+        continue
+    try:
+        price = float(str(r["price"]).replace("£", "").replace("￥", "").strip())
+    except ValueError:
+        continue
+    if r["title"] in seen:
+        continue
+    seen.add(r["title"])
+    clean.append({"title": r["title"], "price": price})
+
+total = len(clean)
+avg = sum(b["price"] for b in clean) / total if total else 0
+top = max(clean, key=lambda b: b["price"]) if clean else None
+print("清理后数量:", total)
+print("平均价格:", round(avg, 2))
+print("最贵的书:", top["title"], top["price"])`} />
+
+> **真实项目的缩影**：真实数据永远带着缺失、重复、格式错误。稳健的清洗逻辑，比多抓 100 页更有价值。
+
+## 八、可视化与报告
+
+统计结果要能被人看懂。本地可用 `matplotlib` 画柱状图（`plt.barh(titles, prices)` 后 `plt.savefig("price.png")`）；没有图表库，也能用 `"#" * n` 在控制台做字符柱状图。报告写清四件事：**数据来源、采集时间、样本量、关键结论**——说不清数据从哪来的报告，再漂亮也不可信。
+
+## 九、常见坑排查表
+
+| 常见坑 | 后果 | 正确做法 |
+| --- | --- | --- |
+| 一口吃成胖子，上来写 500 页全站爬虫 | 一处错全盘崩，定位不到问题 | 先抓 1 页跑通，再逐步放大 |
+| 没有中间检查点 | 跑完才发现第几页开始数据就错了 | 每页打印条数、每步存快照 |
+| 字段设计混乱，边写边加 | 存储、分析模块跟着返工 | 开工前定死字段、类型、单位 |
+| 不做数据校验 | 空值、重复、脏数据混进结果 | 入库前过质量检查表 |
+| 忽略异常导致半途而废 | 一个 403 就中断，前功尽弃 | `try/except` + 重试 + 日志 |
+| 硬编码 URL / 页数散落各处 | 换站点等于重写 | 配置化，常量集中管理 |
+
+## 十、能力要求与交付清单
+
+| 等级 | 能力要求 | 对应成绩 |
+| --- | --- | --- |
+| 及格 | 跑通单页采集，解析书名价格，存入 CSV | 完成基础功能 |
+| 良好 | 实现翻页、异常处理、控频，落 CSV 与 SQLite | 健壮性达标 |
+| 优秀 | 模块分层、配置化、数据校验、日志完整，附报告 | 工程化达标 |
+| 加分 | 多数据源对比、可视化、合规自查清单齐全 | 超出基本要求 |
 
 完成一个合格的爬虫项目，需要过这些关：
 
 - [ ] 代码可运行，无硬编码敏感信息
 - [ ] robots.txt 已检查，频率已控制
-- [ ] 数据已落 CSV / 数据库
-- [ ] 日志可回溯，异常有处理
+- [ ] 数据已落 CSV / 数据库，且经过校验
+- [ ] 日志可回溯，异常有处理，报告说明来源
 - [ ] 合规自检通过（不碰个人信息、不突破防护）
-
-### 项目自检表
 
 | 检查项 | 是否通过 | 说明 |
 | --- | --- | --- |
@@ -138,103 +355,18 @@ def fetch(url, headers, max_retries=3):
 | robots 合规 | [ ] | 检查了目标站 robots.txt |
 | 请求头完整 | [ ] | 包含 User-Agent |
 | 超时设置 | [ ] | 所有请求加了 `timeout` |
-| 异常处理 | [ ] | try/except 包裹请求和解析 |
+| 异常处理 | [ ] | `try/except` 包裹请求和解析 |
 | 控频 | [ ] | 每页之间 `time.sleep` |
 | 数据存储 | [ ] | CSV 或 SQLite 落地 |
-| 日志记录 | [ ] | 成功/失败有日志 |
+| 日志与校验 | [ ] | 成功 / 失败有日志，数据过检查 |
 | 合规检查 | [ ] | 不碰个人信息、不突破防护 |
 
-## 六、完整爬虫架构模板
+## 十一、小结
 
-```python
-"""
-图书榜爬虫 - 完整版模板
-包含：请求、解析、存储、异常处理、日志、控频
-"""
+- **完整项目 = 需求 → 建模 → 结构 → 采集 / 解析 / 存储 → 校验 / 可视化 → 异常 / 日志 → 交付。**
+- **先在内联数据跑通再联网**：用靶站和模拟数据做中间检查点，排错更高效。
+- **健壮性靠 `try/except` + 重试 + `logging`**，数据质量靠校验表。
+- **架构上做配置化与分层**，让每个模块都能单独验证。
+- **交付前过合规清单**：底线（第 12 章）比功能更重要。
 
-import requests
-from bs4 import BeautifulSoup
-import csv
-import sqlite3
-import time
-import logging
-import random
-
-logging.basicConfig(filename="crawler.log", level=logging.WARNING)
-
-def fetch_page(url, headers):
-    """请求一页,带重试和异常处理"""
-    for attempt in range(3):
-        try:
-            resp = requests.get(url, headers=headers, timeout=5)
-            resp.raise_for_status()
-            return resp.text
-        except requests.exceptions.RequestException as e:
-            logging.warning(f"失败: {e}")
-            time.sleep(random.uniform(1, 3))
-    return None
-
-def parse_page(html):
-    """解析一页,返回记录列表"""
-    soup = BeautifulSoup(html, "lxml")
-    records = []
-    for li in soup.select("li.book"):
-        records.append({
-            "title": li.select_one(".title").get_text(strip=True),
-            "price": li.select_one(".price").get_text(strip=True),
-        })
-    return records
-
-def save_csv(records, filename="books.csv"):
-    """保存为 CSV"""
-    with open(filename, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["title", "price"])
-        writer.writeheader()
-        writer.writerows(records)
-    logging.info(f"已保存 {filename}")
-
-def save_sqlite(records, filename="books.db"):
-    """保存为 SQLite"""
-    conn = sqlite3.connect(filename)
-    c = conn.cursor()
-    c.execute("CREATE TABLE IF NOT EXISTS book (title TEXT, price TEXT)")
-    c.executemany("INSERT INTO book VALUES (?, ?)",
-                   [(r["title"], r["price"]) for r in records])
-    conn.commit()
-    conn.close()
-    logging.info(f"已保存 {filename}")
-
-def main():
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)..."}
-    all_records = []
-    
-    # 翻页
-    for page in range(1, 4):
-        url = f"https://books.example.com/list?page={page}"
-        html = fetch_page(url, headers)
-        if not html:
-            continue
-        
-        records = parse_page(html)
-        all_records.extend(records)
-        logging.info(f"第 {page} 页抓到 {len(records)} 条")
-        
-        time.sleep(random.uniform(1, 3))
-    
-    # 存储
-    save_csv(all_records)
-    save_sqlite(all_records)
-    logging.info(f"全部完成,共 {len(all_records)} 条")
-
-if __name__ == "__main__":
-    main()
-```
-
-## 七、小结
-
-- 完整项目 = 需求 → 结构 → 请求/解析/存储 → 异常/日志 → 交付。
-- 先在内联数据跑通再联网，排错更高效。
-- 健壮性靠 try/except + 重试 + logging。
-- 交付前过合规清单，底线更重要。
-
-恭喜你！学到这里，你已经掌握了爬虫的核心知识体系。下一步：选一个目标网站，动手做一个属于自己的爬虫项目。
+恭喜你！学到这里，你已经掌握了爬虫的核心知识体系。下一步：选一个目标网站，先做合规评估，再动手做一个属于自己的爬虫项目。

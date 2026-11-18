@@ -4,22 +4,29 @@ id: 06-single-page
 
 import CodeRunner from '../../components/CodeRunner.astro';
 
-前面学的解析(BeautifulSoup、XPath)终于要落地了：这一章我们完整爬取一个列表页，并把结果存成 CSV 文件。凡是「列表页 → 抓数据 → 落库」，骨架都一样。
+前面学的解析（BeautifulSoup、XPath）终于要落地了：这一章我们完整爬取一个列表页，并把结果存成 CSV 文件。凡是「列表页 → 抓数据 → 落库」，骨架都一样。
 
-> **这一章是全书第一个「端到端」实战**——从请求到存储，一条龙走完全流程。学会这个模式，后面的多页爬取、两级爬取、JSON 接口都是它的扩展版。
+> **这一章是全书第一个「端到端」实战**——从请求到存储，一条龙走完全流程。学会这个模式，后面的多页爬取、两级爬取、JSON 接口都是它的扩展版。今天用的站点是真实公开的 `quotes.toscrape.com`（第 4、5 章已验证过结构），所以这段代码不是玩具，拿去本地就能跑出真实数据。
 
-## 一、单页爬取的通用四步
+## 一、单页爬取的通用五步骨架
+
+把第 4 章的四步补上"编码"和"异常处理"，就是生产里真正跑得稳的五步骨架：
 
 ```
-请求(request) → 解析(parse) → 提取(extract) → 存储(store)
+请求(request) → 编码(encoding) → 解析(parse) → 提取+清洗(extract) → 存储(store)
 ```
 
-1. **请求**：拿到网页 HTML(用 `requests.get`)。
-2. **解析**：`BeautifulSoup(html, "lxml")` 变成可查询对象。
-3. **提取**：`select` / `xpath` 取出每一条数据，整理成字典列表。
-4. **存储**：写进 CSV / 数据库。
+| 步骤 | 做什么 | 关键代码 | 常见坑 |
+| --- | --- | --- | --- |
+| ① 请求 | 带请求头、设超时发起 GET | `requests.get(url, headers, timeout=10)` | 没超时、没 UA，卡死或被 403 |
+| ② 编码 | 修正响应编码再取文本 | `resp.encoding = resp.apparent_encoding` | 中文乱码（方块/问号） |
+| ③ 解析 | HTML 字符串变成树 | `BeautifulSoup(resp.text, "lxml")` | 解析器没装、结构判断错 |
+| ④ 提取+清洗 | 容器取字段、去空白 | `select` / `select_one` + `get_text(strip=True)` | 字段对不上、空值没兜底 |
+| ⑤ 存储 | 写入 CSV / JSON | `csv.DictWriter` / `json.dump` | 中文乱码、多空行、换行符 |
 
-> 这个四步模式是爬虫的**基本骨架**。后面所有复杂爬虫都是在这四步的每个阶段加了东西（循环、并发、异常处理等），核心逻辑不变。
+异常处理（`try/except`）像一根安全绳，套在整条链路外面——任何一步失败都要能报错退出，而不是留下半截脏数据。
+
+> 这个五步模式是爬虫的**基本骨架**。后面所有复杂爬虫都是在这五步的每一步里加东西（循环翻页、并发请求、重试、代理等），核心逻辑不变。先把单页跑通，再谈规模化。
 
 ## 二、可运行：解析列表并收集为字典列表
 
@@ -53,12 +60,14 @@ print("共抓到:", len(books), "本")
 for b in books:
     print(b)`} />
 
+> **为什么用字典列表？** 因为它是"结构化数据"和"存储格式"之间的通用桥梁。CSV 的每一行、JSON 的每个对象、数据库的一条记录，都能直接从 `{"字段名": 值}` 映射过去。先把数据整理成字典列表，后面换存储方式只需改最后一步。
+
 ## 三、保存为 CSV
 
 拿到字典列表后，用标准库 `csv` 落盘。你需要补全写入逻辑：
 
 <CodeRunner
-  variant="challenge"
+  variant="guided"
   title="把字典列表写成 CSV"
   prompt="任务:books 已收集好,用 csv.DictWriter 把它写成 CSV 格式。提示:先 writeheader() 写表头,再用 writerows(books) 写数据,最后 getvalue() 查看。"
   code={`import csv, io
@@ -72,11 +81,11 @@ books = [
 buf = io.StringIO()
 writer = csv.DictWriter(buf, fieldnames=["title", "price"])
 writer.writeheader()
-# TODO: 用 writerows 把 books 全部写进去,然后打印 buf.getvalue()
+# 用 writerows 把 books 全部写进去,然后打印 buf.getvalue()
 writer.writerows(books)
 print(buf.getvalue())`} />
 
-> 真实落地只要把 `io.StringIO()` 换成 `open("books.csv", "w", newline="", encoding="utf-8")`，其余写法完全一致。`newline=""` 能避免 Windows 下多出空行。
+> 真实落地只要把 `io.StringIO()` 换成 `open("books.csv", "w", newline="", encoding="utf-8-sig")`，其余写法完全一致。`newline=""` 能避免 Windows 下多出空行；`utf-8-sig` 带 BOM 头，让 Excel 直接打开也不乱码（详见第七节）。
 
 ### CSV 写入对比
 
@@ -84,57 +93,211 @@ print(buf.getvalue())`} />
 | --- | --- | --- | --- |
 | `io.StringIO()` + `getvalue()` | 浏览器练习、内存操作 | 不写文件，即跑即用 | 数据在内存里，关了就没了 |
 | `open("file.csv", "w")` | 本地真实运行 | 数据落盘，永久保存 | 需处理编码、换行 |
+| `open(..., encoding="utf-8-sig")` | 落盘且用 Excel 打开 | 中文不乱码 | 文件头多个 BOM 字符（正常现象） |
 
-## 四、完整单页爬取流程（含 requests）
+## 四、真实案例：完整爬取 quotes.toscrape.com 存入 CSV
 
-下面是一个**完整**的单页爬取示例——从请求到存储一条龙。注意每个步骤的异常处理：
+现在把五步骨架用在一个**真实公开站点**上，端到端跑一遍：请求 → 编码 → 解析 → 提取清洗 → 存储，外面套异常处理。站点结构（第 4 章实测）：`div.quote` 容器、`span.text` 名言、`small.author` 作者、`a.tag` 标签。
+
+下面这段在**本地 Python 环境**运行（浏览器 Pyodide 里请求公网会被 CORS 拦截，公网案例请放本地跑）：
 
 ```python
+import csv
 import requests
 from bs4 import BeautifulSoup
-import csv
 
-url = "https://books.example.com/list"
-headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)..."}
+url = "https://quotes.toscrape.com/"
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                  "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+}
 
-# 步骤 1: 请求
+rows = []
 try:
-    resp = requests.get(url, headers=headers, timeout=5)
+    # ① 请求：带 UA、设超时
+    resp = requests.get(url, headers=headers, timeout=10)
     resp.raise_for_status()
+
+    # ② 编码：尊重站点声明的编码，避免中文乱码
+    resp.encoding = resp.apparent_encoding
+
+    # ③ 解析：字符串变成树
+    soup = BeautifulSoup(resp.text, "lxml")
+
+    # ④ 提取 + 清洗：先找容器，再在容器内取字段
+    for div in soup.select("div.quote"):
+        text = div.select_one("span.text")
+        author = div.select_one("small.author")
+        rows.append({
+            "author": author.get_text(strip=True) if author else "",
+            "quote":  text.get_text(strip=True).strip("“”") if text else "",
+            "tags":   ",".join(a.get_text(strip=True) for a in div.select("a.tag")),
+        })
+
+    # ⑤ 存储：utf-8-sig 让 Excel 直接打开不乱码
+    with open("quotes.csv", "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.DictWriter(f, fieldnames=["author", "quote", "tags"])
+        writer.writeheader()
+        writer.writerows(rows)
+
+    print("成功写入", len(rows), "条到 quotes.csv")
+
 except requests.exceptions.RequestException as e:
-    print("请求失败:", e)
-    exit(1)
-
-# 步骤 2: 解析
-soup = BeautifulSoup(resp.text, "lxml")
-
-# 步骤 3: 提取
-books = []
-for li in soup.select(".books li.book"):
-    books.append({
-        "title": li.select_one(".title").get_text(strip=True),
-        "price": li.select_one(".price").get_text(strip=True),
-    })
-
-print(f"抓到 {len(books)} 本")
-
-# 步骤 4: 存储 CSV
-with open("books.csv", "w", newline="", encoding="utf-8") as f:
-    writer = csv.DictWriter(f, fieldnames=["title", "price"])
-    writer.writeheader()
-    writer.writerows(books)
-
-print("已保存 books.csv")
+    print("请求阶段出错:", e)
+except Exception as e:
+    print("解析或存储阶段出错:", type(e).__name__, e)
 ```
 
-## 五、串联靶站
+### 4.1 这段代码里的专业细节
 
-打开 [Level 1 靶站](/practice/level1-books/)，用浏览器「检查」观察表格结构，然后用本课的思路把 24 行书名价格抓出来。本页底部的「代码实战」会带你做一遍。
+逐条拆解，这些都是从坑里总结出来的：
 
-## 六、小结
+1. **先容器后字段**：`soup.select("div.quote")` 先拿到 10 个容器，再在每个容器内取作者和名言——避免作者和名言"张冠李戴"。
+2. **空值兜底**：`if author else ""`，万一某条名言没有作者标签，不会抛 `NoneType` 异常，而是留空字符串。
+3. **文本清洗**：`.strip("“”")` 去掉名言外侧的引号，让数据更干净——这就是下一节的"字段清洗"。
+4. **多值字段扁平化**：一条名言有多个标签，用 `",".join(...)` 拼成一个单元格，CSV 才能放下。
+5. **编码 + 换行**：`encoding="utf-8-sig"` 防 Excel 乱码，`newline=""` 防多空行。
+6. **分层异常捕获**：网络请求失败单独提示，解析/存储失败另给提示——出问题时能快速定位是哪一环。
 
-- 单页爬取四步：请求 → 解析 → 提取 → 存储。
-- 提取的核心是「每条数据 → 一个字典」，再汇总成列表。
-- `csv.DictWriter` 把字典列表写成 CSV；`newline=""` 防空行。
-- 先把整条链路用内联 HTML 跑通，再换成真实 `requests` + `open` 落地。
+> 生成的第一行数据长这样（`quotes.csv` 打开后）：
+> `author,quote,tags` 下一行 `Albert Einstein,The world as we have created it is a process of our thinking…,change;deep-thoughts;thinking;world`（此处用分号展示，代码里用的是逗号拼接）。
+
+## 五、存储方式对比：CSV vs JSON vs 直接打印
+
+同样是字典列表，存哪里、怎么存？三种方式各有用途：
+
+| 存储方式 | 适合场景 | 优点 | 缺点 |
+| --- | --- | --- | --- |
+| 直接 `print` | 调试、验证解析是否正确 | 零成本，立刻看到结果 | 不落盘，关机即失，无法后续处理 |
+| CSV | 表格数据、要用 Excel/pandas 分析 | 通用、人可读、Excel 友好 | 不支持嵌套结构，字段类型全是字符串 |
+| JSON | 有嵌套字段（如 tags 列表）、要程序间交换 | 保留数据类型和结构 | Excel 打开不直观，文件略大 |
+
+同一份名言数据，三种输出的写法对比：
+
+```python
+import json, csv
+
+# 直接打印：调试用
+for row in rows[:3]:
+    print(row)
+
+# JSON：保留 tags 为列表，适合程序读取
+with open("quotes.json", "w", encoding="utf-8") as f:
+    json.dump(rows, f, ensure_ascii=False, indent=2)
+
+# CSV：扁平化列表为字符串，适合表格分析
+with open("quotes.csv", "w", newline="", encoding="utf-8-sig") as f:
+    w = csv.DictWriter(f, fieldnames=["author", "quote", "tags"])
+    w.writeheader()
+    w.writerows(rows)
+```
+
+> **JSON 的 `ensure_ascii=False` 很关键**：不加它，中文会被转义成 `\uXXXX` 这样的 Unicode 转义序列，虽然程序能读，但人眼看不懂。加上它，文件里就是正常中文。
+
+## 六、字段清洗的常用方法
+
+从网页扒下来的文本往往"带刺"——多余空白、乱码符号、HTML 实体、不规范数字。落库前清洗一下，数据才好用：
+
+| 问题 | 清洗方法 | 示例 |
+| --- | --- | --- |
+| 首尾空白/换行 | `get_text(strip=True)` 或 `.strip()` | `" Python 入门 "` → `"Python 入门"` |
+| 多余引号/装饰符 | `.strip("“”\"'")` | `"“名言”"` → `"名言"` |
+| 中间多余空格 | `" ".join(s.split())` | `"a  b   c"` → `"a b c"` |
+| 列表字段扁平化 | `",".join(list)` | `["a","b"]` → `"a,b"` |
+| 价格/数字去单位 | 正则或 `.replace()` | `"¥59.00"` → `"59.00"` |
+| 空值兜底 | `x if x else ""` 或 `get()` | `None` → `""` |
+| HTML 实体（如 `&nbsp;`） | `html.unescape()` 或 BS4 自动处理 | `"Tom &amp; Jerry"` → `"Tom & Jerry"` |
+
+清洗示例：
+
+```python
+import re
+
+raw = "  “The  world ...”  "
+clean = " ".join(raw.strip().strip("“”").split())
+# → "The world ..."
+
+price = "¥59.00"
+num = re.sub(r"[^\d.]", "", price)   # → "59.00"
+```
+
+> **原则**：清洗要"克制"——只做有明确必要的转换，保留原始数据的可追溯性。必要时同时存一份原始字段和清洗后字段，别把不可逆的处理直接覆盖原值。
+
+## 七、常见坑排查表
+
+| 现象 / 报错 | 常见原因 | 排查方向 |
+| --- | --- | --- |
+| CSV 用 Excel 打开中文乱码 | 存成 `utf-8` 没有 BOM | 改用 `encoding="utf-8-sig"` |
+| CSV 每行之间多一个空行 | Windows 下换行符被重复转换 | `open(..., newline="")` |
+| `ValueError: dict contains fields not in fieldnames` | 字典的 key 和 `fieldnames` 对不上 | 核对字段名拼写，或加 `extrasaction="ignore"` |
+| 某字段全是空 | 选择器写错，或站点该字段本就缺失 | `print(soup.prettify()[:500])` 看真实结构 |
+| `NoneType has no attribute 'get_text'` | `select_one` 返回 `None` 没判空 | `if x else ""` 兜底 |
+| 抓到 0 条数据 | 容器选择器写错 / 页面是 JS 渲染的 | 先看源码有没有数据（回看第 10 章） |
+| 请求卡住不动 | 没设 `timeout` | `requests.get(..., timeout=10)` |
+| 中文存进 CSV 变成问号 | 请求阶段编码就错了 | `resp.encoding = resp.apparent_encoding` |
+| 跑几页后突然 403 | 请求太快、没带 UA | 补请求头 + 加延时（回看第 11 章） |
+
+> **避坑心法**：存储阶段的坑，九成出在"编码"和"字段名"两件事上。写完先 `print` 前两条数据确认内容正确，再落盘；落盘后用文本编辑器打开 CSV 看前几行，比盲写快得多。
+
+## 八、完整单页爬取流程模板（含 requests）
+
+下面是一个**精简模板**，把五步骨架和异常处理融在一起，适合套用到任何"列表页 → CSV"场景（把 URL 和选择器换成你的目标即可）：
+
+```python
+import requests, csv
+from bs4 import BeautifulSoup
+
+def crawl_list(url, css_selector, fields, outfile):
+    """通用单页爬取:fields 是 {输出字段: (CSS选择器, 是否多值)} 的映射。"""
+    resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0 ..."}, timeout=10)
+    resp.raise_for_status()
+    resp.encoding = resp.apparent_encoding
+    soup = BeautifulSoup(resp.text, "lxml")
+
+    rows = []
+    for node in soup.select(css_selector):
+        row = {}
+        for name, (sel, multi) in fields.items():
+            tags = node.select(sel)
+            row[name] = ",".join(t.get_text(strip=True) for t in tags) if multi \
+                        else (tags[0].get_text(strip=True) if tags else "")
+        rows.append(row)
+
+    with open(outfile, "w", newline="", encoding="utf-8-sig") as f:
+        w = csv.DictWriter(f, fieldnames=list(fields))
+        w.writeheader()
+        w.writerows(rows)
+    return len(rows)
+
+# 套用到 quotes.toscrape.com
+n = crawl_list(
+    "https://quotes.toscrape.com/",
+    "div.quote",
+    {"author": ("small.author", False),
+     "quote":  ("span.text", False),
+     "tags":   ("a.tag", True)},
+    "quotes.csv",
+)
+print("写入", n, "条")
+```
+
+> **封装的意义**：把重复的五步抽成函数后，爬下一个列表页只需换三个参数（URL、容器选择器、字段映射）。这就是从"写死的一段代码"到"可复用的小工具"的关键一步。
+
+## 九、串联靶站
+
+打开 [Level 1 靶站](/practice/level1-books/)，用浏览器「检查」观察表格结构，然后用本课的思路把 24 行书名价格抓出来——先选容器 `tbody tr`，再在每行里取书名和价格字段，最后存成 CSV。本页底部的「代码实战」会带你做一遍。
+
+> 靶站在浏览器运行器里可直接访问（已打补丁），是练习"真实提取"最安全的地方；`quotes.toscrape.com` 这类公网站点请放在本地 Python 环境跑。
+
+## 十、小结
+
+- 单页爬取五步：请求 → 编码 → 解析 → 提取清洗 → 存储，外面套异常处理。
+- 提取的核心是「每条数据 → 一个字典」，再汇总成字典列表；它是连接解析与存储的通用桥梁。
+- `csv.DictWriter` 写 CSV；`newline=""` 防空行，`encoding="utf-8-sig"` 防 Excel 中文乱码。
+- 存储三选一：调试用 `print`，表格分析用 CSV，有嵌套结构或程序交换用 JSON（`ensure_ascii=False`）。
+- 字段清洗要克制：去空白、去装饰符、扁平化列表、空值兜底，必要时保留原始字段。
+- 真实案例：`quotes.toscrape.com` 用 `div.quote` + `span.text`/`small.author`/`a.tag`，一页 10 条，完整落盘 `quotes.csv`。
+- 把五步封装成函数，换 URL 和选择器就能复用到下一个列表页——这是规模化的起点。
 - 练手：[Level 1 靶站](/practice/level1-books/) 抓 24 行。
+
+本页底部「代码实战」让你在靶站上完成一次真实的"请求到落盘"全流程。

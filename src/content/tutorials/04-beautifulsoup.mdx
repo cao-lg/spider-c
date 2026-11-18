@@ -4,11 +4,15 @@ id: 04-beautifulsoup
 
 import CodeRunner from '../../components/CodeRunner.astro';
 
-拿到网页字符串只是开始，真正的功夫在**解析**——把杂乱的 HTML 变成你能按规则提取数据的结构。BeautifulSoup(BS4)是 Python 里最友好的解析库。
+拿到网页字符串只是开始，真正的功夫在**解析**——把杂乱的 HTML 变成你能按规则提取数据的结构。BeautifulSoup（BS4）是 Python 里最友好的解析库：容错好、API 直观，即使面对写得乱七八糟的标签，也能把数据稳稳捞出来。
 
-> **为什么需要解析？** HTML 就像一锅乱码，`<div><p><span class="title">Python 入门</span></p></div>` 层层嵌套。BeautifulSoup 把 HTML 变成一棵「树」，你可以按标签名、类名、属性、层级关系来定位数据。
+> **为什么需要解析？** HTML 就像一锅乱炖，`<div><p><span class="title">Python 入门</span></p></div>` 层层嵌套。BeautifulSoup 把 HTML 变成一棵「树」，你可以按标签名、类名、属性、层级关系来定位数据，而不用手写正则去猜——正则解析 HTML 是出了名的脆弱，改个空格就崩。
 
-## 一、解析器怎么选
+这一章不只教 API，更要建立一套**可迁移的解析思路**：选解析器 → 定位容器 → 逐个提取 → 清洗文本 → 兜底判断。最后用一个真实站点把整条链路串起来。
+
+## 一、先把 HTML 变成一棵树：解析器怎么选
+
+BS4 本身不解析 HTML，它把解析工作交给底层解析器。选哪个，直接影响速度和容错：
 
 ```python
 from bs4 import BeautifulSoup
@@ -18,15 +22,17 @@ soup = BeautifulSoup(html, "lxml")          # 更快,需装 lxml(推荐)
 
 | 解析器 | 速度 | 容错性 | 依赖 | 推荐场景 |
 | --- | --- | --- | --- | --- |
-| `lxml` | ⚡ 最快 | 好 | 需安装 lxml | 生产环境、大页面（推荐） |
+| `lxml` | ⚡ 最快 | 好 | 需安装 `lxml` | 生产环境、大页面（推荐） |
 | `html.parser` | 中等 | 好 | 零依赖 | 快速实验、不想装库 |
-| `html5lib` | 最慢 | 最好 | 需安装 html5lib | 解析严重不规范的老站 HTML |
+| `html5lib` | 最慢 | 最好 | 需安装 `html5lib` | 解析严重不规范的老站 HTML |
 
-教程统一用 `"lxml"`（快），它也能解析不规范的 HTML。下面所有示例都基于它。
+教程统一用 `"lxml"`（快，且能容忍不规范的 HTML）。安装只需一行：`pip install lxml beautifulsoup4`。
+
+> **专业提示**：解析器只影响"把字符串变成树"这一步，不影响后面的定位语法。教学环境里如果 `lxml` 没装，把参数换成 `"html.parser"` 代码照样跑——这是最省事的兜底。
 
 ## 二、三种定位方式
 
-BeautifulSoup 提供三种定位方式，各有适用场景：
+BeautifulSoup 提供三种定位方式，各有适用场景。理解它们的差别，比死记 API 更重要。
 
 ### 2.1 按标签名
 
@@ -51,7 +57,32 @@ soup.select('div.book > span.title')  # 返回所有匹配的标签列表
 soup.select_one('div.book .title')    # 返回第一个匹配,等价于 find
 ```
 
-> **CSS 选择器语法**和前端开发用的完全一样：`tag.class`、`tag.class.sub`、`tag > child`（直接子）、`tag descendant`（后代）、`tag[attr]`（有某属性）。熟练掌握 CSS 选择器，是高效提取数据的关键。
+> **CSS 选择器语法**和前端开发用的完全一样：`tag.class`、`tag.class.sub`、`tag > child`（直接子）、`tag descendant`（后代）、`tag[attr]`（有某属性）、`tag[attr="值"]`（属性值精确匹配）。熟练掌握 CSS 选择器，是高效提取数据的关键。
+
+### 2.4 select_one 与 select：别用错返回值
+
+这对孪生方法是最常见的"返回空/报错"源头，务必分清：
+
+| 方法 | 返回 | 找不到时 | 典型用途 |
+| --- | --- | --- | --- |
+| `select(css)` | **列表**（Tag 对象列表） | 空列表 `[]` | 遍历一批同类元素，如所有名言 |
+| `select_one(css)` | **单个 Tag** 或 `None` | `None` | 在已知容器里取一个字段，如书名 |
+
+**铁律**：`select` 的结果要 `for ... in` 遍历；`select_one` 的结果取文本前要先判 `None`。写成 `soup.select_one("a").get_text()` 而页面上没有 `a` 时，会直接抛 `AttributeError: 'NoneType'`。
+
+### 2.5 层级选择器与 nth-child
+
+复杂页面靠"层级关系"精确定位，避免误抓：
+
+```python
+soup.select("div.quote > span.text")       # 直接子元素：quote 下的 span.text
+soup.select("div.quote a.tag")             # 后代元素：quote 内任意层级的 a.tag
+soup.select("ul.books > li:nth-child(2)")  # 第 2 个 li（nth-child 从 1 开始）
+soup.select("li:last-child")               # 最后一个 li
+soup.select("a[href^='/tag/']")            # href 以 /tag/ 开头的链接
+```
+
+> ⚠️ **两个"第几个"的坑**：CSS 的 `nth-child(1)` 指第 1 个（从 1 开始）；而 Python 列表下标从 0 开始。别把 `li[0]` 的思维带进来。
 
 下面需要你补全提取逻辑——给定一段图书列表 HTML，用 CSS 选择器取出每本书的书名和价格：
 
@@ -78,7 +109,7 @@ for li in soup.select("li.book"):
 
 ## 三、遍历节点树
 
-HTML 是树，BS4 让你上下左右走：
+HTML 是树，BS4 让你上下左右走。当 CSS 选择器不够用时，节点遍历是补充手段：
 
 | 方向 | 属性/方法 | 示例 |
 | --- | --- | --- |
@@ -87,7 +118,7 @@ HTML 是树，BS4 让你上下左右走：
 | 兄弟 | `tag.next_sibling` / `tag.previous_sibling` | `a.next_sibling` → 下一个兄弟 |
 | 后代文本 | `tag.get_text()` | `soup.get_text()` → 所有嵌套文字拼起来 |
 
-> 提取文字用 `.get_text()`，不要直接 `str(tag)`——后者会把标签也带进去，比如 `<span>Python 入门</span>` 变成 `[<span>Python 入门</span>]`。
+> 提取文字用 `.get_text()`，不要直接 `str(tag)`——后者会把标签也带进去，把 `<span>Python 入门</span>` 变成一长串带尖括号的文本。
 
 ### 节点树实战示例
 
@@ -95,25 +126,39 @@ HTML 是树，BS4 让你上下左右走：
 # 从 <li> 向上找父节点 <ul>
 parent = li.parent          # <ul class="books">
 
-# 遍历 <ul> 下所有 <li> 子节点
+# 遍历 <ul> 下所有 <li> 子节点（注意 contents 里可能含换行文本节点）
 for child in ul.children:
-    if child.name == 'li':
-        print(child.get_text())
+    if getattr(child, "name", None) == "li":
+        print(child.get_text(strip=True))
 
-# 找下一个兄弟节点
-next_li = li.next_sibling
+# 找下一个兄弟节点（可能是空白文本，需再判断 name）
+next_li = li.find_next_sibling("li")
 ```
+
+> **实战经验**：`next_sibling` 经常返回的是标签之间的换行/空白文本节点，不是你想要的标签。用 `find_next_sibling("li")` 这类带标签名的方法更稳。
 
 ## 四、属性与文本的正确姿势
 
-- 取属性：`tag['href']` 或 `tag.get('href')`（推荐 `get`，没有时返回 None 不报错）。
-- 取文本：`tag.get_text(strip=True)` 的 `strip=True` 能顺手去掉首尾空白，实战必加。
-- 批量属性：`[a.get('href') for a in soup.select('a')]`。
+取属性、取文本看着简单，坑却最多。这一节讲清楚三种取文本方式的差别。
+
+**取属性**：`tag['href']` 或 `tag.get('href')`。推荐 `get`——没有时返回 `None` 不报错；而 `tag['href']` 在属性不存在时直接抛 `KeyError`。
+
+**取文本**：`tag.get_text(strip=True)` 的 `strip=True` 能顺手去掉首尾空白，实战必加。
+
+`get_text()`、`.string`、`.text` 三者对比：
+
+| 方式 | 返回类型 | 行为 | 推荐度 |
+| --- | --- | --- | --- |
+| `get_text(strip=True)` | 字符串 | 递归拼接所有后代文本，`strip` 去首尾空白 | ⭐⭐⭐ 首选 |
+| `.text` | 字符串 | 等价于 `get_text()`，但**不能传参数** | ⭐⭐ 可用 |
+| `.string` | 字符串或 `None` | 仅当标签**只有一个文本子节点**时返回值；有嵌套子标签就返回 `None` | ⚠️ 易踩坑 |
+
+> **关键区别**：`div.string` 在 div 里既有文字又有 `<span>` 子元素时会返回 `None`，而 `div.get_text(strip=True)` 能正确拼出全部文字。所以批量提取一律用 `get_text(strip=True)`。
 
 再来一个练习，这次链接文字前后有多余空格和换行，你需要正确清洗：
 
 <CodeRunner
-  variant="challenge"
+  variant="guided"
   title="提取链接并清洗文本"
   prompt="任务:提取每个 a 标签的 href 属性和清洗后的文本。注意原始文本有空格和换行!提示:get_text(strip=True) 可以一次性去掉首尾空白。"
   code={`from bs4 import BeautifulSoup
@@ -125,36 +170,120 @@ html = """<div class="list">
 
 soup = BeautifulSoup(html, "lxml")
 
-# TODO: 遍历所有 a 标签,提取 href 和清洗后的文本,格式打印
+# 遍历所有 a 标签,提取 href 和清洗后的文本,格式打印
 for a in soup.select("a"):
     href = a.get("href")
     text = a.get_text(strip=True)
     print(href, "=>", text)`} />
 
-## 五、BS4 vs lxml/XPath：怎么选
+## 五、真实案例：解析 quotes.toscrape.com
+
+前面都是教学用的小片段，现在上一个**真实公开站点**：`https://quotes.toscrape.com`（Zyte 官方提供的爬取练习沙盒，公开声明供爬虫教学使用）。
+
+### 5.1 先看页面结构
+
+浏览器打开后每页显示 10 条名言。用 F12 检查一条名言，结构是：
+
+- `div.quote`：一条名言的**容器**（每页 10 个）
+- `span.text`：名言正文
+- `small.author`：作者
+- `a.tag`：标签（一条名言可能有多个）
+
+**关键思路**：先 `select("div.quote")` 拿到 10 个容器，再在每个容器内部用 `select_one` 取字段。这就是"先找容器、再取字段"的通用套路——直接全局 `select("span.text")` 虽然也能拿到文本，但一旦要把"作者/标签"和"名言"配对就乱了。
+
+### 5.2 完整解析代码（本地运行）
+
+下面这段在**本地 Python 环境**运行（浏览器 Pyodide 里请求公网会被 CORS 拦截，请把公网案例放到本地跑）：
+
+```python
+import requests
+from bs4 import BeautifulSoup
+
+url = "https://quotes.toscrape.com/"
+resp = requests.get(url, timeout=10)
+resp.raise_for_status()
+soup = BeautifulSoup(resp.text, "lxml")
+
+quotes = []
+for div in soup.select("div.quote"):
+    quotes.append({
+        "text":   div.select_one("span.text").get_text(strip=True),
+        "author": div.select_one("small.author").get_text(strip=True),
+        "tags":   [a.get_text(strip=True) for a in div.select("a.tag")],
+    })
+
+print("本页名言数:", len(quotes))
+for q in quotes[:3]:
+    print(q["author"], "—", q["text"][:50], "| 标签:", q["tags"])
+```
+
+### 5.3 输出示例（真实结构）
+
+```
+本页名言数: 10
+Albert Einstein — “The world as we have created it is a process of ...” | 标签: ['change', 'deep-thoughts', 'thinking', 'world']
+J.K. Rowling — “It is our choices, Harry, that show what we truly are, ...” | 标签: ['choices', 'abilities']
+```
+
+> **专业要点**：`tags` 用列表推导式 `div.select("a.tag")` 一次取全部，因为一条名言有多个标签。字段形态要和站点结构对应——单值用 `select_one`，多值用 `select`。
+
+## 六、select() 与 find()/find_all() 怎么选
+
+两套定位 API 并存，很多初学者纠结用哪个。其实功能高度重叠，选顺手的即可，但要知道差异：
+
+| 维度 | `select()` / `select_one()` | `find()` / `find_all()` |
+| --- | --- | --- |
+| 语法 | CSS 选择器，前端同学零成本 | BS4 自有参数（`class_`、 `attrs`） |
+| 按 class | `select(".book")` ✅ 直观 | `find_all("div", class_="book")` ⚠️ 要写 `class_` |
+| 层级/组合 | `select("div.quote > span.text")` ✅ 一行搞定 | 需多次调用或传 `recursive` 参数 |
+| `nth-child` 等伪类 | ✅ 原生支持 | ❌ 不支持 |
+| 多属性匹配 | `select("a[href^='/tag/']")` ✅ | 用 `attrs={...}` 较繁琐 |
+| 返回 | `select` 返回列表，`select_one` 返回单个 | `find_all` 列表，`find` 单个 |
+
+**经验法则**：
+
+- 需要**层级组合、伪类、属性模糊匹配** → `select`（CSS）更强。
+- 只是**按标签名/class 简单取一批** → 两者都行，`select` 通常更短。
+- 团队里前端背景多 → 统一用 `select`，沟通成本低。
+
+## 七、常见坑排查表
+
+| 现象 / 报错 | 常见原因 | 排查方向 |
+| --- | --- | --- |
+| 中文乱码（方块/问号） | `resp.text` 猜错编码 | 用 `resp.encoding = resp.apparent_encoding` 后再解析 |
+| 选择器返回空 `[]` | class 名写错、层级写反、站点结构变了 | 先 `print(soup.prettify()[:500])` 看真实 HTML |
+| `AttributeError: 'NoneType' object has no attribute 'get_text'` | `select_one` 没找到，返回 `None` | 取文本前先判空，或确认选择器是否正确 |
+| 文本前后一堆空白/换行 | 没加 `strip` | `get_text(strip=True)` |
+| `.string` 取出来是 `None` | 标签里嵌套了子标签 | 改用 `get_text(strip=True)` |
+| 取属性抛 `KeyError` | 用了 `tag['href']` 但属性不存在 | 改用 `tag.get('href')` |
+| 一对名言和作者配错 | 全局分别 `select` 两个字段，顺序对不上 | 先 `select("div.quote")` 拿到容器，再在容器内取字段 |
+
+> **避坑心法**：解析结果不对时，先打印原始 HTML（`soup.prettify()`）确认结构，再逐层验证选择器——`soup.select("div.quote")` 先确认能拿到容器，再往里加 `.select_one("span.text")`。一步一步定位，比猜快得多。
+
+## 八、BS4 vs lxml/XPath：怎么选
 
 - BS4 胜在**容错好、API 直观**，新手友好。
 - 纯 XPath（lxml）在「按文字定位、向上找父节点」时更省事（见下一章 XPath）。
 - 实战常组合：BS4 做主解析，遇到 BS4 不擅长的定位再切到 `lxml` 的 XPath。
 
-### 对比表
-
 | 维度 | BS4 `select` | BS4 `find` | XPath |
 | --- | --- | --- | --- |
-| 按 class 找 | `select(".book")` ✅直观 | `find("div", class_="book")` ⚠️ class_ 特殊 | `.xpath("//div[@class='book']")` |
-| 按文本过滤 | ❌不支持 | ❌不支持 | `//a[contains(text(),'详情')]` ✅ |
-| 向上找父节点 | ⚠️`.parent` 只能一层 | 同上 | `.xpath("ancestor::div")` ✅ |
+| 按 class 找 | `select(".book")` ✅ 直观 | `find("div", class_="book")` ⚠️ `class_` 特殊 | `//div[@class='book']` |
+| 按文本过滤 | ❌ 不支持 | ❌ 不支持 | `//a[contains(text(),'详情')]` ✅ |
+| 向上找父节点 | ⚠️ `.parent` 只能一层 | 同上 | `//span/ancestor::div` ✅ |
 | 容错性 | 好（自动修复标签） | 好 | 中等 |
 | 性能 | 慢（Python 实现） | 慢 | 快（C 实现） |
 
 > **经验法则**：简单「按 class/id 取一批标签」→ BS4 更直观；需要「按文字内容定位」「向上找父节点」→ XPath 更省力。
 
-## 六、小结
+## 九、小结
 
-- `BeautifulSoup(html, "lxml")` 解析；`class` 参数要写 `class_`。
-- 定位三件套：`find` / `find_all` / `select`（CSS）。
-- 取文本用 `get_text(strip=True)`，取属性用 `get('href')`。
-- 节点树可上下遍历：`.parent`、`.children`、`.next_sibling`。
+- `BeautifulSoup(html, "lxml")` 解析；`class` 参数要写 `class_`，没装 lxml 就用 `"html.parser"` 兜底。
+- 定位三件套：`find` / `find_all` / `select`；`select` 返回列表、`select_one` 返回单个且可能为 `None`。
+- 取文本用 `get_text(strip=True)`（`.string` 遇嵌套会返回 `None`），取属性用 `get('href')`。
+- 节点树可上下遍历：`.parent`、`.children`、`.find_next_sibling("li")` 等比裸 `next_sibling` 稳。
+- 通用套路：**先选容器，再在容器内取字段**；单值用 `select_one`，多值用 `select`。
+- 真实案例：`quotes.toscrape.com` 用 `div.quote` 容器 + `span.text`/`small.author`/`a.tag` 三字段，10 条一页。
 - 练手：[Level 1 靶站](/practice/level1-books/) 用 `select("tbody tr")` 抓 24 行。
 
 本页底部「代码实战」让你在靶站上完成一次真实提取。

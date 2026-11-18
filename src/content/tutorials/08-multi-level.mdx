@@ -4,26 +4,97 @@ id: 08-multi-level
 
 import CodeRunner from '../../components/CodeRunner.astro';
 
-很多数据「列表页看概要、点进去才看全」。比如图书列表只显示书名，详情页才有作者、简介、评分。这就是**两级爬取**：先抓列表拿链接，再逐个进详情页抓细数据。
+很多数据"列表页看概要、点进去才看全"。图书列表只显示书名和封面，详情页才有作者、简介、评分；电商列表只有标题和价格，详情页才给规格和库存。这就是**两级爬取**：先抓列表拿到详情链接，再逐个进详情页抓细数据，最后合并成一条完整记录。
 
-> **两级爬取是爬虫中最经典的结构**。几乎所有复杂数据（电商商品详情、新闻全文、用户信息）都采用这种「列表 → 详情」的两级架构。掌握它，你就掌握了 60% 的爬虫模式。
+> **两级爬取是爬虫中最经典的结构**。几乎所有复杂数据（商品详情、新闻全文、用户信息）都采用"列表 → 详情"的两级架构。掌握它，你就掌握了一大半的真实爬取场景。这一章用实测过的图书站讲清完整流程，再给出能直接跑的练习。
 
-## 一、两级结构长这样
+## 一、两级结构长什么样
 
 ```
-列表页 → 提取每条的详情链接 → 逐条请求详情页 → 解析细数据 → 合并
+列表页 → 提取每条的详情链接 → 逐条请求详情页 → 解析细数据 → 合并字段
 ```
 
 | 层级 | 做什么 | 输出 |
 | --- | --- | --- |
-| **第一级：列表页** | 抓链接 + 概要（标题、摘要） | `{"url": "/book/1", "title": "Python 入门", ...}` |
+| **第一级：列表页** | 抓链接 + 概要（标题、摘要） | `{"url": "/book/1", "title": "Python 入门"}` |
 | **第二级：详情页** | 逐条请求详情页 → 抓细数据 | `{"url": ..., "title": ..., "author": "张三", "rating": 4.5}` |
 
-> 理解了这个架构，你就知道：**先别急着请求详情页**。第一步只干一件事——把列表页上所有详情页链接收集成一张清单。等清单齐了，再统一请求。这样的好处是：如果某个详情页挂了，不影响其他详情页的数据。
+> 理解了这个架构，你就知道：**先别急着请求详情页**。第一步只干一件事——把列表页上所有详情页链接收集成一张清单。等清单齐了，再统一请求。好处是：如果某个详情页挂了，可以单独跳过，不影响其他数据。
 
-## 二、可运行：列表取链接 + 详情二次解析
+## 二、真实案例：Books to Scrape 两级爬取
 
-下面模拟一个两级场景——先从列表抽链接和书名，再从「详情页」取作者，合并成完整记录：
+### 2.1 页面现象
+
+`http://books.toscrape.com/` 是另一个公开图书爬取沙盒。我实测确认：
+
+- 首页有 20 本书，每本是一个 `article.product_pod` 卡片；
+- 书名和链接在卡片里的 `h3 a`，链接形如 `catalogue/a-light-in-the-attic_1000/index.html`（相对路径）；
+- 详情页有书名（`h1`）、价格（`p.price_color`，如 `£51.77`）、库存（`p.instock.availability`，如 `In stock`）。
+
+### 2.2 完整两级代码（本地运行）
+
+> 下面这段请在**本地 Python 环境**运行。浏览器运行器（Pyodide）里请求公网会被 CORS 拦截；公网案例只作讲解与本地演示。
+
+```python
+import time
+import requests
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin
+
+BASE = "http://books.toscrape.com/"
+headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ..."}
+
+session = requests.Session()
+session.headers.update(headers)
+
+# 步骤 1：抓列表页，拿到每本书的详情 URL
+resp = session.get(BASE, timeout=10)
+resp.encoding = "utf-8"
+soup = BeautifulSoup(resp.text, "html.parser")
+
+detail_urls = []
+for pod in soup.select("article.product_pod"):
+    href = pod.select_one("h3 a")["href"]
+    detail_urls.append(urljoin(BASE, href))   # 相对链接 → 绝对 URL
+print("列表页找到:", len(detail_urls), "本书")
+
+# 步骤 2：逐个请求详情页，提取字段并合并
+books = []
+for url in detail_urls:
+    try:
+        d = session.get(url, timeout=10)
+        d.raise_for_status()                   # 404/500 直接抛异常
+        d.encoding = "utf-8"
+        ds = BeautifulSoup(d.text, "html.parser")
+        books.append({
+            "title": ds.select_one("h1").get_text(strip=True),
+            "price": ds.select_one("p.price_color").get_text(strip=True),
+            "stock": ds.select_one("p.instock.availability").get_text(strip=True),
+            "url": url,
+        })
+    except requests.exceptions.RequestException as e:
+        print("详情页失败，跳过:", url, e)
+    time.sleep(0.3)                            # 控频
+
+print("共采集:", len(books), "本")
+for b in books[:3]:
+    print(b)
+```
+
+### 2.3 流程拆解
+
+1. **第一次请求只解析列表**：用 `article.product_pod` 圈定每本书的卡片，从 `h3 a` 取 `href`，用 `urljoin` 转成绝对 URL 存进 `detail_urls`。
+2. **第二次循环进详情**：遍历 `detail_urls`，每本书请求一次详情页，用 `h1` / `p.price_color` / `p.instock.availability` 取三个字段。
+3. **合并成一条记录**：把列表阶段的信息（这里保留了 `url`）和详情字段拼成一个 dict，追加进 `books`。
+4. **异常隔离**：某本书 404 只打印跳过，不中断整个循环——这是两级爬取相比"边抓边进"最大的优势。
+
+## 三、可运行练习
+
+> 练习数据只来自内置模拟数据或课程靶站 `SITE_BASE`，运行器里可以直接跑；公网案例请在本地跑。
+
+### 练习 1：列表取链接 + 详情二次解析
+
+下面模拟一个两级场景——先从列表抽链接和书名，再从"详情页"取作者，合并成完整记录：
 
 <CodeRunner
   variant="guided"
@@ -59,12 +130,12 @@ print("完整记录:")
 for it in items:
     print(it)`} />
 
-## 三、用 set 去重
+### 练习 2：用 set 去重
 
 列表页之间常有重复条目（尤其翻页重叠）。用 `set` 存已抓过的链接，遇到重复就跳过：
 
 <CodeRunner
-  variant="challenge"
+  variant="guided"
   title="用 set 给链接去重"
   prompt="任务:links 里有重复链接。用 set 维护已见集合 seen,只保留首次出现的链接到 unique 列表。补全去重逻辑。"
   code={`links = ["/book/1", "/book/2", "/book/1", "/book/3", "/book/2"]
@@ -80,91 +151,145 @@ for link in links:
 
 print("去重后:", unique)`} />
 
-> **为什么用 set 去重而不是 list？** `set` 的 `in` 操作是 O(1) 常数时间（哈希查找），`list` 的 `in` 是 O(n) 线性搜索。翻页量大时差距巨大。
+> **为什么用 set 去重而不是 list？** `set` 的 `in` 操作是 O(1) 常数时间（哈希查找），`list` 的 `in` 是 O(n) 线性搜索。链接量大时差距巨大。
 
-## 四、常见坑与排查
+### 练习 3：真·靶站两级爬取（SITE_BASE）
 
-| 问题 | 原因 | 解决方案 |
+把两级思路用到课程靶站：先从 `books.html` 列表页提取 20 个详情链接，再逐个请求详情页，提取书名与价格。运行器已对靶站打好补丁，可以直接跑：
+
+<CodeRunner
+  variant="guided"
+  title="靶站实战：列表 + 详情页"
+  prompt="任务:先请求 SITE_BASE + /practice/level3-detail/books.html,用 tbody tr td:first-child a 的 href 提取所有详情链接存入 links;再遍历 links 请求 SITE_BASE + /practice/level3-detail/ + href,用 h2 取书名、td.price 取价格,组成 dict 追加到 details。最后打印 details 数量和第一条。"
+  code={`import requests
+from bs4 import BeautifulSoup
+
+base = SITE_BASE + "/practice/level3-detail/"
+r = requests.get(base + "books.html", timeout=10)
+r.encoding = "utf-8"
+soup = BeautifulSoup(r.text, "html.parser")
+
+# 第一级:提取详情链接
+links = [a.get("href") for a in soup.select("tbody tr td:first-child a")]
+
+# 第二级:逐个请求详情页,提取书名与价格
+details = []
+for href in links:
+    d = requests.get(base + href, timeout=10)
+    d.encoding = "utf-8"
+    ds = BeautifulSoup(d.text, "html.parser")
+    details.append({
+        "书名": ds.select_one("h2").get_text().strip(),
+        "价格": ds.select_one("td.price").get_text().strip(),
+    })
+
+print("详情页数量:", len(details))
+print("样例:", details[0] if details else None)`} />
+
+## 四、三种对比：结构、并发与链接处理
+
+### 4.1 两级结构 vs 单页
+
+| 维度 | 单页爬取 | 两级爬取（列表 + 详情） |
 | --- | --- | --- |
-| 详情页 404 | 列表页的链接过期或不存在 | 加入 `try/except` 跳过失败页，继续抓 |
-| 详情页结构变化 | 某些详情页没有 `.author` 标签 | 用 `.get("author", "未知")` 兜底 |
-| 重复抓取 | 翻页重叠导致同一链接被抓多次 | 用 `set` 维护 `seen` 集合去重 |
-| 太慢 | 详情页一多，串行请求会很慢 | 用 `ThreadPoolExecutor` 并发（见下） |
+| 请求次数 | 1 次 | 1 次列表 + N 次详情 |
+| 数据完整度 | 只有概要字段 | 概要 + 完整细字段 |
+| 代码复杂度 | 简单 | 中等（需维护链接清单、合并字段） |
+| 失败影响 | 整页失败即无数据 | 单条详情失败可跳过，其余照常 |
+| 耗时 | 快 | 慢（N 次网络往返），适合并发提速 |
 
-## 五、并发提速(进阶)
-
-详情页一多，串行请求会很慢。可用线程池并发（本地运行）：
-
-```python
-from concurrent.futures import ThreadPoolExecutor
-import requests
-
-def fetch_detail(url):
-    return requests.get(url, timeout=5).text
-
-with ThreadPoolExecutor(max_workers=5) as pool:
-    details = pool.map(fetch_detail, detail_urls)
-```
-
-> **并发不是越快越好**——`max_workers` 别太大（建议 5-10），配合 `time.sleep` 才礼貌。太多并发不仅容易压垮服务器，也容易被反爬识别。
-
-### 串行 vs 并发对比
+### 4.2 串行 vs 线程池并发 vs 异步
 
 | 方式 | 速度 | 代码复杂度 | 适用场景 |
 | --- | --- | --- | --- |
 | 串行（for 循环） | 慢 | 简单 | 少量详情页（50 以内） |
-| 线程池并发 | 快 | 中等 | 中等量（50-500） |
-| `aiohttp` 异步 | 最快 | 复杂 | 大量（500+），需进阶 |
+| 线程池 `ThreadPoolExecutor` | 快 | 中等 | 中等量（50-500），I/O 密集型首选 |
+| `aiohttp` 异步 | 最快 | 复杂 | 大量（500+），需 asyncio 进阶 |
 
-## 六、完整两级爬取代码
+> **并发不是越快越好**——`max_workers` 别太大（建议 5-10），配合控频才礼貌。太多并发既容易压垮服务器，也容易被反爬识别（第 11 章）。
 
-下面是一个**完整**的两级爬取示例——包含异常处理、去重和控频：
+### 4.3 相对链接必须用 urljoin
+
+列表页里的 `href` 通常是相对路径：首页是 `catalogue/xxx/index.html`，详情页里又可能是 `../../../xxx/index.html`。手拼字符串在不同层级会出错，`urljoin(当前页URL, href)` 会按当前页面路径正确解析，是两级爬取里最容易踩、也最该一次做对的细节。
+
+## 五、工程要点：合并、去重、并发与重试
+
+### 5.1 标准流程
+
+1. **先抓列表**：只解析列表页，把每条的详情 URL 和概要字段收进清单。
+2. **再抓详情**：遍历清单逐条请求，解析细字段。
+3. **合并字段**：把列表概要和详情细字段拼成一条完整记录（用同一个 dict 累加键即可）。
+4. **写出去**：逐条落盘或统一保存，避免中途崩溃丢失全部数据。
+
+### 5.2 去重：先去重再抓详情
+
+重复链接会导致同一详情页被请求多次。应在"拿到清单后、抓详情前"先去重，省掉无谓请求：
 
 ```python
-import requests
-from bs4 import BeautifulSoup
-import time
-
-headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)..."}
-base_url = "https://books.example.com"
 seen = set()
-results = []
-
-# 步骤 1: 抓取列表页
-resp = requests.get(base_url + "/list", headers=headers, timeout=5)
-soup = BeautifulSoup(resp.text, "lxml")
-
-links = [a.get("href") for a in soup.select("li a")]
-
-# 步骤 2: 逐条请求详情页
-for url in links:
-    if url in seen:  # 去重
-        continue
-    seen.add(url)
-    
-    try:
-        detail_resp = requests.get(base_url + url, headers=headers, timeout=5)
-        detail_resp.raise_for_status()
-        
-        # 解析详情页
-        d_soup = BeautifulSoup(detail_resp.text, "lxml")
-        title = d_soup.select_one(".title").get_text(strip=True)
-        author = d_soup.select_one(".author").get_text(strip=True) or "未知"
-        
-        results.append({"url": url, "title": title, "author": author})
-    except requests.exceptions.RequestException:
-        print(f"详情页 {url} 失败,跳过")
-    
-    time.sleep(1)  # 控频
-
-print(f"抓取完成,共 {len(results)} 本")
+unique_urls = []
+for u in detail_urls:
+    if u not in seen:
+        seen.add(u)
+        unique_urls.append(u)
 ```
+
+### 5.3 并发控频：线程池的正确姿势
+
+```python
+from concurrent.futures import ThreadPoolExecutor
+import requests, time
+
+def fetch_detail(url):
+    resp = requests.get(url, timeout=8)
+    resp.raise_for_status()
+    time.sleep(0.2)                # 每线程内部也要控频
+    return resp.text
+
+with ThreadPoolExecutor(max_workers=5) as pool:   # 并发数克制一点
+    html_list = list(pool.map(fetch_detail, unique_urls))
+```
+
+> 并发只是把"等待网络"的时间重叠起来，`max_workers` 要克制。生产环境还应把 `retry` 和 `raise_for_status` 一起放进 `fetch_detail`，让单个失败不污染整体。
+
+### 5.4 失败重试：别让一本书 404 拖垮全表
+
+详情页偶尔 500 或超时，加一个带上限的重试，仍失败就跳过并记录，保证主流程继续：
+
+```python
+def fetch_with_retry(url, retries=3):
+    for attempt in range(retries):
+        try:
+            r = requests.get(url, timeout=8)
+            r.raise_for_status()
+            return r.text
+        except requests.exceptions.RequestException:
+            if attempt == retries - 1:
+                print("放弃:", url)
+                return None
+            time.sleep(2 ** attempt)   # 1s, 2s 简单退避
+```
+
+> 更完整的"指数退避 + 抖动 + 尊重 Retry-After"见第 11 章。这里先建立"失败要隔离、要有上限"的意识。
+
+## 六、常见坑排查表
+
+| 现象 | 原因 | 解决办法 |
+| --- | --- | --- |
+| 详情页全部 404 / 路径拼错 | 相对 URL 直接字符串拼接，层级不对 | 统一 `urljoin(当前页URL, href)` 解析相对链接 |
+| 详情页字段取不到（None） | 部分详情页结构不同，选择器失效 | 用 `select_one(...)` 后判空，`.get("class", 默认值)` 兜底 |
+| 并发太高被封（403/429） | `max_workers` 过大、无间隔请求 | 并发数降到 5-10，线程内 `time.sleep`，遇 429 退避 |
+| 某本书 404 导致整体崩溃 | 没做异常隔离，异常冒出循环 | `try/except` 包住单条详情，失败打印后 `continue` |
+| 数据对不上 / 有重复 | 翻页重叠、同一链接抓多次 | 先 `set` 去重再抓详情；按唯一 ID 校验 |
+| 重试陷入长时间等待 | 无上限重试或退避无封顶 | 限制 `retries`，退避用 `min(cap, 2**attempt)` |
 
 ## 七、小结
 
-- 两级爬取：列表页抽链接 → 详情页抓细数据 → 合并。
-- 先把链接和概要收集成列表，再统一进详情页，结构更清晰。
-- `set` 去重：用「已见集合」跳过重复链接。
-- 量大用 `ThreadPoolExecutor` 并发，但务必控制频率。
-- 异常处理：详情页挂了不影响其他页，用 `try/except` 跳过。
+- **两级流程**：抓列表拿链接 → 先去重 → 逐条进详情 → 合并字段 → 统一保存。
+- **真实案例**：Books to Scrape 首页 20 本，`article.product_pod` 列表、`h3 a` 链接，详情页 `h1` / `p.price_color` / `p.instock.availability`。
+- **对比选择**：单页简单但数据少；两级完整但耗时，量大了用 `ThreadPoolExecutor` 并发（并发数克制 + 控频）。
+- **相对链接**：列表页和详情页层级不同，必须用 `urljoin` 而不是手拼字符串。
+- **稳定性**：异常隔离（失败跳过）、有限重试（带退避）、先去重再抓，三者缺一不可。
 - 去 [Level 3 靶站](/practice/level3-detail/) 实战列表 + 详情。
+
+下一章：数据藏在接口里怎么办——用 `requests` 直接调用 JSON API，比解析 HTML 更快更稳。

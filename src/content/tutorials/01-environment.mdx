@@ -8,14 +8,18 @@ import CodeRunner from '../../components/CodeRunner.astro';
 
 > 这一章的内容，你将来 every 项目都会遇到。**环境管理**是区分「写了一段脚本」和「做一个正经项目」的分水岭。
 
-## 一、为什么需要隔离环境
+> **先说清楚本课程的运行方式**：页面底部的「代码实战」运行器（基于 Pyodide，把 Python 编译成 WebAssembly 跑在浏览器里）**已经预装了 `requests` / `beautifulsoup4` / `lxml`，无需安装即可直接跑示例**。它适合你学语法、验证思路、按教程练习；但它是受限沙盒（下文第七节详述）。要写出能长期运行、能装任意库、能定时任务的**真实爬虫**，你迟早要在自己电脑上搭一套本地环境——这正是本章要教你的。
 
-你以后会同时做很多 Python 项目，每个项目依赖的库版本可能冲突。比如：
+## 一、为什么需要隔离环境：从「依赖地狱」讲起
 
-- 项目 A 需要 `requests 2.x`（老库，只兼容旧版）
-- 项目 B 需要 `requests 2.32+`（新版有 bugfix）
+你以后会同时做很多 Python 项目，每个项目依赖的库版本可能冲突。来看一个真实会遇到的场景：
 
-如果都装在全局 Python 里，`import requests` 永远只指向一个版本，你要么 A 跑不了，要么 B 跑不了。**虚拟环境(venv)**就是给每个项目单独建一个小房间，互不干扰。
+- 项目 A 是一个老爬虫，依赖 `requests 2.20`，因为新版某个内部 API 变了，一升级就报错。
+- 项目 B 是新课作业，明确要求 `requests 2.32+`（新版修了一个重要的安全漏洞）。
+
+如果都装在全局 Python 里，`import requests` 永远只指向**同一个**版本：你要么让 A 跑不了，要么让 B 跑不了。更糟的是，很多库还共享底层依赖（比如 `urllib3`、`certifi`），一个项目升级会悄悄弄坏另一个——这就是臭名昭著的**依赖地狱（dependency hell）**。
+
+**虚拟环境（venv）** 就是给每个项目单独建一个小房间：每个房间有自己的一套库，A 房间装 2.20，B 房间装 2.32，互不干扰。切换项目只需「激活」对应的房间。
 
 | 方案 | 适用场景 | 缺点 |
 | --- | --- | --- |
@@ -24,74 +28,206 @@ import CodeRunner from '../../components/CodeRunner.astro';
 | conda | 数据科学（需多版本 Python） | 体积大，启动慢 |
 | 浏览器运行器 | 本教程练习，即开即用 | 无法装任意库，受限环境 |
 
-> **本教程的浏览器运行器**已经预装好了 `requests` / `BeautifulSoup` / `lxml`，你不用装也能直接在页面里跑示例。但学会本地环境管理，是你把爬虫跑在自己电脑上的前提。
+> **专业习惯**：拿到一个新项目，第一件事不是 `pip install`，而是先建虚拟环境。哪怕这个项目只用一个库——因为三天后你可能就要加第二个。
 
-## 二、安装并验证 Python
+## 二、安装 Python 3.13 并验证
 
-1. 到 [python.org](https://www.python.org/downloads/) 下载 **Python 3.10+**（安装时**务必勾选** "Add Python to PATH"）。
-2. 打开终端验证：
+### 2.1 安装步骤
+
+1. 到 [python.org 下载页](https://www.python.org/downloads/) 下载 **Python 3.13**（或 3.10 以上的稳定版）。Windows 用户直接下 `python-3.13.x-amd64.exe` 安装包。
+2. 运行安装程序，**务必勾选底部的 "Add Python to PATH"**（这是新手最常漏的一步，漏了后面 `python`、`pip` 都会「找不到命令」）。
+3. 选择 "Install Now"，等待完成。
+
+> **macOS / Linux 注意**：系统通常自带 Python（macOS 自带来的是老版本）。建议用 `python3` 命令区分，或用 Homebrew（`brew install python@3.13`）安装。 Linux 发行版可用 `apt install python3`。
+
+### 2.2 验证安装
+
+打开终端（Windows 用 PowerShell 或 CMD，macOS/Linux 用 Terminal）执行：
 
 ```bash
-python --version      # 或 python3 --version
-# 期望看到: Python 3.10.x 或更高
+python --version      # Windows 常用；期望看到 Python 3.13.x
+python3 --version     # macOS / Linux 常用
+pip --version         # 确认 pip 可用，输出里会带 python 路径
 ```
 
-如果提示「找不到命令」，大概率是安装时没勾 PATH，或需要用 `python3`（Linux/macOS 常见）。
+看到 `Python 3.13.x` 就说明装好了。如果提示「找不到命令」，别急着重装——先对照下面的排查表。
 
-### 常见安装问题
+### 2.3 多版本 Python 共存
+
+一台电脑上有很多个 Python 是常态：系统自带一个、Anaconda 一个、你自己装的一个。如何区分？
+
+| 操作 | Windows | macOS / Linux |
+| --- | --- | --- |
+| 列出所有已装版本 | `py -0` | `ls /usr/bin/python*` |
+| 用指定版本建环境 | `py -3.13 -m venv .venv` | `python3.13 -m venv .venv` |
+| 用指定版本跑脚本 | `py -3.13 spider.py` | `python3.13 spider.py` |
+
+> **关键原则**：**永远用 `python -m pip` 代替裸 `pip`**。因为 `python -m pip` 明确使用「当前这个 Python 解释器」对应的 pip，能从根本上避免「pip 装在 A 环境、python 用的是 B 环境」的错配问题。
+
+### 2.4 常见安装问题
 
 | 现象 | 原因 | 解决 |
 | --- | --- | --- |
-| `command not found: python` | 没装或没加 PATH | 重新安装，勾 PATH |
+| `command not found: python` | 没装或没加 PATH | 重新安装，勾 "Add Python to PATH" |
 | `command not found: python3` | 需要 `python3` 前缀 | 用 `python3 --version` |
-| `pip: command not found` | 没装 pip | 运行 `python -m ensurepip --upgrade` |
-| 多个 Python 版本 | 系统自带 Python 和你装的不一样 | 用 `which python` / `where python` 确认路径 |
+| `pip: 不是内部或外部命令` | pip 没加入 PATH，或没装 | 用 `python -m pip --version`；不行就 `python -m ensurepip --upgrade` |
+| 多个 Python 版本分不清 | 系统自带与你装的不一样 | 用 `where python`（Win）/ `which python3`（Mac/Linux）确认路径 |
+| Windows 指向了 Anaconda 的 python | PATH 顺序问题 | 用 `py -3.13` 显式指定版本 |
 
-> **Windows 特别注意**：如果你同时装了 Anaconda，`python` 可能指向 conda 而非你刚装的 Python。建议用 `python3` 或完整路径区分。
+## 三、虚拟环境三剑客：venv vs conda vs uv
 
-## 三、用 venv 创建虚拟环境
+创建虚拟环境的工具不止一个。选哪个，取决于你的场景：
 
-在项目目录里：
+| 工具 | 特点 | 速度 | 适合谁 |
+| --- | --- | --- | --- |
+| **venv** | Python 3.3+ 内置，零额外安装，社区标准 | 中 | 绝大多数 Python 项目，**入门首选** |
+| **conda** | 能管理 Python 解释器本身 + C 科学库（numpy/scipy 等） | 慢 | 数据科学、需要多版本 Python 或复杂二进制依赖 |
+| **uv** | Astral 出品的 Rust 新星，装包/建环境极快，兼容 venv 生态 | 极快 | 追求效率、受够了 pip 慢的人（进阶推荐） |
+
+> **怎么选**：本课程（以及绝大多数 Web 爬虫）用 **venv 就够**，它是官方内置、最稳定、资料最多的方案。conda 主要赢在「非 Python 二进制依赖」管理，爬虫用不到。uv 是速度怪兽，等你熟悉了 venv 再尝鲜不迟。
+
+### 3.1 用 venv 创建虚拟环境（推荐路线）
+
+在项目目录里执行：
 
 ```bash
-# 在当前目录创建名为 .venv 的虚拟环境
+# 1. 在当前目录创建名为 .venv 的虚拟环境
 python -m venv .venv
 
-# 激活(Windows)
+# 2. 激活(Windows / PowerShell)
 .venv\Scripts\activate
-# 激活(macOS / Linux)
+#    激活(macOS / Linux)
 source .venv/bin/activate
+
+# 3. 激活后提示符前出现 (.venv)，表示已进入隔离房间
+# 4. 用完退出
+deactivate
 ```
 
-激活后，终端提示符前面会出现 `(.venv)`，表示你已进入这个隔离房间。之后用 `pip` 装的库都只装在这里。
+激活后，终端提示符前面会出现 `(.venv)`，表示你已进入这个隔离房间。之后用 `pip`（或更稳妥的 `python -m pip`）装的库都只装在这里。
 
 > `.venv` 是社区约定俗成的虚拟环境目录名（前面加点表示隐藏，不会干扰项目文件）。你可以改名，但 `.venv` 是最被广泛认知的。
+>
+> **Windows PowerShell 激活报错？** 若提示「禁止运行脚本」，执行 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` 放开当前用户的脚本执行策略即可。
 
-## 四、用 pip 安装核心库
-
-爬虫三件套：
+### 3.2 uv 极速体验（可选了解）
 
 ```bash
-pip install requests beautifulsoup4 lxml
+# 安装 uv（一次性）
+pip install uv
+
+# 建环境 + 装包，速度通常是 pip 的十倍
+uv venv .venv
+uv pip install requests beautifulsoup4 lxml
 ```
 
-- **requests**：发 HTTP 请求拿网页（最流行的 HTTP 库）
-- **beautifulsoup4**：把 HTML 解析成好用的对象（配 `lxml` 解析器最快）
+uv 生成的环境就是标准 venv，激活方式完全一样——这也是它兼容性好的原因。
+
+## 四、pip 安装核心库 + 镜像源加速
+
+### 4.1 爬虫三件套
+
+激活虚拟环境后安装：
+
+```bash
+python -m pip install requests beautifulsoup4 lxml
+```
+
+- **requests**：发 HTTP 请求拿网页（最流行的 HTTP 库，第 3 章详讲）
+- **beautifulsoup4**：把 HTML 解析成好用的对象（第 4-6 章详讲）
 - **lxml**：高性能解析引擎，XPath 也靠它
 
 升级 pip 本身（可选）：`python -m pip install --upgrade pip`。
 
-### 验证安装成功
+### 4.2 真实案例：用国内镜像源加速安装
+
+`pip` 默认从国外的 PyPI 官方源下载，在国内经常慢到几十 KB/s 甚至超时。**换成国内镜像源**，速度立刻起飞：
 
 ```bash
-pip list | grep -i "requests\|beautifulsoup\|lxml"
-# 或
-pip show requests beautifulsoup4 lxml
+# 临时使用清华源（在 install 后加 -i 参数）
+python -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple requests
+
+# 临时使用阿里云源
+python -m pip install -i https://mirrors.aliyun.com/pypi/simple/ requests
+
+# 永久切换到清华源（推荐，一次配置终身受益）
+python -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+
+# 查看当前配置
+python -m pip config list
+
+# 想恢复官方源
+python -m pip config unset global.index-url
 ```
 
-## 五、验证环境就绪
+常用镜像源一览：
 
-下面这段在浏览器运行器里直接跑，它检查三个核心库是否都能导入——你本地激活环境后跑同样的代码，应该看到「核心库就绪」：
+| 镜像源 | 地址 | 特点 |
+| --- | --- | --- |
+| 清华 TUNA | `https://pypi.tuna.tsinghua.edu.cn/simple` | 老牌、稳定，首选 |
+| 阿里云 | `https://mirrors.aliyun.com/pypi/simple/` | 速度快，企业用户多 |
+| 中国科技大学 | `https://pypi.mirrors.ustc.edu.cn/simple/` | 教育网友好 |
+| PyPI 官方 | `https://pypi.org/simple` | 最全，但国内可能慢 |
+
+> **镜像源超时的排查**：确认地址拼写无误（结尾的 `/simple` 不能少）；公司网络可能有代理或防火墙，问 IT；必要时用 `--timeout 60` 放宽超时，或用 `--trusted-host pypi.tuna.tsinghua.edu.cn` 信任主机。
+
+### 4.3 验证安装成功
+
+```bash
+python -m pip list | grep -i "requests\|beautifulsoup\|lxml"   # macOS / Linux
+# Windows PowerShell 用：
+python -m pip list | Select-String "requests|beautifulsoup|lxml"
+
+# 或逐个查详情
+python -m pip show requests beautifulsoup4 lxml
+```
+
+### 4.4 pip 常用命令速查
+
+| 操作 | 命令 |
+| --- | --- |
+| 安装一个库 | `python -m pip install 包名` |
+| 安装指定版本 | `python -m pip install requests==2.32.3` |
+| 卸载一个库 | `python -m pip uninstall 包名` |
+| 列出已装 | `python -m pip list` |
+| 查包详情 | `python -m pip show 包名` |
+| 升级 pip | `python -m pip install --upgrade pip` |
+| 导出依赖 | `python -m pip freeze > requirements.txt` |
+| 从文件装 | `python -m pip install -r requirements.txt` |
+| 用镜像源装 | `python -m pip install -i 镜像地址 包名` |
+
+> `requirements.txt` 是 Python 项目的「环境清单」——把它交给同事，对方一行 `python -m pip install -r requirements.txt` 就能装齐所有依赖。**交付项目时务必带上它**。
+
+### 4.5 真实案例：5 分钟搭好一个爬虫项目
+
+把上面的步骤串起来，就是一次标准的项目初始化。在一个空文件夹里依次执行：
+
+```bash
+mkdir my-spider && cd my-spider                          # 建项目目录并进入
+python -m venv .venv                                     # 建虚拟环境
+.venv\Scripts\activate                                   # 激活(Windows)；Mac/Linux 用 source .venv/bin/activate
+python -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple   # 换清华源
+python -m pip install requests beautifulsoup4 lxml       # 装三件套
+python -m pip freeze > requirements.txt                  # 保存环境清单
+```
+
+完成后目录里多出 `.venv/`（隔离环境）和 `requirements.txt`（依赖清单）。以后换电脑、换同事，只需 `python -m venv .venv` → 激活 → `python -m pip install -r requirements.txt`，几秒钟就能还原出一模一样的环境。**这就是专业项目所谓的「可复现性」**——也是为什么我们一开始就要建虚拟环境。
+
+## 五、编辑器怎么选：VS Code vs PyCharm vs Jupyter
+
+环境装好了，还得有个趁手的「写代码的地方」：
+
+| 工具 | 定位 | 优点 | 适合场景 |
+| --- | --- | --- | --- |
+| **VS Code** | 轻量代码编辑器 | 免费、启动快、插件生态丰富、Python 插件体验好 | **爬虫开发首选**，通用、灵活 |
+| **PyCharm** | 专业 Python IDE | 调试/重构/代码补全极强，开箱即用 | 大型项目、追求强 IDE 功能（社区版免费） |
+| **Jupyter** | 交互式 Notebook | 边写边运行、可视化强 | 数据分析、教学演示、探索性实验 |
+
+> **建议路线**：入门用 **VS Code**（装官方 Python 插件 + Pylance），轻量又专业；如果你喜欢「一站式、不折腾配置」，**PyCharm 社区版**也很香；**Jupyter** 更适合分析数据和边写边看，不适合管理多文件的爬虫工程。三者的解释器都要指向你建好的 `.venv`——在项目里选对解释器（VS Code 左下角 / PyCharm 的 Project Interpreter），才能用上隔离环境里的库。
+
+## 六、验证环境就绪
+
+下面这段在浏览器运行器里直接跑，它检查三个核心库是否都能导入——你本地激活虚拟环境后跑同样的代码，应该看到「核心库就绪」：
 
 <CodeRunner
   variant="showcase"
@@ -107,35 +243,46 @@ except ImportError as e:
     print("缺少库:", e)
     print("在本地请运行: pip install requests beautifulsoup4 lxml")`} />
 
-## 六、pip 常用操作速查
+> **思考题答案**：两者的区别在于「import 从哪里加载」。浏览器运行器里，包来自 Pyodide 预编译的 WebAssembly 包；本地激活 venv 后，包来自 `.venv/lib/python3.13/site-packages`（Windows 是 `.venv\Lib\site-packages`）。同一段 `import`，背后的来源完全不同——这正是环境隔离的意义。
 
-| 操作 | 命令 |
-| --- | --- |
-| 安装一个库 | `pip install 包名` |
-| 卸载一个库 | `pip uninstall 包名` |
-| 列出已装 | `pip list` |
-| 查包详情 | `pip show 包名` |
-| 升级 pip | `python -m pip install --upgrade pip` |
-| 导出依赖 | `pip freeze > requirements.txt` |
-| 从文件装 | `pip install -r requirements.txt` |
+## 七、浏览器运行器（Pyodide）与本地环境的差异
 
-> `requirements.txt` 是 Python 项目的「环境清单」——把它交给同事，对方一行命令就能装齐所有依赖。
+课程内置的运行器用 **Pyodide** 技术，把 CPython 编译成 WebAssembly 跑在浏览器沙盒里。它很方便，但和本地 Python 有本质区别，了解这些差异能帮你避免困惑：
 
-## 七、常见坑与排查
+| 维度 | 浏览器运行器（Pyodide） | 本地 Python + venv |
+| --- | --- | --- |
+| 安装 | 零安装，打开即用 | 需装 Python、建 venv、装库 |
+| 文件系统 | 内存虚拟文件系统，刷新即清空 | 真实磁盘，文件持久保存 |
+| 可装的库 | 仅预装或纯 Python/预编译 wheel | 任意库（含 C 扩展） |
+| 网络请求 | 受浏览器 CORS 限制，**无法直连公网** | 自由访问网络 |
+| 持久化 | 无，关掉页面就重置 | 完全持久化 |
+| 适用场景 | 学语法、做练习、验证思路 | 真实爬虫项目、定时任务、工程开发 |
+
+> **这直接决定了本课程练习的设计**：可运行练习里的数据，要么来自代码内置的模拟字符串/JSON，要么来自课程**内置靶站**（运行器已对该域名打补丁，能正常访问）。你不会在练习里看到请求 `httpbin.org` 这种公网地址——它在浏览器里会被 CORS 拦截。公网站点我们只作讲解和「本地运行代码」展示。
+
+## 八、常见坑排查表
 
 | 现象 | 原因 | 解决办法 |
 | --- | --- | --- |
-| `pip install` 成功但 `import` 失败 | 没激活 venv，或激活错了环境 | 用 `which pip` (Linux) 或 `where pip` (Windows) 确认路径指向 `.venv` |
+| `pip install` 成功但 `import` 失败 | 没激活 venv，或激活错了环境 | 用 `where python` / `which python3` 确认解释器路径指向 `.venv` |
+| `ModuleNotFoundError: No module named 'requests'` | 库装到了另一个 Python 环境 | 用 `python -m pip install requests` 重装到当前解释器 |
 | Windows 激活报权限错误 | PowerShell 执行策略限制 | `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` |
-| `pip` 和 `python` 不是一对 | 全局 pip 装了，venv 没装 | 激活 venv 后运行 `python -m pip install 包名`（推荐写法） |
-| 装完库却 `ImportError` | 用了另一个 Python 解释器 | 确保 `python` 和 `pip` 来自同一个环境（用 `python -m pip` 最稳妥） |
+| `pip` 和 `python` 不是一对 | 全局 pip 装了，venv 没装 | 激活 venv 后用 `python -m pip install 包名`（推荐写法） |
+| 多版本 Python 冲突 | `python` 指向了错误的版本 | 用 `py -0`（Win）列出版本，`py -3.13 -m venv .venv` 指定版本 |
+| `'pip' 不是内部或外部命令` | pip 没进 PATH 或没装 | 优先用 `python -m pip`；再试 `python -m ensurepip --upgrade` |
+| 镜像源下载超时 | 源地址错误 / 网络受限 | 换清华或阿里源，检查 `/simple` 后缀，加 `--timeout 60` |
+| 浏览器能跑、本地报错（或反之） | Pyodide 与本地环境差异 | 对照第七节：CORS、虚拟 FS、可用库都不同，别混为一谈 |
 
-## 八、小结
+> **万能诊断三连**：遇到「装了却用不了」，依次问自己——① 我激活 venv 了吗？② `python` 和 `pip` 指向同一个解释器吗（`python -m pip` 能规避）？③ `import` 报的错到底是什么？按顺序排查，99% 的环境问题都能定位。
 
-- 先装 Python 3.10+，验证 `python --version`。
-- 每个项目用 `python -m venv .venv` 隔离，装库前先激活。
+## 九、小结
+
+- 先装 Python 3.13（或 3.10+），安装时**勾选 Add Python to PATH**，用 `python --version` 验证。
+- 每个项目用 `python -m venv .venv` 隔离，装库前先激活；`python -m pip` 永远比裸 `pip` 稳妥。
+- **venv** 是爬虫项目首选；conda 面向数据科学；uv 是追求速度的进阶选项。
 - 爬虫三件套：`requests`（请求）+ `beautifulsoup4`（解析）+ `lxml`（引擎/XPath）。
-- 装完用 `import` 验证，比「以为装好了」可靠。
-- `requirements.txt` 是环境清单，一行 `pip install -r requirements.txt` 就能恢复所有依赖。
+- 国内安装慢就换**清华/阿里镜像源**；`requirements.txt` 是项目环境清单，交付时带上。
+- 编辑器推荐 VS Code（或 PyCharm 社区版），并确保解释器指向 `.venv`。
+- **浏览器运行器零安装、便于练习，但受 CORS 和库限制；真实爬虫必须搭本地环境。**
 
 下一章：HTTP 是什么，URL 长什么样——理解了网络协议，后面的代码才有意义。
