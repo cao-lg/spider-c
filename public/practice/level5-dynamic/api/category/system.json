@@ -1,0 +1,21 @@
+{
+  "code": 0,
+  "message": "success",
+  "category": "系统",
+  "slug": "system",
+  "total": 1,
+  "data": [
+    {
+      "id": "B0352",
+      "title": "操作系统 · 实战指南",
+      "author": "秦峰",
+      "publisher": "异步图书",
+      "price": 49,
+      "rating": 4.0,
+      "pubdate": "2022-01",
+      "isbn": "978-7-652-77881-9",
+      "category": "系统",
+      "description": "配套在线练习与配套资料,帮助你巩固所学知识点。"
+    }
+  ]
+}

@@ -3509,3 +3509,57 @@ button {
   width: 100%;
   min-width: 460px;
 }
+
+.exam-fill input,
+.exam-fill textarea {
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-1);
+  font-size: 0.95rem;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.exam-fill textarea {
+  min-height: 4rem;
+}
+
+.exam-code {
+  margin-top: 0.5rem;
+}
+
+.exam-code-editor {
+  width: 100%;
+  min-height: 7.5rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-1);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  line-height: 1.55;
+  resize: vertical;
+  tab-size: 4;
+}
+
+.exam-code-status {
+  font-size: 0.85rem;
+  padding-left: 0.1rem;
+}
+
+.exam-code-status[data-kind='ok'] {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.exam-code-status[data-kind='bad'] {
+  color: var(--danger);
+}
+
+.exam-code-status[data-kind='info'] {
+  color: var(--text-3);
+}

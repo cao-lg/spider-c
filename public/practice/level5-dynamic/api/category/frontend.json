@@ -1,0 +1,45 @@
+{
+  "code": 0,
+  "message": "success",
+  "category": "前端",
+  "slug": "frontend",
+  "total": 3,
+  "data": [
+    {
+      "id": "B0383",
+      "title": "前端开发 · 从零开始",
+      "author": "苏晴",
+      "publisher": "异步图书",
+      "price": 129,
+      "rating": 4.0,
+      "pubdate": "2024-06",
+      "isbn": "978-7-240-27218-2",
+      "category": "前端",
+      "description": "从零构建完整的实战项目,涵盖开发、测试与部署全流程。"
+    },
+    {
+      "id": "B0396",
+      "title": "前端开发 · 深入学习",
+      "author": "罗雪",
+      "publisher": "清华-伯克利出版中心",
+      "price": 49,
+      "rating": 4.1,
+      "pubdate": "2019-08",
+      "isbn": "978-7-657-30446-5",
+      "category": "前端",
+      "description": "丰富的图表与代码演示,让抽象概念变得直观易懂。"
+    },
+    {
+      "id": "B0400",
+      "title": "前端开发 · 面试宝典",
+      "author": "高翔",
+      "publisher": "电子工业出版社",
+      "price": 89,
+      "rating": 4.8,
+      "pubdate": "2016-07",
+      "isbn": "978-7-362-51474-5",
+      "category": "前端",
+      "description": "配套在线练习与配套资料,帮助你巩固所学知识点。"
+    }
+  ]
+}

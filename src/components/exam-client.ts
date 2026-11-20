@@ -10,7 +10,8 @@ import { cloud, currentSession, onAuthChange, isTeacher, errorMessage } from '..
 import type { CloudSessionData } from '../lib/cloud';
 import { onProfileChange } from '../lib/profile';
 import type { ExamQuestion } from '../lib/exam-data';
-import { answerValuesFor } from '../lib/exam-data';
+import { answerValuesFor, CODE_PASS, CODE_FAIL } from '../lib/exam-data';
+import { runPython } from './runner-runtime';
 
 interface ExamRow {
   id: number;
@@ -117,26 +118,129 @@ function escape(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+/** 编程题判分状态: code -> 学生代码, pass -> 是否判分通过 */
+const codeState = new Map<string, { code: string; pass: boolean; grading: boolean }>();
+
+/** 转义 HTML,保证题目/选项里的 <code> 等原样渲染 */
+function escapeForPrompt(value: string): string {
+  // prompt/options 里含 <code> 等受信标签,这里只转义引号,其余保留以渲染富文本。
+  return value;
+}
+
+function renderOptions(q: ExamQuestion, index: number): string {
+  if (q.type === 'truefalse') {
+    return [
+      { value: 'T', label: '正确' },
+      { value: 'F', label: '错误' },
+    ]
+      .map(
+        (o) =>
+          `<label class="exam-option"><input type="radio" name="${escape(q.id)}" value="${o.value}" /> <span>${o.label}</span></label>`,
+      )
+      .join('');
+  }
+  if (q.type === 'multi') {
+    return (q.options ?? [])
+      .map(
+        (label, i) =>
+          `<label class="exam-option"><input type="checkbox" name="${escape(q.id)}" value="${String(i)}" /> <span>${label}</span></label>`,
+      )
+      .join('');
+  }
+  if (q.type === 'choice') {
+    return (q.options ?? [])
+      .map(
+        (label, i) =>
+          `<label class="exam-option"><input type="radio" name="${escape(q.id)}" value="${String(i)}" /> <span>${label}</span></label>`,
+      )
+      .join('');
+  }
+  if (q.type === 'fill') {
+    return `<div class="exam-fill"><input type="text" name="${escape(q.id)}" autocomplete="off" placeholder="填写答案" /></div>`;
+  }
+  if (q.type === 'short') {
+    return `<div class="exam-fill"><textarea name="${escape(q.id)}" rows="2" placeholder="简要作答(需包含关键词)" ></textarea></div>`;
+  }
+  if (q.type === 'code') {
+    // 隐藏域承载判分结果;textarea 为学生编辑区
+    return `<div class="exam-code">
+      <input type="hidden" name="${escape(q.id)}" data-code-pass value="" />
+      <textarea class="exam-code-editor" spellcheck="false" rows="6">${escape(q.starter ?? '')}</textarea>
+      <div class="btn-row">
+        <button type="button" class="btn sm" data-code-run="${escape(q.id)}">运行并判分</button>
+        <span class="exam-code-status" data-code-status="${escape(q.id)}">未判分</span>
+      </div>
+    </div>`;
+  }
+  return '';
+}
+
 function renderQuestions(exam: ExamRow): void {
   const form = el<HTMLFormElement>('exam-form');
+  codeState.clear();
   form.innerHTML = (exam.paper ?? [])
     .map((q, index) => {
-      const options =
-        q.type === 'truefalse'
-          ? [
-              { value: 'T', label: '正确' },
-              { value: 'F', label: '错误' },
-            ]
-          : (q.options ?? []).map((label, i) => ({ value: String(i), label }));
-      const inputs = options
-        .map(
-          (o) =>
-            `<label class="exam-option"><input type="radio" name="${escape(q.id)}" value="${escape(o.value)}" /> <span>${o.label}</span></label>`,
-        )
-        .join('');
-      return `<fieldset class="exam-question"><legend>第 ${index + 1} 题 · ${q.points} 分</legend><div class="exam-prompt">${q.prompt}</div>${inputs}</fieldset>`;
+      const typeLabel: Record<string, string> = {
+        choice: '单选题',
+        truefalse: '判断题',
+        multi: '多选题',
+        fill: '填空题',
+        short: '简答题',
+        code: '编程题',
+      };
+      const label = typeLabel[q.type] ?? '题目';
+      return `<fieldset class="exam-question" data-qtype="${escape(q.type)}"><legend>第 ${index + 1} 题 · ${label} · ${q.points} 分</legend><div class="exam-prompt">${q.prompt}</div>${renderOptions(q, index)}</fieldset>`;
     })
     .join('');
+
+  // 绑定编程题"运行并判分"事件
+  form.querySelectorAll<HTMLButtonElement>('[data-code-run]').forEach((button) => {
+    button.addEventListener('click', () => void runCodeQuestion(button.dataset.codeRun as string));
+  });
+}
+
+/** 运行某道编程题:拼接学生代码 + 隐藏 check,跑 Pyodide,把结果写入隐藏 input */
+async function runCodeQuestion(qid: string): Promise<void> {
+  const form = el<HTMLFormElement>('exam-form');
+  const editor = form.querySelector<HTMLTextAreaElement>(`textarea[name="${escape(qid)}"]`);
+  if (!editor) return;
+  const status = form.querySelector<HTMLElement>(`[data-code-status="${escape(qid)}"]`);
+  const btn = form.querySelector<HTMLButtonElement>(`[data-code-run="${escape(qid)}"]`);
+  const hidden = form.querySelector<HTMLInputElement>(`input[name="${escape(qid)}"][data-code-pass]`);
+  const question = active?.paper?.find((q) => q.id === qid);
+
+  const code = editor.value;
+  codeState.set(qid, { code, pass: false, grading: true });
+  if (status) { status.textContent = '判分中…'; status.dataset.kind = 'info'; }
+  if (btn) btn.disabled = true;
+
+  const full = `${code}\n\n# ---- 判分器 ----\n${question?.check ?? ''}`;
+  let passed = false;
+  let message = '';
+  let out = '';
+  try {
+    const result = await runPython(full, {
+      timeout: 45000,
+      onOutput: (c) => {
+        if (c.text) out += c.text;
+      },
+    });
+    // 判分器是隐藏 check:无异常、无断言失败即通过
+    if (result.ok) {
+      passed = true;
+      message = '已通过判分';
+    } else {
+      const trimmed = (out || result.error || '').trim();
+      message = trimmed ? trimmed.slice(-140) : '未通过,请检查代码';
+    }
+  } catch (error) {
+    message = `判分异常:${error instanceof Error ? error.message : String(error)}`;
+  }
+
+  codeState.set(qid, { code, pass: passed, grading: false });
+  if (hidden) hidden.value = passed ? CODE_PASS : '';
+  if (status) { status.textContent = message; status.dataset.kind = passed ? 'ok' : 'bad'; }
+  if (btn) btn.disabled = false;
 }
 
 function updateTimer(): void {
@@ -179,7 +283,18 @@ async function submitExam(auto = false): Promise<void> {
 
   const form = el<HTMLFormElement>('exam-form');
   const answers: Record<string, string[]> = {};
-  for (const q of active.paper ?? []) answers[q.id] = answerValuesFor(q.type, q.id, form);
+  for (const q of active.paper ?? []) {
+    if (q.type === 'code') {
+      // 编程题:判分结果写入隐藏域;另把代码以 'code:' 前缀一并提交,便于教师复盘
+      const hidden = form.querySelector<HTMLInputElement>(`input[name="${escape(q.id)}"][data-code-pass]`);
+      const editor = form.querySelector<HTMLTextAreaElement>(`textarea[name="${escape(q.id)}"]`);
+      const pass = hidden?.value ?? '';
+      const code = editor?.value ?? '';
+      answers[q.id] = pass ? [pass, `code:${code}`] : ['', `code:${code}`];
+      continue;
+    }
+    answers[q.id] = answerValuesFor(q.type, q.id, form);
+  }
 
   const elapsed = Math.round((Date.now() - (endsAt - Math.max(1, active.duration_min) * 60000)) / 1000);
   const { data, error } = await cloud.database.rpc('submit_exam', {

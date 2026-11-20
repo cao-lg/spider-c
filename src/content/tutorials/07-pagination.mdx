@@ -106,21 +106,19 @@ print("作者页示例:", all_quotes[0]["author_url"])
 - **Session 贯穿全程**：翻页属于同一站点、同一会话，用 `session.get` 复用 TCP 连接，也自动带上 Cookie（万一站点要维持登录态）。
 - **`time.sleep(0.5)` 是礼貌**：真人不会一秒翻十页。控频既保护服务器，也保护你的 IP。
 
-## 三、真实案例 2：按年份"翻页"——分页不一定是数字
+## 三、真实案例 2：按分类"翻页"——分页不一定是数字
 
-不是所有分页都是 `/page/N/`。`https://www.scrapethissite.com/pages/ajax-javascript/` 顶部有一排年份按钮，点 `2015` 才加载当年的奥斯卡影片。这里的"页码"其实是**年份参数**——本质仍是分页，只是变化的是 `year`。
+不是所有分页都是 `/page/N/`。本课程自托管靶站 `SITE_BASE + "/practice/level5-dynamic/"` 顶部有一排分类按钮，点 `Python` 才加载 Python 类图书。这里的"页码"其实是**分类参数**——本质仍是分页，只是变化的是 `category`。
 
-我已实测：点击年份会触发一个 AJAX 接口，直接返回 JSON（这一点在第 10 章用 Playwright 抓包详细演示过）。所以本地可以直接请求接口，把"点按钮"换成"改参数"：
+我已实测：点击分类会触发一个 AJAX 接口，直接返回 JSON（这一点在第 10 章用 Playwright 抓包详细演示过）。所以本地可以直接请求接口，把"点按钮"换成"改参数"：
 
 ```python
 import requests
 
-url = "https://www.scrapethissite.com/pages/ajax-javascript/"
-for year in range(2010, 2016):        # 把年份当页码遍历
-    films = requests.get(
-        url, params={"ajax": "true", "year": year}, timeout=10
-    ).json()
-    print(f"{year} 年: {len(films)} 部影片")
+base = SITE_BASE + "/practice/level5-dynamic/api/category/"
+for cat in ["python", "backend", "frontend"]:   # 把分类当参数遍历
+    data = requests.get(base + cat + ".json", timeout=10).json()
+    print(f"{cat}: {data['total']} 本")
 ```
 
 > **思路比代码重要**：看到"按钮翻数据"别急着模拟点击。先按第 10 章的三层定位法找接口——找到后，年份就只是一个可以 `for` 循环的参数。分页的形态千变万化，但"找到变化的量并参数化"这个内核不变。

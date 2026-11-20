@@ -1,0 +1,21 @@
+{
+  "code": 0,
+  "message": "success",
+  "category": "算法",
+  "slug": "algorithm",
+  "total": 1,
+  "data": [
+    {
+      "id": "B0374",
+      "title": "算法与数据结构 · 快速上手",
+      "author": "罗雪",
+      "publisher": "中国电力出版社",
+      "price": 39,
+      "rating": 4.4,
+      "pubdate": "2019-10",
+      "isbn": "978-7-292-91688-4",
+      "category": "算法",
+      "description": "丰富的图表与代码演示,让抽象概念变得直观易懂。"
+    }
+  ]
+}

@@ -1,0 +1,117 @@
+{
+  "code": 0,
+  "message": "success",
+  "category": "工程",
+  "slug": "engineering",
+  "total": 9,
+  "data": [
+    {
+      "id": "B0348",
+      "title": "软件测试 · 零基础教程",
+      "author": "张伟",
+      "publisher": "图灵教育",
+      "price": 129,
+      "rating": 3.8,
+      "pubdate": "2025-03",
+      "isbn": "978-7-962-50156-9",
+      "category": "工程",
+      "description": "系统讲解基础概念与进阶技巧,配以大量可运行的示例代码。"
+    },
+    {
+      "id": "B0357",
+      "title": "软件测试 · 实战指南",
+      "author": "秦峰",
+      "publisher": "清华大学出版社",
+      "price": 129,
+      "rating": 4.9,
+      "pubdate": "2017-01",
+      "isbn": "978-7-822-50784-1",
+      "category": "工程",
+      "description": "丰富的图表与代码演示,让抽象概念变得直观易懂。"
+    },
+    {
+      "id": "B0359",
+      "title": "软件测试 · 全栈之路",
+      "author": "周涛",
+      "publisher": "北京大学出版社",
+      "price": 59,
+      "rating": 3.8,
+      "pubdate": "2018-10",
+      "isbn": "978-7-838-44088-2",
+      "category": "工程",
+      "description": "聚焦生产环境中的常见问题与解决方案,即学即用。"
+    },
+    {
+      "id": "B0363",
+      "title": "性能优化 · 深入学习",
+      "author": "郭涛",
+      "publisher": "北京大学出版社",
+      "price": 139,
+      "rating": 4.2,
+      "pubdate": "2024-11",
+      "isbn": "978-7-550-64382-4",
+      "category": "工程",
+      "description": "聚焦生产环境中的常见问题与解决方案,即学即用。"
+    },
+    {
+      "id": "B0373",
+      "title": "性能优化 · 核心原理",
+      "author": "孙悦",
+      "publisher": "电子工业出版社",
+      "price": 39,
+      "rating": 4.4,
+      "pubdate": "2020-09",
+      "isbn": "978-7-749-98242-7",
+      "category": "工程",
+      "description": "适合入门读者循序渐进地学习,也适合进阶读者查漏补缺。"
+    },
+    {
+      "id": "B0377",
+      "title": "性能优化 · 权威指南",
+      "author": "苏晴",
+      "publisher": "清华-伯克利出版中心",
+      "price": 129,
+      "rating": 5.0,
+      "pubdate": "2021-01",
+      "isbn": "978-7-150-44791-5",
+      "category": "工程",
+      "description": "系统讲解基础概念与进阶技巧,配以大量可运行的示例代码。"
+    },
+    {
+      "id": "B0380",
+      "title": "软件测试 · 编程之道",
+      "author": "黄俊",
+      "publisher": "人民邮电出版社",
+      "price": 69,
+      "rating": 4.8,
+      "pubdate": "2017-05",
+      "isbn": "978-7-634-25685-2",
+      "category": "工程",
+      "description": "适合入门读者循序渐进地学习,也适合进阶读者查漏补缺。"
+    },
+    {
+      "id": "B0384",
+      "title": "性能优化 · 入门到实践",
+      "author": "吴倩",
+      "publisher": "电子工业出版社",
+      "price": 79,
+      "rating": 4.7,
+      "pubdate": "2021-09",
+      "isbn": "978-7-434-51492-3",
+      "category": "工程",
+      "description": "系统讲解基础概念与进阶技巧,配以大量可运行的示例代码。"
+    },
+    {
+      "id": "B0387",
+      "title": "性能优化 · 编程之道",
+      "author": "曹阳",
+      "publisher": "清华-伯克利出版中心",
+      "price": 49,
+      "rating": 4.4,
+      "pubdate": "2024-07",
+      "isbn": "978-7-425-68519-2",
+      "category": "工程",
+      "description": "汇集一线工程师多年经验,内容贴近企业真实研发场景。"
+    }
+  ]
+}

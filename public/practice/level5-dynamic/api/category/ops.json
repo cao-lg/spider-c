@@ -1,0 +1,57 @@
+{
+  "code": 0,
+  "message": "success",
+  "category": "运维",
+  "slug": "ops",
+  "total": 4,
+  "data": [
+    {
+      "id": "B0350",
+      "title": "云计算 · 实战指南",
+      "author": "苏晴",
+      "publisher": "中国电力出版社",
+      "price": 109,
+      "rating": 3.8,
+      "pubdate": "2018-06",
+      "isbn": "978-7-400-74774-7",
+      "category": "运维",
+      "description": "丰富的图表与代码演示,让抽象概念变得直观易懂。"
+    },
+    {
+      "id": "B0351",
+      "title": "云计算 · 高效编程",
+      "author": "马超",
+      "publisher": "清华大学出版社",
+      "price": 129,
+      "rating": 4.5,
+      "pubdate": "2021-10",
+      "isbn": "978-7-599-13043-4",
+      "category": "运维",
+      "description": "汇集一线工程师多年经验,内容贴近企业真实研发场景。"
+    },
+    {
+      "id": "B0382",
+      "title": "DevOps · 工程师手册",
+      "author": "赵敏",
+      "publisher": "电子工业出版社",
+      "price": 139,
+      "rating": 4.4,
+      "pubdate": "2016-02",
+      "isbn": "978-7-144-23873-3",
+      "category": "运维",
+      "description": "结合真实项目案例,深入剖析背后的原理与最佳实践。"
+    },
+    {
+      "id": "B0393",
+      "title": "云计算 · 核心原理",
+      "author": "杨帆",
+      "publisher": "人民邮电出版社",
+      "price": 79,
+      "rating": 4.1,
+      "pubdate": "2017-03",
+      "isbn": "978-7-460-16100-1",
+      "category": "运维",
+      "description": "聚焦生产环境中的常见问题与解决方案,即学即用。"
+    }
+  ]
+}

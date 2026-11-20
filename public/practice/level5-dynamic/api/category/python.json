@@ -1,0 +1,117 @@
+{
+  "code": 0,
+  "message": "success",
+  "category": "Python",
+  "slug": "python",
+  "total": 9,
+  "data": [
+    {
+      "id": "B0345",
+      "title": "Python 开发 · 工程师手册",
+      "author": "陈静",
+      "publisher": "人民邮电出版社",
+      "price": 89,
+      "rating": 4.0,
+      "pubdate": "2018-12",
+      "isbn": "978-7-829-80706-7",
+      "category": "Python",
+      "description": "聚焦生产环境中的常见问题与解决方案,即学即用。"
+    },
+    {
+      "id": "B0347",
+      "title": "网络爬虫 · 全栈之路",
+      "author": "徐磊",
+      "publisher": "北京大学出版社",
+      "price": 109,
+      "rating": 4.3,
+      "pubdate": "2017-01",
+      "isbn": "978-7-467-13695-6",
+      "category": "Python",
+      "description": "丰富的图表与代码演示,让抽象概念变得直观易懂。"
+    },
+    {
+      "id": "B0353",
+      "title": "网络爬虫 · 开发日志",
+      "author": "何娜",
+      "publisher": "中国电力出版社",
+      "price": 99,
+      "rating": 3.9,
+      "pubdate": "2024-06",
+      "isbn": "978-7-571-33584-6",
+      "category": "Python",
+      "description": "聚焦生产环境中的常见问题与解决方案,即学即用。"
+    },
+    {
+      "id": "B0355",
+      "title": "Web 开发 · 设计模式",
+      "author": "周涛",
+      "publisher": "北京大学出版社",
+      "price": 69,
+      "rating": 4.2,
+      "pubdate": "2022-01",
+      "isbn": "978-7-776-11236-5",
+      "category": "Python",
+      "description": "结合真实项目案例,深入剖析背后的原理与最佳实践。"
+    },
+    {
+      "id": "B0358",
+      "title": "Python 开发 · 核心原理",
+      "author": "曹阳",
+      "publisher": "清华大学出版社",
+      "price": 139,
+      "rating": 4.9,
+      "pubdate": "2016-11",
+      "isbn": "978-7-529-16256-6",
+      "category": "Python",
+      "description": "汇集一线工程师多年经验,内容贴近企业真实研发场景。"
+    },
+    {
+      "id": "B0361",
+      "title": "Python 开发 · 权威指南",
+      "author": "韩雪",
+      "publisher": "中国电力出版社",
+      "price": 69,
+      "rating": 4.7,
+      "pubdate": "2022-10",
+      "isbn": "978-7-119-82435-5",
+      "category": "Python",
+      "description": "聚焦生产环境中的常见问题与解决方案,即学即用。"
+    },
+    {
+      "id": "B0379",
+      "title": "数据分析 · 权威指南",
+      "author": "王磊",
+      "publisher": "清华大学出版社",
+      "price": 59,
+      "rating": 4.4,
+      "pubdate": "2016-02",
+      "isbn": "978-7-496-72638-7",
+      "category": "Python",
+      "description": "配套在线练习与配套资料,帮助你巩固所学知识点。"
+    },
+    {
+      "id": "B0390",
+      "title": "Python 开发 · 最佳实践",
+      "author": "刘洋",
+      "publisher": "清华大学出版社",
+      "price": 129,
+      "rating": 4.9,
+      "pubdate": "2016-05",
+      "isbn": "978-7-831-53403-0",
+      "category": "Python",
+      "description": "汇集一线工程师多年经验,内容贴近企业真实研发场景。"
+    },
+    {
+      "id": "B0391",
+      "title": "Python 开发 · 设计模式",
+      "author": "周涛",
+      "publisher": "清华-伯克利出版中心",
+      "price": 59,
+      "rating": 4.1,
+      "pubdate": "2018-10",
+      "isbn": "978-7-461-45339-5",
+      "category": "Python",
+      "description": "汇集一线工程师多年经验,内容贴近企业真实研发场景。"
+    }
+  ]
+}

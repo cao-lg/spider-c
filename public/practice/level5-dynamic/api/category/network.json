@@ -1,0 +1,69 @@
+{
+  "code": 0,
+  "message": "success",
+  "category": "网络",
+  "slug": "network",
+  "total": 5,
+  "data": [
+    {
+      "id": "B0356",
+      "title": "计算机网络 · 全栈之路",
+      "author": "曹阳",
+      "publisher": "机械工业出版社",
+      "price": 99,
+      "rating": 4.6,
+      "pubdate": "2022-11",
+      "isbn": "978-7-123-57806-9",
+      "category": "网络",
+      "description": "从零构建完整的实战项目,涵盖开发、测试与部署全流程。"
+    },
+    {
+      "id": "B0360",
+      "title": "计算机网络 · 入门到实践",
+      "author": "李强",
+      "publisher": "电子工业出版社",
+      "price": 79,
+      "rating": 4.0,
+      "pubdate": "2022-06",
+      "isbn": "978-7-369-15142-2",
+      "category": "网络",
+      "description": "丰富的图表与代码演示,让抽象概念变得直观易懂。"
+    },
+    {
+      "id": "B0362",
+      "title": "计算机网络 · 高效编程",
+      "author": "苏晴",
+      "publisher": "清华大学出版社",
+      "price": 69,
+      "rating": 4.6,
+      "pubdate": "2025-01",
+      "isbn": "978-7-381-45647-6",
+      "category": "网络",
+      "description": "聚焦生产环境中的常见问题与解决方案,即学即用。"
+    },
+    {
+      "id": "B0367",
+      "title": "计算机网络 · 进阶之路",
+      "author": "赵敏",
+      "publisher": "图灵教育",
+      "price": 109,
+      "rating": 4.9,
+      "pubdate": "2018-04",
+      "isbn": "978-7-235-83869-6",
+      "category": "网络",
+      "description": "聚焦生产环境中的常见问题与解决方案,即学即用。"
+    },
+    {
+      "id": "B0397",
+      "title": "计算机网络 · 核心原理",
+      "author": "胡军",
+      "publisher": "中国电力出版社",
+      "price": 49,
+      "rating": 4.3,
+      "pubdate": "2025-04",
+      "isbn": "978-7-753-48714-9",
+      "category": "网络",
+      "description": "适合入门读者循序渐进地学习,也适合进阶读者查漏补缺。"
+    }
+  ]
+}

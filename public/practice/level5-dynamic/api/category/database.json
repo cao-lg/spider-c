@@ -1,0 +1,21 @@
+{
+  "code": 0,
+  "message": "success",
+  "category": "数据库",
+  "slug": "database",
+  "total": 1,
+  "data": [
+    {
+      "id": "B0346",
+      "title": "数据库 · 零基础教程",
+      "author": "何娜",
+      "publisher": "中国电力出版社",
+      "price": 129,
+      "rating": 4.9,
+      "pubdate": "2017-09",
+      "isbn": "978-7-538-94484-5",
+      "category": "数据库",
+      "description": "系统讲解基础概念与进阶技巧,配以大量可运行的示例代码。"
+    }
+  ]
+}

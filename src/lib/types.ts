@@ -1,6 +1,6 @@
 // 学习系统共享类型定义
 
-export type QuestionType = 'choice' | 'truefalse' | 'fill';
+export type QuestionType = 'choice' | 'truefalse' | 'multi' | 'fill' | 'short' | 'code';
 export type RunnerVariant = 'showcase' | 'guided' | 'challenge';
 
 /** 认知层级(简化版 Bloom,用于目标与题目的对齐校验) */
@@ -21,6 +21,14 @@ export interface Question {
   options?: string[];
   /** 正确答案: choice -> 选项索引(字符串),truefalse -> ['T']|['F'],fill -> 可接受答案列表 */
   answer: string[];
+  /** fill 的可接受答案列表(任一命中即可) */
+  accept?: string[];
+  /** short 的判分关键词(任一命中即可) */
+  keywords?: string[];
+  /** code 的初始代码(编辑器预填) */
+  starter?: string;
+  /** code 的隐藏判分代码 */
+  check?: string;
   points: number;
   explanation?: string;
   skills?: string[];

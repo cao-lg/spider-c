@@ -22,13 +22,13 @@ import CodeRunner from '../../components/CodeRunner.astro';
 
 ### 动手实验：一分钟判断是不是空壳
 
-拿真实的教学站点 `https://quotes.toscrape.com/js/` 试（这是 Zyte 官方专门用来演示 JS 渲染的公开练习站）：
+拿真实的教学站点 `https://quotes.toscrape.com/js/` 试（这是 Zyte 官方专门用来演示 JS 渲染的公开练习站）。若你的网络打不开它，可改用**本课程自托管靶站** `SITE_BASE + "/practice/level5-dynamic/"`（同样源码里搜不到书名，数据由 JS 现场拉取）：
 
 ```python
 import requests
-html = requests.get("https://quotes.toscrape.com/js/", timeout=10).text
+html = requests.get(SITE_BASE + "/practice/level5-dynamic/", timeout=10).text
 print("HTML 长度:", len(html))
-print("源码里有 Einstein 吗:", "Einstein" in html)   # False
+print("源码里有《Python》吗:", "Python 开发" in html)   # False
 print(html[:300])                                     # 只有框架标签和 <script>
 ```
 
@@ -134,7 +134,9 @@ for div in soup.select("div.quote"):
 
 ### 3.1 页面现象
 
-`https://www.scrapethissite.com/pages/ajax-javascript/` 是另一个公开爬取沙盒（数据来自维基百科）。页面顶部有一排年份按钮，点 `2015`，下方才出现当年的奥斯卡获奖影片表格——这就是典型的 AJAX：点击 → 发请求 → 局部刷新。
+前面的 `quotes.toscrape.com` 是海外站点，个别网络环境下访问会不稳。这里我们改用**本课程自托管的教学靶站** `SITE_BASE + "/practice/level5-dynamic/"`（在你本地浏览器打开即可，无需翻墙）。页面顶部是一排**分类按钮**（全部 / Python / 后端 / 工程……），你点 `Python`，下方才出现 Python 类图书——这就是典型的 AJAX：点击 → 发请求 → 局部刷新。
+
+> 它的表现和经典的"按年份加载奥斯卡获奖影片"完全一样，只是把"年份"换成"分类"。这种"先给按钮、点了才出数据"的结构，就是 AJAX 最标志性的样子。
 
 ### 3.2 专业技巧：让 Playwright 替你"抓包"
 
@@ -150,33 +152,36 @@ with sync_playwright() as p:
 
     # 注册响应监听器：记录所有 XHR/Fetch 的 URL 和状态码
     page.on("response", lambda r: captured.append((r.status, r.url))
-            if "ajax" in r.url or "api" in r.url else None)
+            if "api/" in r.url else None)
 
-    page.goto("https://www.scrapethissite.com/pages/ajax-javascript/",
+    page.goto(SITE_BASE + "/practice/level5-dynamic/",
               wait_until="networkidle")
-    page.get_by_text("2015", exact=True).click()   # 点击年份按钮
-    page.wait_for_selector(".film")                # 等表格行出现
+    page.get_by_text("Python", exact=True).click()   # 点分类按钮
+    page.wait_for_selector("#book-list li")          # 等表格行出现
     browser.close()
 
 print("抓到的请求:", captured)
-# 你会看到: (200, 'https://www.scrapethissite.com/pages/ajax-javascript/?ajax=true&year=2015')
+# 你会看到: (200, 'SITE_BASE/practice/level5-dynamic/api/category/python.json')
 ```
 
 > `page.on("response", ...)` 是网络监听器；`get_by_text(..., exact=True)` 用文本定位按钮，比写 CSS 选择器更稳。这两招在真实项目里非常常用。
 
 ### 3.3 拿到接口后，扔掉浏览器
 
-我已实测该接口直接返回 JSON，字段为 `title` / `year` / `awards` / `nominations` / `best_picture`：
+我已实测该接口直接返回 JSON，字段为 `id` / `title` / `author` / `price` / `rating` / `category`：
 
 ```python
 import requests
 
-url = "https://www.scrapethissite.com/pages/ajax-javascript/"
-films = requests.get(url, params={"ajax": "true", "year": 2015}, timeout=10).json()
+url = SITE_BASE + "/practice/level5-dynamic/api/category/python.json"
+books = requests.get(url, timeout=10).json()
 
-for f in films:
-    print(f["title"].strip(), "| 获奖", f["awards"], "| 提名", f["nominations"])
+print("共", books["total"], "本")
+for b in books["data"]:
+    print(b["title"], "|", b["author"], "| ¥", b["price"])
 ```
+
+> 用 `SITE_BASE` 时，请先在代码里定义它（本页下方练习题会自动注入）。例如 `SITE_BASE = "https://spider-c.pages.dev"` 或你本地开发地址。
 
 **这就是完整工作流**：
 
@@ -270,7 +275,7 @@ expect(page.locator(".quote")).to_have_count(10)   # 自动等到 10 个或超�
 ### 5.3 定位元素的优先级
 
 1. `get_by_role("button", name="下一页")` —— 语义定位，最抗改版
-2. `get_by_text("2015", exact=True)` —— 文本定位，适合按钮/标签
+2. `get_by_text("Python", exact=True)` —— 文本定位，适合按钮/标签
 3. `[data-testid="price"]` —— 测试专用属性，网站不改就一直有效
 4. `.list > .item:nth-child(2)` —— CSS 结构定位，最脆弱，放最后
 
@@ -355,7 +360,7 @@ for name, n in counts.most_common():
 | 不当免费劳动力 | 能公开接口拿到的就别模拟登录绕限制 |
 | 优先官方 API | 有开放 API 就用 API，这是又快又体面的路 |
 
-> **练习推荐**：本章两个案例站（`quotes.toscrape.com`、`scrapethissite.com`）都是公开声明用于爬取教学练习的沙盒，放心拿它们练手。真实商业站点请遵守上述准则。
+> **练习推荐**：本章两个案例站（`quotes.toscrape.com` 为海外站、本课程自托管靶站 `/practice/level5-dynamic/`）都是公开声明用于爬取教学练习的沙盒，放心拿它们练手。真实商业站点请遵守上述准则。
 
 ## 八、方案选择速查表
 
@@ -371,7 +376,7 @@ for name, n in counts.most_common():
 
 - **三层定位法**：源码 → Network 接口 → 渲染，按顺序排查，成本从低到高。
 - **真实案例一**：`quotes.toscrape.com/js/` 是 JS 渲染页，但有 `/api/quotes?page=N` 接口，用 `has_next` 翻页，根本不用浏览器。
-- **真实案例二**：`scrapethissite.com` 点年份触发 AJAX，用 `page.on("response")` 抓到 `?ajax=true&year=2015` 接口，再改用 requests。
+- **真实案例二**：课程自托管靶站 `/practice/level5-dynamic/` 点分类触发 AJAX，用 `page.on("response")` 抓到 `api/category/python.json` 接口，再改用 requests。
 - **Playwright 的正确定位**：发现接口的工具 + 处理无限滚动/登录态等必须交互的场景，不是默认选项。
 - **工程习惯**：条件等待优先、元素定位按语义优先级、浏览器必须关闭、真实站点先查合规。
 

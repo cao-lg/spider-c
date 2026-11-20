@@ -11,18 +11,16 @@
   header.site .sub { font-size: 13px; opacity: .85; margin-top: 2px; }
   .panel { background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 18px; margin-top: 18px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
   h2 { font-size: 17px; margin: 0 0 12px; }
-  table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  th, td { border-bottom: 1px solid #e5e5e5; padding: 9px 8px; text-align: left; }
-  th { background: #f0f0f0; font-weight: 600; }
-  tr:hover td { background: #faf7f0; }
-  .price { color: #c0392b; font-weight: 600; }
-  .rating { color: #b9770e; }
-  .pager { margin-top: 16px; display: flex; gap: 6px; align-items: center; justify-content: center; font-size: 14px; }
-  .pager a, .pager span { padding: 5px 10px; border: 1px solid #ccc; border-radius: 4px; background: #fff; text-decoration: none; color: #2b3a4a; }
-  .pager span.cur { background: #2b3a4a; color: #fff; }
-  .footer { margin-top: 30px; font-size: 12px; color: #999; text-align: center; }
+  .cats { margin: 10px 0 16px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .cats button { padding: 6px 14px; border: 1px solid #ccc; border-radius: 16px; background: #fff; cursor: pointer; font-size: 13px; color: #2b3a4a; }
+  .cats button:hover { background: #eef3f8; }
+  .cats button.cur { background: #2b3a4a; color: #fff; border-color: #2b3a4a; }
   .meta { color: #777; font-size: 13px; }
-  a { color: #1a5276; }
+  ul#book-list { list-style: none; margin: 0; padding: 0; }
+  ul#book-list li { border-bottom: 1px dashed #e5e5e5; padding: 9px 2px; font-size: 14px; }
+  ul#book-list li .cat { color: #1a5276; font-size: 12px; margin-left: 6px; }
+  .count { color: #999; font-size: 13px; margin: 6px 0 0; }
+  .footer { margin-top: 30px; font-size: 12px; color: #999; text-align: center; }
 </style>
 </head>
 <body>
@@ -30,22 +28,62 @@
 <div class="wrap">
   <div class="panel">
     <h2>推荐书目</h2>
-    <p class="meta">本页数据由 JavaScript 动态加载,直接查看页面源代码看不到图书数据。</p>
+    <p class="meta">本页数据由 JavaScript 动态加载,直接查看页面源代码看不到图书数据。点下方分类按钮,会发一个 AJAX 请求,然后再把对应图书"局部刷新"到列表里。</p>
+    <div class="cats" id="cat-bar"></div>
     <ul id="book-list"></ul>
+    <p class="count" id="book-count"></p>
   </div>
 <div class="footer">本站为爬虫课程练习靶站,仅用于学习爬虫技术</div>
 </body>
 </html>
 
 <script>
-  fetch('api/books.json')
-    .then(function (r) { return r.json(); })
-    .then(function (d) {
-      var ul = document.getElementById('book-list');
-      d.data.forEach(function (b) {
-        var li = document.createElement('li');
-        li.textContent = b.title + ' — ' + b.author + ' (¥' + b.price + ', 评分 ' + b.rating + ')';
-        ul.appendChild(li);
-      });
+  var CATS = [
+    { label: '全部', file: 'api/books.json' },
+    { label: 'Python', file: 'api/category/python.json' },
+    { label: '后端', file: 'api/category/backend.json' },
+    { label: '工程', file: 'api/category/engineering.json' },
+    { label: '前端', file: 'api/category/frontend.json' },
+    { label: 'AI', file: 'api/category/ai.json' },
+    { label: '安全', file: 'api/category/security.json' },
+    { label: '网络', file: 'api/category/network.json' },
+    { label: '运维', file: 'api/category/ops.json' }
+  ];
+  var cur = 0;
+  var bar = document.getElementById('cat-bar');
+  var ul = document.getElementById('book-list');
+  var countEl = document.getElementById('book-count');
+
+  function load(i) {
+    cur = i;
+    bar.querySelectorAll('button').forEach(function (b, k) {
+      b.className = k === i ? 'cur' : '';
     });
+    var file = CATS[i].file;
+    fetch(file, { headers: { 'X-Requested-With': 'fetch' } })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        ul.innerHTML = '';
+        var items = (d && d.data) ? d.data : [];
+        items.forEach(function (b) {
+          var li = document.createElement('li');
+          li.textContent = b.title + ' — ' + b.author + ' (¥' + b.price + ', 评分 ' + b.rating + ')';
+          var span = document.createElement('span');
+          span.className = 'cat';
+          span.textContent = '[' + b.category + ']';
+          li.appendChild(span);
+          ul.appendChild(li);
+        });
+        countEl.textContent = '共 ' + items.length + ' 本';
+      });
+  }
+
+  CATS.forEach(function (c, i) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = c.label;
+    b.addEventListener('click', function () { load(i); });
+    bar.appendChild(b);
+  });
+  load(0);
 </script>

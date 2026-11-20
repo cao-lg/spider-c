@@ -1,0 +1,57 @@
+{
+  "code": 0,
+  "message": "success",
+  "category": "安全",
+  "slug": "security",
+  "total": 4,
+  "data": [
+    {
+      "id": "B0388",
+      "title": "安全攻防 · 面试宝典",
+      "author": "徐磊",
+      "publisher": "人民邮电出版社",
+      "price": 89,
+      "rating": 4.5,
+      "pubdate": "2023-02",
+      "isbn": "978-7-532-57737-2",
+      "category": "安全",
+      "description": "适合入门读者循序渐进地学习,也适合进阶读者查漏补缺。"
+    },
+    {
+      "id": "B0394",
+      "title": "安全攻防 · 开发日志",
+      "author": "张伟",
+      "publisher": "异步图书",
+      "price": 99,
+      "rating": 4.7,
+      "pubdate": "2019-12",
+      "isbn": "978-7-761-70232-9",
+      "category": "安全",
+      "description": "汇集一线工程师多年经验,内容贴近企业真实研发场景。"
+    },
+    {
+      "id": "B0395",
+      "title": "安全攻防 · 核心原理",
+      "author": "高翔",
+      "publisher": "电子工业出版社",
+      "price": 109,
+      "rating": 4.5,
+      "pubdate": "2023-12",
+      "isbn": "978-7-787-98846-9",
+      "category": "安全",
+      "description": "汇集一线工程师多年经验,内容贴近企业真实研发场景。"
+    },
+    {
+      "id": "B0399",
+      "title": "安全攻防 · 企业级应用",
+      "author": "何娜",
+      "publisher": "图灵教育",
+      "price": 89,
+      "rating": 4.5,
+      "pubdate": "2019-07",
+      "isbn": "978-7-145-21168-7",
+      "category": "安全",
+      "description": "系统讲解基础概念与进阶技巧,配以大量可运行的示例代码。"
+    }
+  ]
+}
