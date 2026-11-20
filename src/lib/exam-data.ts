@@ -13,9 +13,9 @@
  *  - code    编程   : 学生在浏览器内用 Pyodide 跑代码 + 隐藏 check 判分,
  *                     通过则提交 ['PASS'],否则 ['FAIL'](服务端按集合相等判分)
  */
-import { conceptQuestions } from '../data/questions';
-import { examQuestions } from '../data/exam-questions';
-import { units } from '../data/course';
+import { conceptQuestions } from '../data/questions.ts';
+import { examQuestions } from '../data/exam-questions.ts';
+import { units } from '../data/course.ts';
 
 const ALL_QUESTIONS = [...conceptQuestions, ...examQuestions];
 
@@ -68,10 +68,47 @@ export function unitOptions(): { id: string; label: string }[] {
   ];
 }
 
+/** 题型配比:每个题型的抽题数量,0 表示该题型不抽。 */
+export type ExamTypePlan = Partial<Record<ExamQuestionType, number>>;
+
+/**
+ * 按题型配比从题库分层抽题,保证编程题等指定题型一定入选。
+ * 各题型抽不满时,缺口由其他题型随机补齐,直到凑够 count。
+ */
+function pickByPlan(pool: typeof ALL_QUESTIONS, count: number, plan: ExamTypePlan): typeof ALL_QUESTIONS {
+  const picked: typeof ALL_QUESTIONS = [];
+  const used = new Set<string>();
+  for (const type of Object.keys(plan) as ExamQuestionType[]) {
+    const want = Math.max(0, plan[type] ?? 0);
+    if (want === 0 || picked.length >= count) continue;
+    const candidates = shuffle(pool.filter((q) => q.type === type && !used.has(q.id)));
+    let taken = 0;
+    for (const q of candidates) {
+      if (taken >= want || picked.length >= count) break;
+      picked.push(q);
+      used.add(q.id);
+      taken += 1;
+    }
+  }
+  // 缺口用其余题补齐(仍排除已选),保证总题量达标
+  if (picked.length < count) {
+    const rest = shuffle(pool.filter((q) => !used.has(q.id)));
+    for (const q of rest) {
+      if (picked.length >= count) break;
+      picked.push(q);
+      used.add(q.id);
+    }
+  }
+  return shuffle(picked);
+}
+
 /** 从课程题库抽题,返回可直接写入 exams.paper / exam_keys.objective 的两份数据。 */
-export function buildPaper(unitId: string, count: number, pointsPerQuestion: number): BuiltPaper {
+export function buildPaper(unitId: string, count: number, pointsPerQuestion: number, plan?: ExamTypePlan): BuiltPaper {
   const pool = ALL_QUESTIONS.filter((q) => (!unitId || q.unitId === unitId));
-  const picked = shuffle(pool).slice(0, Math.max(1, Math.min(count, pool.length)));
+  const hasPlan = plan && Object.values(plan).some((n) => (n ?? 0) > 0);
+  const picked = hasPlan
+    ? pickByPlan(pool, Math.max(1, Math.min(count, pool.length)), plan!)
+    : shuffle(pool).slice(0, Math.max(1, Math.min(count, pool.length)));
 
   const paper: ExamQuestion[] = picked.map((q) => {
     const base: ExamQuestion = {

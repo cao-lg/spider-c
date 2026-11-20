@@ -6,7 +6,7 @@
  */
 import { cloud, currentSession, onAuthChange, isTeacher, errorMessage } from '../lib/cloud';
 import type { CloudSessionData } from '../lib/cloud';
-import { buildPaper } from '../lib/exam-data';
+import { buildPaper, type ExamTypePlan } from '../lib/exam-data';
 
 interface ExamAdminRow {
   id: number;
@@ -149,6 +149,14 @@ async function createExam(): Promise<void> {
   const unitId = el<HTMLSelectElement>('exam-new-unit').value;
   const count = Number(el<HTMLInputElement>('exam-new-count').value);
   const points = Number(el<HTMLInputElement>('exam-new-points').value);
+  const plan: ExamTypePlan = {
+    choice: Number(el<HTMLInputElement>('plan-choice').value) || 0,
+    truefalse: Number(el<HTMLInputElement>('plan-truefalse').value) || 0,
+    multi: Number(el<HTMLInputElement>('plan-multi').value) || 0,
+    fill: Number(el<HTMLInputElement>('plan-fill').value) || 0,
+    short: Number(el<HTMLInputElement>('plan-short').value) || 0,
+    code: Number(el<HTMLInputElement>('plan-code').value) || 0,
+  };
   const duration = Number(el<HTMLInputElement>('exam-new-duration').value);
   const shuffleQ = el<HTMLInputElement>('exam-new-shuffle-q').checked;
   const shuffleO = el<HTMLInputElement>('exam-new-shuffle-o').checked;
@@ -166,7 +174,7 @@ async function createExam(): Promise<void> {
     return;
   }
 
-  const built = buildPaper(unitId, count, points);
+  const built = buildPaper(unitId, count, points, plan);
   if (built.paper.length === 0) {
     msg('exam-create-msg', '该范围没有可用客观题,请换一个抽题范围。', 'error');
     return;

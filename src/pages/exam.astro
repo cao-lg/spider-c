@@ -64,7 +64,7 @@ import { unitOptions } from '../lib/exam-data';
       <section class="report-card">
         <div class="report-card-title">创建考试</div>
         <p class="report-hint">
-          从课程概念题库抽题生成试卷快照,答案单独加密保存在仅教师可读的答案表中。题库本身是公开教材,适合随堂测验,不建议用于高利害考试。
+          从课程题库按题型配比抽题生成试卷快照(全站 70 题:单选/判断/多选/填空/简答/编程六种题型),答案单独加密保存在仅教师可读的答案表中。题库是公开教材,建议配合乱序、限时与监考使用。
         </p>
         <div class="account-form">
           <label>考试标题<input id="exam-new-title" type="text" maxlength="40" placeholder="如 第一单元随堂测验" /></label>
@@ -85,6 +85,17 @@ import { unitOptions } from '../lib/exam-data';
           </label>
           <label>题量<input id="exam-new-count" type="number" min="1" max="30" value="10" /></label>
           <label>每题分值<input id="exam-new-points" type="number" min="1" max="20" value="10" /></label>
+          <div class="exam-type-plan">
+            <div class="exam-type-plan-title">题型配比 <span class="report-hint">填入各题型题数,合计不必等于总题量;留空则纯随机;不足的由其他题型补齐</span></div>
+            <div class="exam-type-plan-grid">
+              <label>单选<input id="plan-choice" type="number" min="0" max="30" value="2" /></label>
+              <label>判断<input id="plan-truefalse" type="number" min="0" max="30" value="1" /></label>
+              <label>多选<input id="plan-multi" type="number" min="0" max="30" value="2" /></label>
+              <label>填空<input id="plan-fill" type="number" min="0" max="30" value="2" /></label>
+              <label>简答<input id="plan-short" type="number" min="0" max="30" value="1" /></label>
+              <label>编程<input id="plan-code" type="number" min="0" max="30" value="2" /></label>
+            </div>
+          </div>
           <label>时长(分钟)<input id="exam-new-duration" type="number" min="1" max="180" value="30" /></label>
           <label>开放时间<input id="exam-new-opens" type="datetime-local" /></label>
           <label>截止时间<input id="exam-new-closes" type="datetime-local" /></label>
