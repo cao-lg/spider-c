@@ -15,6 +15,16 @@ function extractDefaultCode(el: HTMLElement): string {
   return el.getAttribute('code') ?? '';
 }
 
+/** 稳定的短哈希,用于给运行器生成草稿键(避免直接在 localStorage 存完整标题) */
+function hashStr(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(36);
+}
+
 type Variant = 'showcase' | 'guided' | 'challenge';
 
 class PyRunner extends HTMLElement {
@@ -109,6 +119,11 @@ class PyRunner extends HTMLElement {
       label: `${title} 代码编辑器`,
       onRun: () => void this.run(),
       minRows: 3,
+      // 仅可编辑且非演示场景才持久化草稿;键由标题+默认代码哈希得到,刷新后稳定
+      draftKey:
+        !this.readonly && this.variant !== 'showcase'
+          ? `runner:${hashStr(`${title}|${this.defaultCode}`)}`
+          : '',
     });
 
     if (this.variant !== 'showcase') {
@@ -154,6 +169,7 @@ class PyRunner extends HTMLElement {
     this.runBtn.addEventListener('click', () => void this.run());
     this.resetBtn.addEventListener('click', () => {
       this.editor.setValue(this.defaultCode);
+      this.editor.clearDraft();
       this.clearConsole();
       this.setStatus('已重置为初始代码。');
     });

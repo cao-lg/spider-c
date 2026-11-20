@@ -194,6 +194,8 @@ class PyCodeExercise extends HTMLElement {
       label: `${this.heading} 代码编辑器`,
       onRun: () => void this.run(),
       minRows: 6,
+      // 以题目 id 为键持久化草稿:刷新/重登自动恢复学生已写代码
+      draftKey: `exercise:${this.exerciseId}`,
     });
     runner.appendChild(this.editor.element);
 
@@ -223,6 +225,7 @@ class PyCodeExercise extends HTMLElement {
     this.runBtn.addEventListener('click', () => void this.run());
     this.resetBtn.addEventListener('click', () => {
       this.editor.setValue(this.starter);
+      this.editor.clearDraft(); // 彻底清除该题草稿,重置后刷新也不会回退到旧草稿
       this.consoleEl.style.display = 'none';
       this.consoleEl.textContent = '';
       this.statusEl.textContent = '已重置为初始代码。';

@@ -78,6 +78,11 @@ export interface CodeEditorOptions {
   onRun?: () => void;
   label?: string;
   minRows?: number;
+  /**
+   * 草稿持久化键。传入后,编辑内容会防抖写入 localStorage,刷新/重新进入自动恢复;
+   * 传空或留空则不持久化。
+   */
+  draftKey?: string;
 }
 
 export interface CodeEditor {
@@ -88,6 +93,33 @@ export interface CodeEditor {
   setReadOnly(v: boolean): void;
   /** 容器从隐藏变为可见(如 <details> 展开)后重新测量高度 */
   resize(): void;
+  /** 清除已保存的草稿(重置回初始代码时调用) */
+  clearDraft(): void;
+}
+
+// —— 草稿持久化 ——
+const DRAFT_PREFIX = 'crawler-course:draft:';
+function loadDraft(key: string): string | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_PREFIX + key);
+    return raw == null ? null : raw;
+  } catch {
+    return null;
+  }
+}
+function saveDraft(key: string, value: string): void {
+  try {
+    localStorage.setItem(DRAFT_PREFIX + key, value);
+  } catch {
+    /* 隐私模式/配额满时静默忽略,不影响编辑 */
+  }
+}
+function clearDraftKey(key: string): void {
+  try {
+    localStorage.removeItem(DRAFT_PREFIX + key);
+  } catch {
+    /* ignore */
+  }
 }
 
 const INDENT = '    ';
@@ -116,7 +148,10 @@ export function createCodeEditor(opts: CodeEditorOptions): CodeEditor {
   input.autocapitalize = 'off';
   input.autocomplete = 'off';
   input.setAttribute('autocorrect', 'off');
-  input.value = opts.value;
+  // 有草稿则优先恢复,否则用传入的初始值
+  const draftKey = opts.draftKey ?? '';
+  const savedDraft = draftKey ? loadDraft(draftKey) : null;
+  input.value = savedDraft ?? opts.value;
   input.setAttribute('aria-label', opts.label ?? 'Python 代码编辑器');
   if (opts.readOnly) input.readOnly = true;
 
@@ -164,8 +199,19 @@ export function createCodeEditor(opts: CodeEditorOptions): CodeEditor {
     gutter.style.transform = `translateY(${-input.scrollTop}px)`;
   }
 
-  input.addEventListener('input', paint);
+  input.addEventListener('input', () => {
+    paint();
+    scheduleDraftSave();
+  });
   input.addEventListener('scroll', syncScroll);
+
+  // 草稿防抖保存
+  let draftTimer: number | undefined;
+  function scheduleDraftSave() {
+    if (!draftKey || input.readOnly) return;
+    if (draftTimer) clearTimeout(draftTimer);
+    draftTimer = window.setTimeout(() => saveDraft(draftKey, input.value), 300);
+  }
 
   input.addEventListener('keydown', (e) => {
     const hasMod = e.ctrlKey || e.metaKey;
@@ -188,14 +234,17 @@ export function createCodeEditor(opts: CodeEditorOptions): CodeEditor {
         input.setRangeText(dedented, lineStart, selectionEnd, 'select');
         input.selectionStart = Math.max(lineStart, selectionStart - INDENT.length);
         input.selectionEnd = Math.max(lineStart, selectionEnd - (block.length - dedented.length));
+        paint();
       } else if (selectionStart !== selectionEnd) {
         // 多行缩进
         const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1;
         const block = value.slice(lineStart, selectionEnd);
         const indented = block.replace(/^/gm, INDENT);
         input.setRangeText(indented, lineStart, selectionEnd, 'select');
+        paint();
       } else {
         input.setRangeText(INDENT, selectionStart, selectionEnd, 'end');
+        paint();
       }
       return;
     }
@@ -210,6 +259,7 @@ export function createCodeEditor(opts: CodeEditorOptions): CodeEditor {
       if (lead || extra) {
         e.preventDefault();
         input.setRangeText(`\n${lead}${extra}`, selectionStart, input.selectionEnd, 'end');
+        paint();
       }
     }
 
@@ -223,6 +273,7 @@ export function createCodeEditor(opts: CodeEditorOptions): CodeEditor {
         e.preventDefault();
         input.setRangeText(e.key + closer, pos, pos, 'end');
         input.selectionStart = input.selectionEnd = pos + 1;
+        paint();
       }
     }
   });
@@ -234,6 +285,7 @@ export function createCodeEditor(opts: CodeEditorOptions): CodeEditor {
     e.preventDefault();
     const { selectionStart, selectionEnd } = input;
     input.setRangeText(text.replace(/\r\n/g, '\n'), selectionStart, selectionEnd, 'end');
+    paint();
   });
 
   paint();
@@ -257,6 +309,11 @@ export function createCodeEditor(opts: CodeEditorOptions): CodeEditor {
       input.style.height = 'auto';
       input.style.height = `${input.scrollHeight}px`;
       syncScroll();
+    },
+    clearDraft: () => {
+      if (draftTimer) clearTimeout(draftTimer);
+      draftTimer = undefined;
+      if (draftKey) clearDraftKey(draftKey);
     },
   };
 }

@@ -210,5 +210,39 @@ el<HTMLButtonElement>('snap-push').addEventListener('click', () => void pushSnap
 el<HTMLButtonElement>('snap-pull').addEventListener('click', () => void pullSnapshot());
 el<HTMLButtonElement>('snap-delete').addEventListener('click', () => void deleteCloud());
 
-onAuthChange(render);
-void currentSession().then(render);
+// —— 重新登录自动恢复 ——
+// 学生登录/会话恢复后,若云端已有学习快照,静默 merge 回本机(merge 口径保留较新的本机记录,
+// 不会用旧快照覆盖新数据)。同一会话对同一用户只自动恢复一次,避免每次刷新都拉取。
+let autoRestoredUid: string | null = null;
+async function autoRestore(next: CloudSessionData): Promise<void> {
+  const uid = realUid(next);
+  if (!uid) {
+    autoRestoredUid = null;
+    return;
+  }
+  if (autoRestoredUid === uid) return;
+  autoRestoredUid = uid;
+  try {
+    const { data, error } = await cloud.database
+      .from('learning_snapshots')
+      .select('payload')
+      .eq('owner_id', uid)
+      .maybeSingle();
+    if (error || !data?.payload) return; // 云端无记录/读取失败:静默跳过
+    const res = store.importJSON(JSON.stringify(data.payload), 'merge');
+    if (!res.ok) return; // 格式不兼容:静默,手动「取回」仍可用
+  } catch {
+    /* 网络异常静默,不阻塞登录 */
+  }
+}
+
+function handleAuth(next: CloudSessionData): void {
+  render(next);
+  void autoRestore(next);
+}
+
+onAuthChange(handleAuth);
+void currentSession().then((s) => {
+  render(s);
+  void autoRestore(s);
+});
