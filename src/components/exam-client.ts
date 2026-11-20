@@ -31,6 +31,21 @@ interface SubmissionRow {
   submitted_at: string | null;
   focus_loss_count: number;
   duration_sec: number | null;
+  answers?: Record<string, string[]>;
+}
+
+/** 服务端逐题回看:只含对错与得分,绝不含正确答案 */
+interface FeedbackItem {
+  id: string;
+  correct: boolean;
+  points: number;
+  earned: number;
+}
+
+interface FeedbackResult {
+  score: number | null;
+  totalScore: number | null;
+  items: FeedbackItem[];
 }
 
 function el<T extends HTMLElement = HTMLElement>(id: string): T {
@@ -95,7 +110,9 @@ function renderList(classId: string): void {
       const meta = `${exam.paper?.length ?? 0} 题 · ${exam.duration_min} 分钟 · 满分 ${(exam.paper ?? []).reduce((s, q) => s + q.points, 0)}`;
       let action = '';
       if (done) {
-        action = `<span class="exam-done">已交卷 · ${done.score ?? '-'} 分</span>`;
+        action =
+          `<span class="exam-done">已交卷 · ${done.score ?? '-'} 分</span> ` +
+          `<button class="btn sm" type="button" data-exam-review="${exam.id}">查看回看</button>`;
       } else if (!profileBound) {
         action = '<a class="btn sm" href="/account/">先绑定档案</a>';
       } else if (!open) {
@@ -112,10 +129,99 @@ function renderList(classId: string): void {
       if (found) startExam(found);
     });
   });
+  box.querySelectorAll<HTMLButtonElement>('[data-exam-review]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const found = exams.find((e) => String(e.id) === button.dataset.examReview);
+      if (!found) return;
+      el('exam-list-view').hidden = true;
+      void showFeedback(found, submissions.get(found.id)?.answers);
+    });
+  });
 }
 
 function escape(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/** 交卷后,学生已无法再改动答卷;作答原文随卷回放,仅让学生看自己写了什么 */
+let lastAnswers: Record<string, string[]> = {};
+
+/** 把某题的学生作答(值数组)转成可读文本;不暴露正确答案。 */
+function answerText(q: ExamQuestion, given: string[] | undefined): string {
+  if (!given || given.length === 0) return '未作答';
+  if (q.type === 'truefalse') {
+    return given.map((v) => (v === 'T' ? '正确' : v === 'F' ? '错误' : v)).join('、');
+  }
+  if (q.type === 'choice' || q.type === 'multi') {
+    return given
+      .map((v) => {
+        const i = Number(v);
+        return Number.isInteger(i) && i >= 0 && i < (q.options?.length ?? 0) ? q.options![i] : v;
+      })
+      .join('、');
+  }
+  if (q.type === 'code') {
+    // answers 形如 ['PASS'|'', 'code:源码'],这里只显示判分状态,不回显整段代码
+    return given[0] ? '判分通过' : '未通过判分';
+  }
+  // fill / short:显示学生自己填写的内容
+  return given[0] || '未作答';
+}
+
+/**
+ * 拉取并渲染逐题回看。核心:服务端 RPC 只返回 {id,correct,points,earned},
+ * 题干/选项来自随卷下发的 exams.paper,作答来自 laAnswers,全程不下发正确答案。
+ */
+async function showFeedback(exam: ExamRow, answersOverride?: Record<string, string[]>): Promise<void> {
+  const resultBox = el('exam-result');
+  if (answersOverride) lastAnswers = answersOverride;
+  resultBox.hidden = false;
+  resultBox.innerHTML = '<h2>逐题回看</h2><p class="report-hint">正在加载判分明细…</p>';
+  const { data, error } = await cloud.database.rpc('exam_feedback', { p_exam_id: exam.id });
+  if (error) {
+    resultBox.innerHTML = `<h2>逐题回看</h2><p class="report-hint" data-kind="error">加载失败:${escape(errorMessage(error))}</p><div class="btn-row"><button id="exam-result-back" class="btn sm" type="button">返回列表</button></div>`;
+    el<HTMLButtonElement>('exam-result-back').addEventListener('click', () => {
+      showList();
+      void refresh();
+    });
+    return;
+  }
+  const fb = (Array.isArray(data) ? data[0] : data) as FeedbackResult | null;
+  const items = fb?.items ?? [];
+  const byId = new Map(items.map((it) => [it.id, it]));
+  const typeLabel: Record<string, string> = {
+    choice: '单选',
+    truefalse: '判断',
+    multi: '多选',
+    fill: '填空',
+    short: '简答',
+    code: '编程',
+  };
+  const rows = (exam.paper ?? []).map((q, i) => {
+    const it = byId.get(q.id);
+    const correct = it?.correct === true;
+    const earned = it?.earned ?? 0;
+    return `<li class="exam-fb-item" data-correct="${correct}">
+      <div class="exam-fb-head">
+        <span class="exam-fb-no">第 ${i + 1} 题</span>
+        <span class="exam-fb-type">${typeLabel[q.type] ?? '题目'}</span>
+        <span class="exam-fb-mark">${correct ? '✓ 正确' : '✗ 错误'}</span>
+        <span class="exam-fb-score">${earned} / ${q.points} 分</span>
+      </div>
+      <div class="exam-fb-prompt">${q.prompt}</div>
+      <div class="exam-fb-given">你的作答:${escape(answerText(q, lastAnswers[q.id]))}</div>
+    </li>`;
+  });
+  const right = items.filter((it) => it.correct).length;
+  resultBox.innerHTML = `<h2>逐题回看</h2>
+    <p>本场得分 <strong>${fb?.score ?? '-'}</strong> / ${fb?.totalScore ?? '-'} · 答对 ${right} / ${items.length} 题</p>
+    <p class="report-hint">仅显示你的作答与对错,正确答案不公开,如需讲评请联系教师。</p>
+    <ol class="exam-fb-list">${rows.join('')}</ol>
+    <div class="btn-row"><button id="exam-result-back" class="btn sm" type="button">返回列表</button></div>`;
+  el<HTMLButtonElement>('exam-result-back').addEventListener('click', () => {
+    showList();
+    void refresh();
+  });
 }
 
 /** 编程题判分状态: code -> 学生代码, pass -> 是否判分通过 */
@@ -315,11 +421,9 @@ async function submitExam(auto = false): Promise<void> {
   const result = (Array.isArray(data) ? data[0] : data) as { score?: number; totalScore?: number } | null;
   el('exam-runner').hidden = true;
   el('exam-result').hidden = false;
-  el('exam-result').innerHTML = `<h2>交卷完成</h2><p>本场得分 <strong>${result?.score ?? '-'}</strong> / ${result?.totalScore ?? '-'}</p><p class="report-hint">正确答案不公开,如需讲评请联系教师。切屏 ${focusLoss} 次。</p><div class="btn-row"><button id="exam-result-back" class="btn sm" type="button">返回列表</button></div>`;
-  el<HTMLButtonElement>('exam-result-back').addEventListener('click', () => {
-    showList();
-    void refresh();
-  });
+  el('exam-result').innerHTML = `<h2>交卷完成</h2><p>本场得分 <strong>${result?.score ?? '-'}</strong> / ${result?.totalScore ?? '-'}</p><p class="report-hint">切屏 ${focusLoss} 次。正在生成逐题回看…</p>`;
+  // 交卷后立即拉取逐题明细;传本次作答原文供回放
+  void showFeedback(active, answers);
 }
 
 async function refresh(): Promise<void> {
@@ -328,7 +432,7 @@ async function refresh(): Promise<void> {
   const uid = session.user.id;
   const [examResult, subResult, profileResult] = await Promise.all([
     cloud.database.from('exams').select('*').eq('published', true).order('created_at', { ascending: false }),
-    cloud.database.from('exam_submissions').select('exam_id, score, submitted_at, focus_loss_count, duration_sec').eq('owner_id', uid),
+    cloud.database.from('exam_submissions').select('exam_id, score, submitted_at, focus_loss_count, duration_sec, answers').eq('owner_id', uid),
     cloud.database.from('student_profiles').select('class_id').eq('owner_id', uid).maybeSingle(),
   ]);
 
