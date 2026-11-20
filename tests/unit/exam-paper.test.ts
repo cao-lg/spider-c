@@ -11,11 +11,12 @@ import assert from 'node:assert/strict';
 
 import { examQuestions } from '../../src/data/exam-questions.ts';
 import { examQuestionsExtra } from '../../src/data/exam-questions-extra.ts';
+import { examQuestionsExtra2 } from '../../src/data/exam-questions-extra2.ts';
 import { conceptQuestions } from '../../src/data/questions.ts';
 import { lessons } from '../../src/data/course.ts';
 import { buildPaper } from '../../src/lib/exam-data.ts';
 
-const extQuestions = [...examQuestions, ...examQuestionsExtra];
+const extQuestions = [...examQuestions, ...examQuestionsExtra, ...examQuestionsExtra2];
 const EXT_TYPES = ['multi', 'fill', 'short', 'code'] as const;
 const ALL_TYPES = ['choice', 'truefalse', ...EXT_TYPES] as const;
 
@@ -26,13 +27,13 @@ test('六种题型齐备,且每种都有题目', () => {
   for (const t of ALL_TYPES) assert.ok(counts[t] > 0, `题型 ${t} 没有题目`);
 });
 
-test('全库题号唯一,总量达到正式考试规模(>=140)', () => {
+test('全库题号唯一,总量达到正式考试规模(>=280)', () => {
   const all = [...conceptQuestions, ...extQuestions];
   const ids = all.map((q) => q.id);
   assert.equal(new Set(ids).size, ids.length, '存在重复题号');
-  assert.ok(all.length >= 140, `题库总量仅 ${all.length},不足以支撑多套不重复试卷`);
+  assert.ok(all.length >= 280, `题库总量仅 ${all.length},不足以支撑多套不重复试卷`);
   const codeCount = all.filter((q) => q.type === 'code').length;
-  assert.ok(codeCount >= 20, `编程题仅 ${codeCount} 道`);
+  assert.ok(codeCount >= 40, `编程题仅 ${codeCount} 道`);
 });
 
 test('扩展题库:每单元齐备四种题型,且编程题总量 >= 10', () => {

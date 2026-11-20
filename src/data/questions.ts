@@ -9,6 +9,7 @@
 // 5. objectiveId 对齐 data/design.ts 中的目标,构建期会校验(scripts/check-catalog.mjs)。
 
 import type { Question } from '../lib/types';
+import { extraConceptQuestions } from './questions-extra.ts';
 
 export interface ConceptQuestion extends Question {
   lessonId: string;
@@ -1445,6 +1446,8 @@ export const conceptQuestions: ConceptQuestion[] = [
     explanation: '数据来源与合规判断说明"能不能抓、能不能用",字段含义方便他人理解数据,已知缺陷让使用者了解局限——这些是项目可交付、可维护的一部分。',
     misconception: 'public-equals-free',
   },
+  // 第三批扩充题(独立文件,便于维护):全站概念题达 124 题
+  ...extraConceptQuestions,
 ];
 
 /** 按课程取题(课内检查点) */
