@@ -140,25 +140,24 @@ const misconceptionCount = Object.keys(misconceptionLabels).length;
     </div>
   </section>
 
-  <!-- ── 阶段 1/2:云端看板 ──────────────────────────── -->
+  <!-- ── 阶段 1:云端看板(WorkBuddy 云) ────────────────── -->
   <section id="panel-cloud" class="teacher-panel" hidden role="tabpanel">
     <div class="report-card teacher-card">
-      <div class="report-card-title">云端看板 · 需要已完成阶段 1 部署</div>
+      <div class="report-card-title">云端看板 · WorkBuddy 云同步</div>
       <p class="report-hint">
-        学生在「学习中心 → 云同步」用学号 + 班级 + 同步口令上报后,这里直接拉取全班快照,
-        用与离线模式<strong>完全相同</strong>的报告引擎计算,不再收文件。教师口令由服务端环境变量保存,不写进前端代码。
+        学生在「我的档案 → 云端同步」用微信登录并上传后,这里直接读取全班快照,
+        用与离线模式<strong>完全相同</strong>的报告引擎计算,不再收文件。教师需先用页面右上角的
+        <strong>微信登录</strong>登录教师账号——身份由云端白名单判定,口令不写进前端、不保存在本机。
       </p>
+      <p class="report-hint" id="cloud-identity" role="status" aria-live="polite">正在检查登录状态…</p>
       <div class="teacher-cloud-form">
-        <label>教师口令
-          <input id="cloud-token" type="password" autocomplete="off" placeholder="TEACHER_TOKEN" />
-        </label>
         <label>班级
           <select id="cloud-classes" aria-label="选择班级"><option value="">全部班级</option></select>
         </label>
-        <button id="btn-cloud-load" class="btn sm primary">拉取班级数据</button>
+        <button id="btn-cloud-load" class="btn sm primary" disabled>拉取班级数据</button>
       </div>
       <p class="report-hint" id="cloud-msg" role="status" aria-live="polite">
-        未连接。若站点还没绑定 D1,这里会提示接口不可用 —— 离线模式不受影响。
+        教师账号登录后即可拉取;离线汇总模式不受影响。
       </p>
     </div>
 
@@ -182,13 +181,12 @@ const misconceptionCount = Object.keys(misconceptionLabels).length;
       <div id="cloud-decisions" class="teacher-decisions"></div>
     </div>
 
-    <div class="report-card teacher-card" id="archive-card">
-      <div class="report-card-title">阶段 2 · 周快照归档(R2)</div>
-      <p class="report-hint">
-        归档只保存聚合结果与匿名学号,不保存学生原始作答文本。R2 在这里的角色是<strong>长期留存与回看</strong>,
-        不是主数据库 —— 主数据在 D1,查询与聚合都走 D1。
-      </p>
-      <div class="btn-row">
+    <!-- 阶段 2 周快照归档原依赖 Cloudflare R2,云后端迁移后暂不开放;
+         保留空容器以兼容历史样式,但按钮隐藏。需要归档可先用上方 CSV 导出。 -->
+    <div class="report-card teacher-card" id="archive-card" hidden>
+      <div class="report-card-title">阶段 2 · 周快照归档</div>
+      <p class="report-hint">归档功能迁移中,当前可用「导出目标达成 CSV」留存报告。</p>
+      <div class="btn-row" hidden>
         <button id="btn-cloud-archive" class="btn sm">归档本周报告</button>
         <button id="btn-cloud-archive-list" class="btn sm">查看归档</button>
       </div>

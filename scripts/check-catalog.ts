@@ -164,22 +164,19 @@ for (const target of targets) {
 // ── 教师学情数据链路完整性 ───────────────────────────────────
 // 这些文件被误删时,静态构建仍会成功,但教师报告或云同步会静默失效 ——
 // 属于「构建通过、功能没了」的事故,只能靠机器逐个点名。
+// 数据后端已从 Cloudflare D1/Pages Functions 迁到 WorkBuddy 云(Postgres):
+//   教师/学生都用微信登录,云客户端是 src/lib/cloud.ts,身份白名单在服务端 teacher_roles。
 const teacherChainFiles = [
   'src/pages/teacher.astro',
   'src/components/teacher-client.ts',
-  'src/components/sync-client.ts',
+  'src/pages/account.astro',
+  'src/components/account-client.ts',
+  'src/lib/cloud.ts',
+  'src/lib/cloud-config.ts',
   'src/lib/class-report.ts',
   'src/lib/merge.ts',
   'src/lib/demo-data.ts',
-  'functions/_shared/backend.ts',
-  'functions/_shared/http.ts',
-  'functions/api/enroll.ts',
-  'functions/api/sync.ts',
-  'functions/api/overview.ts',
-  'functions/api/class.ts',
-  'functions/api/student.ts',
-  'functions/api/archive.ts',
-  'schema.sql',
+  'src/lib/profile.ts',
 ];
 for (const f of teacherChainFiles) {
   if (!existsSync(join(root, f))) fail(`教师数据链路缺少关键文件:${f}`);

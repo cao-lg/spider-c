@@ -3389,6 +3389,14 @@ button {
   color: var(--danger);
 }
 
+/* 教师云端看板：身份状态(复用 report-hint) */
+.report-hint[data-kind='ok'] {
+  color: var(--success, #1a7f37);
+}
+.report-hint[data-kind='warn'] {
+  color: var(--warning, #b26a00);
+}
+
 /* ── 在线考试 ─────────────────────────────────────────── */
 .exam-tabs {
   display: flex;

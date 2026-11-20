@@ -1,11 +1,14 @@
 // 教师端学情报告交互
 //
-// 三种数据源,共用 src/lib/class-report.ts 的同一套计算:
+// 两种数据源,共用 src/lib/class-report.ts 的同一套计算:
 //   · 离线文件(阶段 0):File API 在浏览器内解析,零网络请求
 //   · 示例数据:只存在于内存,不写 localStorage
-//   · 云端 D1(阶段 1):/api/* 由 Cloudflare Pages Functions 提供,R2 归档在阶段 2
+//   · WorkBuddy 云(阶段 1):教师微信登录后,RLS 允许读全班 learning_snapshots
+//     + student_profiles,在浏览器内跑同一个 class-report 引擎,口径与离线一致。
+//     不再依赖 Cloudflare Pages Functions / D1 / TEACHER_TOKEN。
 //
-// 安全约定:教师口令只在内存里,不写 localStorage / 不写 URL;前端不持有任何云凭证。
+// 安全约定:教师身份由服务端 RLS + teacher_roles 白名单判定,前端不持有任何云凭证、
+// 不写教师口令;未登录或非教师账号读不到任何学生数据。
 
 import {
   buildClassReport,
@@ -14,7 +17,6 @@ import {
   objectivesCsv,
   misconceptionsCsv,
   studentsCsv,
-  archivePayload,
   type ClassReport,
   type StudentRecord,
   type ObjectiveStat,
@@ -22,7 +24,8 @@ import {
 import { demoRecords } from '../lib/demo-data';
 import { migrate } from '../lib/schema';
 import { countAttempts } from '../lib/merge';
-import { apiUrl } from '../lib/api-origin';
+import { cloud, currentSession, onAuthChange, isTeacher, errorMessage, realUid } from '../lib/cloud';
+import type { CloudSessionData } from '../lib/cloud';
 import { getLessonById } from '../data/course';
 
 function el<T extends HTMLElement = HTMLElement>(id: string): T {
@@ -376,52 +379,41 @@ function bindOffline() {
 // ── 阶段 1/2:云端看板与归档 ────────────────────────────────────
 
 let cloudReport: ClassReport | null = null;
+let cloudSession: CloudSessionData = null;
+let cloudIsTeacher = false;
 
-function cloudMsg(text: string) {
-  el('cloud-msg').textContent = text;
+function cloudMsg(text: string, kind: 'info' | 'error' = 'info') {
+  const node = el('cloud-msg');
+  node.textContent = text;
+  node.dataset.kind = kind;
 }
 
-function teacherToken(): string {
-  return el<HTMLInputElement>('cloud-token').value.trim();
-}
-
-async function api(path: string, init: RequestInit = {}): Promise<unknown> {
-  const token = teacherToken();
-  if (!token) throw new Error('请先填写教师口令。');
-  const resp = await fetch(apiUrl(path), {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      ...(init.headers ?? {}),
-    },
-  });
-  const text = await resp.text();
-  if (!resp.ok) {
-    let detail = text.slice(0, 120);
-    try {
-      const j = JSON.parse(text);
-      detail = j.error ?? detail;
-    } catch {
-      detail = '当前站点尚未部署 Pages Functions(/api/* 返回了静态 404 页面)';
-    }
-    throw new Error(`HTTP ${resp.status}:${detail}`);
-  }
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new Error(
-      '当前站点尚未部署 Pages Functions(/api/* 不可用)。请按 docs/TEACHER-DATA.md 完成阶段 1 部署。',
-    );
+/** 根据登录/教师身份刷新云端面板提示与按钮状态 */
+async function refreshCloudAuth() {
+  cloudSession = await currentSession();
+  cloudIsTeacher = cloudSession ? await isTeacher(cloudSession) : false;
+  const loadBtn = el<HTMLButtonElement>('btn-cloud-load');
+  const identity = el('cloud-identity');
+  if (!realUid(cloudSession)) {
+    loadBtn.disabled = true;
+    identity.textContent = '尚未登录。请点击页面右上角的「微信登录」,使用教师账号登录。';
+    identity.dataset.kind = 'warn';
+    cloudMsg('教师账号登录后才能拉取全班数据;离线汇总模式不受影响。');
+  } else if (!cloudIsTeacher) {
+    loadBtn.disabled = true;
+    identity.textContent = `当前账号(${realUid(cloudSession)?.slice(0, 8)}…)未开通教师权限,请联系管理员在 teacher_roles 中添加。`;
+    identity.dataset.kind = 'warn';
+    cloudMsg('该账号不是教师,无法读取全班数据。');
+  } else {
+    loadBtn.disabled = false;
+    identity.textContent = `已验证教师身份(${realUid(cloudSession)?.slice(0, 8)}…),可拉取全班快照。`;
+    identity.dataset.kind = 'ok';
   }
 }
 
 function cloudUnavailable(e: unknown) {
   const reason = e instanceof Error ? e.message : String(e);
-  cloudMsg(
-    `云端接口不可用(${reason})。请确认 Cloudflare Pages Functions 已部署且网络可达` +
-      '(可访问 https://spider-c.pages.dev/api/health 自检);离线汇总模式不受影响。',
-  );
+  cloudMsg(`云端读取失败(${reason})。离线汇总模式不受影响。`, 'error');
 }
 
 function renderCloudReport(r: ClassReport) {
@@ -440,55 +432,96 @@ function renderCloudReport(r: ClassReport) {
   renderDecisions(r, 'cloud-decisions');
   el('cloud-report-meta').textContent =
     `${r.studentCount} 名学生 · 生成于 ${new Date(r.generatedAt).toLocaleString('zh-CN')} · ` +
-    `数据源:D1 快照(与离线报告同一套计算口径)`;
+    `数据源:WorkBuddy 云快照(与离线报告同一套计算口径)`;
+}
+
+/**
+ * 从 WorkBuddy 云读取全班快照。RLS 的 ls_read / sp_read 策略允许 teacher_roles
+ * 中的教师读到全部行;非教师只能读自己的,前端已用 isTeacher 提前拦截。
+ * student_profiles 提供权威的学号/班级,payload.roster 作为回退。
+ */
+async function loadCloudRecords(): Promise<StudentRecord[]> {
+  const [{ data: snaps, error: snapErr }, { data: profiles, error: profErr }] = await Promise.all([
+    cloud.database.from('learning_snapshots').select('owner_id, payload, updated_at'),
+    cloud.database.from('student_profiles').select('owner_id, class_id, student_no, real_name'),
+  ]);
+  if (snapErr) throw new Error(errorMessage(snapErr, '读取学习快照失败'));
+  if (profErr) throw new Error(errorMessage(profErr, '读取学生档案失败'));
+
+  // owner_id -> profile
+  const byOwner = new Map<string, { class_id: string; student_no: string; real_name?: string }>();
+  for (const p of (profiles ?? []) as { owner_id: string; class_id: string; student_no: string; real_name?: string }[]) {
+    byOwner.set(p.owner_id, p);
+  }
+
+  const records: StudentRecord[] = [];
+  for (const s of (snaps ?? []) as { owner_id: string; payload: unknown; updated_at: string }[]) {
+    if (!s.payload) continue;
+    const data = migrate(s.payload);
+    if (!data) continue;
+    const profile = byOwner.get(s.owner_id);
+    const roster = data.roster ?? {};
+    const studentId = profile?.student_no || roster.studentId || s.owner_id.slice(0, 8);
+    const classId = profile?.class_id || roster.classId || '';
+    const syncedAt = s.updated_at ? new Date(s.updated_at).getTime() : 0;
+    records.push({
+      studentId,
+      classId,
+      sourceLabel: `云端同步 · ${syncedAt ? new Date(syncedAt).toLocaleDateString('zh-CN') : '时间未知'}`,
+      source: 'cloud' as const,
+      syncedAt,
+      data,
+    });
+  }
+  return records;
 }
 
 function bindCloud() {
   el('btn-cloud-load').addEventListener('click', async () => {
-    cloudMsg('正在拉取班级数据…');
+    cloudMsg('正在从 WorkBuddy 云拉取班级数据…');
     try {
-      const overview = (await api('/overview')) as {
-        classes: { classId: string; students: number; lastSyncAt: number }[];
-      };
+      if (!cloudIsTeacher) {
+        cloudMsg('请先用教师账号登录(页面右上角「微信登录」)。', 'error');
+        return;
+      }
+      const all = await loadCloudRecords();
+
+      // 班级下拉：从实际记录汇总
+      const classes = Array.from(new Set(all.map((r) => r.classId).filter(Boolean))).sort();
       const select = el<HTMLSelectElement>('cloud-classes');
       const keep = select.value;
       select.innerHTML =
         '<option value="">全部班级</option>' +
-        (overview.classes ?? [])
-          .map(
-            (c) =>
-              `<option value="${esc(c.classId)}">${esc(c.classId)} · ${c.students} 人</option>`,
-          )
-          .join('');
-      if ((overview.classes ?? []).some((c) => c.classId === keep)) select.value = keep;
+        classes.map((c) => `<option value="${esc(c)}">${esc(c)} · ${all.filter((r) => r.classId === c).length} 人</option>`).join('');
+      if (classes.includes(keep)) select.value = keep;
 
       const classId = select.value;
-      const payload = (await api(`/class${classId ? `?classId=${encodeURIComponent(classId)}` : ''}`)) as {
-        students: { studentId: string; classId: string; syncedAt: number; data: unknown }[];
-      };
-      const cloudRecords: StudentRecord[] = (payload.students ?? []).flatMap((s) => {
-        const data = migrate(s.data);
-        if (!data) return [];
-        return [
-          {
-            studentId: s.studentId,
-            classId: s.classId,
-            sourceLabel: 'D1 同步',
-            source: 'cloud' as const,
-            syncedAt: s.syncedAt,
-            data,
-          },
-        ];
-      });
-      cloudReport = buildClassReport(cloudRecords, { classId: classId || null });
+      const scoped = classId ? all.filter((r) => r.classId === classId) : all;
+      cloudReport = buildClassReport(scoped, { classId: classId || null });
       renderCloudReport(cloudReport);
       cloudMsg(
-        `已拉取 ${cloudRecords.length} 名学生的同步快照。` +
-          (cloudRecords.length === 0 ? '该班还没有学生上报,先让学生在「学习中心 → 云同步」启用。' : ''),
+        `已拉取 ${scoped.length} 名学生的云端快照。` +
+          (scoped.length === 0
+            ? '还没有学生上传快照,请学生在「我的档案 → 云端同步」点「上传」,且已完成微信登录。'
+            : ''),
       );
     } catch (e) {
       cloudUnavailable(e);
     }
+  });
+
+  // 班级下拉切换后,基于已拉取的数据即时重算,无需再次联网
+  el<HTMLSelectElement>('cloud-classes').addEventListener('change', () => {
+    const classId = el<HTMLSelectElement>('cloud-classes').value;
+    // 重新读取一次保证数据最新;失败时保留原报告
+    void loadCloudRecords()
+      .then((all) => {
+        const scoped = classId ? all.filter((r) => r.classId === classId) : all;
+        cloudReport = buildClassReport(scoped, { classId: classId || null });
+        renderCloudReport(cloudReport);
+        cloudMsg(`已切换到${classId ? ` ${esc(classId)}` : '全部班级'},共 ${scoped.length} 人。`);
+      })
+      .catch(cloudUnavailable);
   });
 
   el('btn-cloud-csv').addEventListener('click', () => {
@@ -498,46 +531,8 @@ function bindCloud() {
   });
   el('btn-cloud-print').addEventListener('click', () => window.print());
 
-  el('btn-cloud-archive').addEventListener('click', async () => {
-    if (!cloudReport) {
-      cloudMsg('请先拉取班级数据,再归档。');
-      return;
-    }
-    try {
-      const res = (await api('/archive', {
-        method: 'POST',
-        body: JSON.stringify({
-          classId: cloudReport.classId ?? 'all',
-          csv: objectivesCsv(cloudReport),
-          report: archivePayload(cloudReport),
-        }),
-      })) as { key: string };
-      cloudMsg(`已归档到 R2:${res.key}`);
-    } catch (e) {
-      cloudUnavailable(e);
-    }
-  });
-
-  el('btn-cloud-archive-list').addEventListener('click', async () => {
-    try {
-      const classId = el<HTMLSelectElement>('cloud-classes').value;
-      const res = (await api(`/archive?classId=${encodeURIComponent(classId)}`)) as {
-        items: { key: string; uploadedAt: number; size: number }[];
-      };
-      el('archive-list').innerHTML =
-        (res.items ?? []).length === 0
-          ? '<p class="report-hint">还没有归档记录。</p>'
-          : `<ul class="teacher-archive-list">${res.items
-              .map(
-                (i) =>
-                  `<li><span class="teacher-mono">${esc(i.key)}</span> · ${new Date(i.uploadedAt).toLocaleString('zh-CN')} · ${i.size} B</li>`,
-              )
-              .join('')}</ul>`;
-      cloudMsg(`共 ${(res.items ?? []).length} 份归档。`);
-    } catch (e) {
-      cloudUnavailable(e);
-    }
-  });
+  // 登录态变化(登录/退出/会话恢复)时刷新云端面板；同页面的审计页等也监听该事件
+  onAuthChange(() => void refreshCloudAuth());
 }
 
 // ── 数据源切换 ──────────────────────────────────────────────────
@@ -564,3 +559,4 @@ bindOffline();
 bindCloud();
 bindTabs();
 render();
+void refreshCloudAuth();
