@@ -23,6 +23,19 @@ interface ExamRow {
   opens_at: string | null;
   closes_at: string | null;
   created_at: string;
+  shuffle_questions?: boolean;
+  shuffle_options?: boolean;
+}
+
+/** exam_start / exam_heartbeat 返回的服务器权威状态 */
+interface SessionState {
+  status: 'in_progress' | 'none' | 'force_submitted' | 'reset' | 'submitted';
+  message?: string;
+  endsAt?: string;
+  serverNow?: string;
+  attempts?: number;
+  broadcastMsg?: string | null;
+  broadcastAt?: string | null;
 }
 
 interface SubmissionRow {
@@ -69,6 +82,14 @@ let profileBound = false;
 let endsAt = 0;
 let timer: number | null = null;
 let focusLoss = 0;
+/** 监考:心跳定时器、服务器时间偏移、服务器权威结束时间、广播去重 */
+let heartbeatTimer: number | null = null;
+let statePollTimer: number | null = null;
+let serverOffsetMs = 0; // 服务器时间 - 本地时间
+let lastBroadcastAt: string | null = null;
+/** 当前显示的题目/选项乱序映射(仅显示层,提交值仍为原始 id/索引) */
+let displayPaper: ExamQuestion[] = [];
+let optionOrder = new Map<string, number[]>();
 
 function switchTab(name: 'student' | 'teacher'): void {
   document.querySelectorAll<HTMLButtonElement>('[data-exam-tab]').forEach((button) => {
@@ -233,31 +254,39 @@ function escapeForPrompt(value: string): string {
   return value;
 }
 
+/** Fisher-Yates 打乱,返回新数组 */
+function shuffled<T>(arr: T[]): T[] {
+  const out = [...arr];
+  for (let i = out.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
 function renderOptions(q: ExamQuestion, index: number): string {
   if (q.type === 'truefalse') {
-    return [
+    const pair = [
       { value: 'T', label: '正确' },
       { value: 'F', label: '错误' },
-    ]
+    ];
+    // 判断题也可乱序:打乱显示,value 保持 T/F 不变
+    const order = optionOrder.get(q.id);
+    const shown = order ? order.map((i) => pair[i]) : pair;
+    return shown
       .map(
         (o) =>
           `<label class="exam-option"><input type="radio" name="${escape(q.id)}" value="${o.value}" /> <span>${o.label}</span></label>`,
       )
       .join('');
   }
-  if (q.type === 'multi') {
-    return (q.options ?? [])
+  if (q.type === 'multi' || q.type === 'choice') {
+    const order = optionOrder.get(q.id) ?? (q.options ?? []).map((_, i) => i);
+    const inputType = q.type === 'multi' ? 'checkbox' : 'radio';
+    return order
       .map(
-        (label, i) =>
-          `<label class="exam-option"><input type="checkbox" name="${escape(q.id)}" value="${String(i)}" /> <span>${label}</span></label>`,
-      )
-      .join('');
-  }
-  if (q.type === 'choice') {
-    return (q.options ?? [])
-      .map(
-        (label, i) =>
-          `<label class="exam-option"><input type="radio" name="${escape(q.id)}" value="${String(i)}" /> <span>${label}</span></label>`,
+        (i) =>
+          `<label class="exam-option"><input type="${inputType}" name="${escape(q.id)}" value="${String(i)}" /> <span>${q.options?.[i] ?? ''}</span></label>`,
       )
       .join('');
   }
@@ -284,7 +313,19 @@ function renderOptions(q: ExamQuestion, index: number): string {
 function renderQuestions(exam: ExamRow): void {
   const form = el<HTMLFormElement>('exam-form');
   codeState.clear();
-  form.innerHTML = (exam.paper ?? [])
+  // 题目/选项乱序:只改变显示顺序,答案按 q.id 与选项原始索引对应,判分不受影响。
+  displayPaper = exam.shuffle_questions ? shuffled(exam.paper ?? []) : [...(exam.paper ?? [])];
+  optionOrder = new Map();
+  if (exam.shuffle_options) {
+    for (const q of exam.paper ?? []) {
+      if (q.type === 'choice' || q.type === 'multi') {
+        optionOrder.set(q.id, shuffled((q.options ?? []).map((_, i) => i)));
+      } else if (q.type === 'truefalse') {
+        optionOrder.set(q.id, shuffled([0, 1]));
+      }
+    }
+  }
+  form.innerHTML = displayPaper
     .map((q, index) => {
       const typeLabel: Record<string, string> = {
         choice: '单选题',
@@ -350,7 +391,7 @@ async function runCodeQuestion(qid: string): Promise<void> {
 }
 
 function updateTimer(): void {
-  const left = Math.max(0, endsAt - Date.now());
+  const left = Math.max(0, endsAt - serverNow());
   const mm = Math.floor(left / 60000);
   const ss = Math.floor((left % 60000) / 1000);
   el('exam-timer').textContent = `剩余 ${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
@@ -362,19 +403,164 @@ function updateTimer(): void {
   }
 }
 
-function startExam(exam: ExamRow): void {
+async function startExam(exam: ExamRow): Promise<void> {
+  msg('正在进入考试…');
+  const { data, error } = await cloud.database.rpc('exam_start', { p_exam_id: exam.id });
+  if (error) {
+    msg(`无法开考:${errorMessage(error)}`, 'error');
+    return;
+  }
+  const state = (Array.isArray(data) ? data[0] : data) as SessionState | null;
+  if (!state || state.status !== 'in_progress') {
+    msg(state?.message ?? '无法开考,请刷新后重试。', 'error');
+    return;
+  }
+
   active = exam;
   focusLoss = 0;
+  // 用服务器时间校准,避免本地改时间延长考试。
+  serverOffsetMs = state.serverNow ? new Date(state.serverNow).getTime() - Date.now() : 0;
+  endsAt = state.endsAt ? new Date(state.endsAt).getTime() : Date.now() + Math.max(1, exam.duration_min) * 60000;
+  lastBroadcastAt = state.broadcastAt ?? null;
+  if (state.broadcastMsg) showBroadcast(state.broadcastMsg);
+
   el('exam-list-view').hidden = true;
   el('exam-result').hidden = true;
   el('exam-runner').hidden = false;
   el('exam-run-title').textContent = exam.title;
   renderQuestions(exam);
-  endsAt = Date.now() + Math.max(1, exam.duration_min) * 60000;
+
   updateTimer();
   timer = window.setInterval(updateTimer, 1000);
-  msg('答题中。切出页面会被计入切屏次数,时间到会自动交卷。');
+  startHeartbeat();
+  enterExamGuards();
+  msg(`答题中(第 ${state.attempts ?? 1} 次)。已锁定全屏并禁用复制;切屏/离焦会被记录,时间到自动交卷。`);
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+/** 服务器权威时间(ms) */
+function serverNow(): number {
+  return Date.now() + serverOffsetMs;
+}
+
+/** 心跳:每 8 秒上报作答原文、进度与切屏次数,并接收教师指令 */
+function startHeartbeat(): void {
+  stopHeartbeat();
+  heartbeatTimer = window.setInterval(() => void beat(), 8000);
+}
+
+function stopHeartbeat(): void {
+  if (heartbeatTimer !== null) { window.clearInterval(heartbeatTimer); heartbeatTimer = null; }
+}
+
+async function beat(): Promise<void> {
+  if (!active || !session) return;
+  const answers = collectAnswers(active);
+  const { data, error } = await cloud.database.rpc('exam_heartbeat', {
+    p_exam_id: active.id,
+    p_answers: answers,
+    p_answer_count: Object.values(answers).filter((v) => v.length > 0).length,
+    p_focus_loss: focusLoss,
+  });
+  if (error) return; // 心跳失败不影响作答,下次重试
+  const state = (Array.isArray(data) ? data[0] : data) as SessionState | null;
+  if (!state) return;
+  if (state.serverNow) {
+    serverOffsetMs = new Date(state.serverNow).getTime() - Date.now();
+  }
+  if (state.status !== 'in_progress') {
+    handleServerEnd(state);
+    return;
+  }
+  if (state.endsAt) endsAt = new Date(state.endsAt).getTime();
+  if (state.broadcastAt && state.broadcastAt !== lastBroadcastAt) {
+    lastBroadcastAt = state.broadcastAt;
+    if (state.broadcastMsg) showBroadcast(state.broadcastMsg);
+  }
+}
+
+/** 收集当前答题框的答案(与提交同口径,但不包含判分动作) */
+function collectAnswers(exam: ExamRow): Record<string, string[]> {
+  const form = el<HTMLFormElement>('exam-form');
+  const out: Record<string, string[]> = {};
+  for (const q of exam.paper ?? []) {
+    if (q.type === 'code') {
+      const hidden = form.querySelector<HTMLInputElement>(`input[name="${escape(q.id)}"][data-code-pass]`);
+      const editor = form.querySelector<HTMLTextAreaElement>(`textarea[name="${escape(q.id)}"]`);
+      const pass = hidden?.value ?? '';
+      const code = editor?.value ?? '';
+      out[q.id] = pass ? [pass, `code:${code}`] : ['', `code:${code}`];
+    } else {
+      out[q.id] = answerValuesFor(q.type, q.id, form);
+    }
+  }
+  return out;
+}
+
+// ── 防作弊守卫(浏览器端只能提高成本,无法绝对阻止) ─────────────────────────
+let guardsOn = false;
+const blockCtx = (e: Event) => e.preventDefault();
+const onBlur = () => { if (active && guardsOn) focusLoss += 1; };
+const onVisibility = () => { if (document.hidden && active && guardsOn) focusLoss += 1; };
+const onFullscreenChange = () => {
+  // 学生主动退出全屏视为一次切屏(不强制作弊判定,只记录)
+  if (guardsOn && !document.fullscreenElement && active) focusLoss += 1;
+};
+
+function enterExamGuards(): void {
+  if (guardsOn) return;
+  guardsOn = true;
+  document.addEventListener('contextmenu', blockCtx);
+  document.addEventListener('copy', blockCtx);
+  document.addEventListener('cut', blockCtx);
+  document.addEventListener('paste', blockCtx);
+  document.addEventListener('selectstart', blockCtx);
+  document.addEventListener('dragstart', blockCtx);
+  window.addEventListener('blur', onBlur);
+  document.addEventListener('visibilitychange', onVisibility);
+  document.addEventListener('fullscreenchange', onFullscreenChange);
+  // 尝试锁定全屏;被浏览器/用户拒绝也不阻断考试。
+  const root = document.documentElement;
+  if (root.requestFullscreen && !document.fullscreenElement) {
+    void root.requestFullscreen().catch(() => { /* 用户或策略拒绝 */ });
+  }
+}
+
+function exitExamGuards(): void {
+  if (!guardsOn) return;
+  guardsOn = false;
+  document.removeEventListener('contextmenu', blockCtx);
+  document.removeEventListener('copy', blockCtx);
+  document.removeEventListener('cut', blockCtx);
+  document.removeEventListener('paste', blockCtx);
+  document.removeEventListener('selectstart', blockCtx);
+  document.removeEventListener('dragstart', blockCtx);
+  window.removeEventListener('blur', onBlur);
+  document.removeEventListener('visibilitychange', onVisibility);
+  document.removeEventListener('fullscreenchange', onFullscreenChange);
+  if (document.fullscreenElement) void document.exitFullscreen().catch(() => { /* ignore */ });
+}
+
+function showBroadcast(text: string): void {
+  window.alert(`教师通知:${text}`);
+}
+
+function handleServerEnd(state: SessionState): void {
+  stopHeartbeat();
+  if (timer !== null) { window.clearInterval(timer); timer = null; }
+  exitExamGuards();
+  const message = state.message ?? '本场考试已结束';
+  if (state.status === 'reset') {
+    // 教师允许重做:回列表,学生可重新开考
+    window.alert(`${message}`);
+    showList();
+    void refresh();
+  } else {
+    // 被强交/结束:交卷结果由服务端落库,提示回列表查看
+    window.alert(`${message}。成绩已记录,返回列表可查看逐题回看。`);
+    showList();
+    void refresh();
+  }
 }
 
 async function submitExam(auto = false): Promise<void> {
@@ -387,22 +573,8 @@ async function submitExam(auto = false): Promise<void> {
   const button = el<HTMLButtonElement>('exam-submit');
   button.disabled = true;
 
-  const form = el<HTMLFormElement>('exam-form');
-  const answers: Record<string, string[]> = {};
-  for (const q of active.paper ?? []) {
-    if (q.type === 'code') {
-      // 编程题:判分结果写入隐藏域;另把代码以 'code:' 前缀一并提交,便于教师复盘
-      const hidden = form.querySelector<HTMLInputElement>(`input[name="${escape(q.id)}"][data-code-pass]`);
-      const editor = form.querySelector<HTMLTextAreaElement>(`textarea[name="${escape(q.id)}"]`);
-      const pass = hidden?.value ?? '';
-      const code = editor?.value ?? '';
-      answers[q.id] = pass ? [pass, `code:${code}`] : ['', `code:${code}`];
-      continue;
-    }
-    answers[q.id] = answerValuesFor(q.type, q.id, form);
-  }
-
-  const elapsed = Math.round((Date.now() - (endsAt - Math.max(1, active.duration_min) * 60000)) / 1000);
+  const answers = collectAnswers(active);
+  const elapsed = Math.round((serverNow() - (endsAt - Math.max(1, active.duration_min) * 60000)) / 1000);
   const { data, error } = await cloud.database.rpc('submit_exam', {
     p_exam_id: active.id,
     p_answers: answers,
@@ -418,6 +590,8 @@ async function submitExam(auto = false): Promise<void> {
 
   if (timer !== null) window.clearInterval(timer);
   timer = null;
+  stopHeartbeat();
+  exitExamGuards();
   const result = (Array.isArray(data) ? data[0] : data) as { score?: number; totalScore?: number } | null;
   el('exam-runner').hidden = true;
   el('exam-result').hidden = false;
@@ -508,11 +682,8 @@ el<HTMLButtonElement>('exam-refresh').addEventListener('click', () => {
 window.addEventListener('exam-list-changed', () => refreshIfIdle(true));
 
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) {
-    if (active) focusLoss += 1;
-  } else {
-    refreshIfIdle();
-  }
+  // 切屏计数由考试守卫 onVisibility 统一处理(仅答题中累加),这里只负责列表刷新。
+  if (!document.hidden && !active) refreshIfIdle();
 });
 window.addEventListener('focus', () => refreshIfIdle());
 

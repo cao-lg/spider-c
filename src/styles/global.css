@@ -3456,6 +3456,69 @@ button {
   color: var(--text-3);
 }
 
+/* ── 防作弊配置 / 监考 ─────────────────────── */
+.exam-anti-cheat {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1.4rem;
+  margin: 0.4rem 0 0.2rem;
+}
+
+.exam-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.exam-check input {
+  accent-color: var(--accent);
+}
+
+.exam-proctor-global {
+  margin: 0.6rem 0;
+}
+
+.exam-proctor-global input[type='text'] {
+  flex: 1 1 16rem;
+  min-width: 12rem;
+}
+
+.exam-mon-actions {
+  gap: 0.3rem;
+}
+
+.exam-mon-status {
+  font-weight: 600;
+}
+
+.exam-mon-status[data-status='in_progress'] {
+  color: var(--accent);
+}
+
+.exam-mon-status[data-status='force_submitted'] {
+  color: var(--danger);
+}
+
+.exam-mon-status[data-status='reset'] {
+  color: var(--warning, #b8860b);
+}
+
+.exam-mon-status[data-status='submitted'] {
+  color: var(--success);
+}
+
+.exam-mon-online {
+  color: var(--success);
+  font-size: 0.78rem;
+}
+
+.exam-mon-offline {
+  color: var(--text-3);
+  font-size: 0.78rem;
+}
+
 /* ── 逐题回看 ─────────────────────────────── */
 .exam-fb-list {
   list-style: none;

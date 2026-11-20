@@ -17,6 +17,27 @@ interface ExamAdminRow {
   duration_min: number;
   published: boolean;
   created_at: string;
+  shuffle_questions?: boolean;
+  shuffle_options?: boolean;
+  opens_at?: string | null;
+  closes_at?: string | null;
+}
+
+interface MonitorRow {
+  ownerId: string;
+  classId: string;
+  studentNo: string;
+  realName: string;
+  status: string;
+  answerCount: number;
+  focusLoss: number;
+  attempts: number;
+  extendedSec: number;
+  startedAt: string;
+  lastSeenAt: string;
+  online: boolean;
+  submitted: boolean;
+  score: number | null;
 }
 
 interface GradeRow {
@@ -55,7 +76,7 @@ let gradeExam: ExamAdminRow | null = null;
 async function loadExams(): Promise<void> {
   const { data, error } = await cloud.database
     .from('exams')
-    .select('id, code, title, class_id, paper, duration_min, published, created_at')
+    .select('id, code, title, class_id, paper, duration_min, published, created_at, shuffle_questions, shuffle_options, opens_at, closes_at')
     .order('created_at', { ascending: false });
   if (error) {
     el('exam-admin-list').innerHTML = `<p class="report-hint">读取失败:${escape(errorMessage(error))}</p>`;
@@ -72,17 +93,23 @@ function renderExamList(): void {
     box.innerHTML = '<p class="report-hint">还没有试卷,用上面的表单创建第一场。</p>';
     return;
   }
-  box.innerHTML = `<table class="design-table"><thead><tr><th>标题 / 代号</th><th>班级</th><th>题量</th><th>时长</th><th>状态</th><th>操作</th></tr></thead><tbody>${examRows
-    .map(
-      (row) => `<tr>
+  box.innerHTML = `<table class="design-table"><thead><tr><th>标题 / 代号</th><th>班级</th><th>题量</th><th>时长</th><th>防作弊</th><th>开放窗口</th><th>状态</th><th>操作</th></tr></thead><tbody>${examRows
+    .map((row) => {
+      const ac = [row.shuffle_questions ? '题乱序' : '', row.shuffle_options ? '选项乱序' : ''].filter(Boolean).join(' / ') || '默认';
+      const windowLabel = row.opens_at || row.closes_at
+        ? `${row.opens_at ? escape(new Date(row.opens_at).toLocaleString('zh-CN')) : '不限'} ~ ${row.closes_at ? escape(new Date(row.closes_at).toLocaleString('zh-CN')) : '不限'}`
+        : '不限';
+      return `<tr>
         <td><strong>${escape(row.title)}</strong><br /><span class="report-hint">${escape(row.code)}</span></td>
         <td>${escape(row.class_id ?? '全部')}</td>
         <td>${row.paper?.length ?? 0}</td>
         <td>${row.duration_min} 分钟</td>
+        <td>${ac}</td>
+        <td class="report-hint">${windowLabel}</td>
         <td>${row.published ? '<span class="exam-published">已发布</span>' : '草稿'}</td>
         <td><button type="button" class="btn sm" data-exam-toggle="${row.id}">${row.published ? '停止发布' : '发布'}</button></td>
-      </tr>`,
-    )
+      </tr>`;
+    })
     .join('')}</tbody></table>`;
   box.querySelectorAll<HTMLButtonElement>('[data-exam-toggle]').forEach((button) => {
     button.addEventListener('click', () => void togglePublish(Number(button.dataset.examToggle)));
@@ -90,12 +117,13 @@ function renderExamList(): void {
 }
 
 function renderGradeSelect(): void {
-  const select = el<HTMLSelectElement>('exam-grade-select');
-  select.innerHTML =
+  const opts =
     '<option value="">选择考试</option>' +
     examRows
       .map((row) => `<option value="${row.id}">${escape(row.title)} (${escape(row.class_id ?? '全部')})</option>`)
       .join('');
+  el<HTMLSelectElement>('exam-grade-select').innerHTML = opts;
+  el<HTMLSelectElement>('exam-proctor-select').innerHTML = opts;
 }
 
 async function togglePublish(id: number): Promise<void> {
@@ -122,6 +150,12 @@ async function createExam(): Promise<void> {
   const count = Number(el<HTMLInputElement>('exam-new-count').value);
   const points = Number(el<HTMLInputElement>('exam-new-points').value);
   const duration = Number(el<HTMLInputElement>('exam-new-duration').value);
+  const shuffleQ = el<HTMLInputElement>('exam-new-shuffle-q').checked;
+  const shuffleO = el<HTMLInputElement>('exam-new-shuffle-o').checked;
+  const opensRaw = el<HTMLInputElement>('exam-new-opens').value;
+  const closesRaw = el<HTMLInputElement>('exam-new-closes').value;
+  const opens = opensRaw ? new Date(opensRaw).toISOString() : null;
+  const closes = closesRaw ? new Date(closesRaw).toISOString() : null;
 
   if (!title || !/^[a-z0-9-]{3,24}$/i.test(code)) {
     msg('exam-create-msg', '请填写标题,代号用 3-24 位字母、数字或连字符。', 'error');
@@ -151,8 +185,10 @@ async function createExam(): Promise<void> {
       class_id: classId || null,
       paper: built.paper,
       duration_min: duration,
-      shuffle_questions: false,
-      shuffle_options: false,
+      shuffle_questions: shuffleQ,
+      shuffle_options: shuffleO,
+      opens_at: opens,
+      closes_at: closes,
       max_attempts: 1,
       published: false,
     })
@@ -271,6 +307,139 @@ function exportCsv(): void {
   URL.revokeObjectURL(url);
 }
 
+// ── 实时监考 ─────────────────────────────────────────────────
+let monitorTimer: number | null = null;
+
+function proctorMsg(text: string, kind: 'info' | 'error' = 'info'): void {
+  msg('exam-proctor-msg', text, kind);
+}
+
+async function loadMonitor(): Promise<void> {
+  const id = Number(el<HTMLSelectElement>('exam-proctor-select').value);
+  if (!id) {
+    el('exam-proctor-list').innerHTML = '<p class="report-hint">请先选择一场考试。</p>';
+    return;
+  }
+  const { data, error } = await cloud.database.rpc('exam_monitor', { p_exam_id: id });
+  if (error) {
+    proctorMsg(`读取监考状态失败:${errorMessage(error)}`, 'error');
+    return;
+  }
+  const rows = (Array.isArray(data) ? data : []) as MonitorRow[];
+  const exam = examRows.find((r) => r.id === id);
+  const total = exam?.paper?.length ?? 0;
+  const statusLabel: Record<string, string> = {
+    in_progress: '作答中', force_submitted: '已强交', reset: '待重做', submitted: '已交卷',
+  };
+  el('exam-proctor-list').innerHTML = rows.length === 0
+    ? '<p class="report-hint">还没有学生进入这场考试。</p>'
+    : `<table class="design-table"><thead><tr><th>状态</th><th>班级 / 学号</th><th>姓名</th><th>进度</th><th>切屏</th><th>第几次</th><th>最近心跳</th><th>操作</th></tr></thead><tbody>${rows
+        .map((r) => {
+          const heart = r.lastSeenAt ? new Date(r.lastSeenAt).toLocaleTimeString('zh-CN') : '—';
+          const dangerFocus = r.focusLoss > 0 ? ' style="color:var(--danger);font-weight:700"' : '';
+          return `<tr data-owner="${escape(r.ownerId)}">
+            <td><span class="exam-mon-status" data-status="${r.status}">${statusLabel[r.status] ?? r.status}</span> ${r.online ? '<span class="exam-mon-online">●在线</span>' : '<span class="exam-mon-offline">离线</span>'}</td>
+            <td>${escape(r.classId)} / ${escape(r.studentNo)}</td>
+            <td>${escape(r.realName || '—')}</td>
+            <td>${r.answerCount} / ${total}${r.submitted && r.score != null ? ` · ${r.score}分` : ''}</td>
+            <td${dangerFocus}>${r.focusLoss}</td>
+            <td>${r.attempts}</td>
+            <td class="report-hint">${heart}</td>
+            <td><div class="btn-row exam-mon-actions">
+              ${r.status === 'in_progress' ? `<button type="button" class="btn sm" data-mon-force="${escape(r.ownerId)}">强制交卷</button>` : ''}
+              <button type="button" class="btn sm" data-mon-reset="${escape(r.ownerId)}">允许重做</button>
+              ${r.status === 'in_progress' ? `<button type="button" class="btn sm" data-mon-extend="${escape(r.ownerId)}">+5分</button>` : ''}
+            </div></td>
+          </tr>`;
+        })
+        .join('')}</tbody></table>`;
+  bindMonitorActions();
+  proctorMsg(`共 ${rows.length} 名学生 · ${rows.filter((r) => r.online).length} 人在线。`);
+}
+
+function bindMonitorActions(): void {
+  const id = Number(el<HTMLSelectElement>('exam-proctor-select').value);
+  el('exam-proctor-list').querySelectorAll<HTMLButtonElement>('[data-mon-force]').forEach((b) => {
+    b.addEventListener('click', () => {
+      const owner = b.dataset.monForce as string;
+      if (!window.confirm('强制交卷将按该生当前已答内容判分,确定吗?')) return;
+      void cloud.database.rpc('exam_force_submit', { p_exam_id: id, p_owner_id: owner }).then(({ data, error }) => {
+        if (error) { proctorMsg(`强交失败:${errorMessage(error)}`, 'error'); return; }
+        const r = (Array.isArray(data) ? data[0] : data) as { score: number; totalScore: number } | null;
+        proctorMsg(`已强制交卷,得分 ${r?.score ?? '-'} / ${r?.totalScore ?? '-'}。`);
+        void loadMonitor();
+      });
+    });
+  });
+  el('exam-proctor-list').querySelectorAll<HTMLButtonElement>('[data-mon-reset]').forEach((b) => {
+    b.addEventListener('click', () => {
+      const owner = b.dataset.monReset as string;
+      if (!window.confirm('允许重做会清除该生旧答卷与成绩,学生可重新作答。确定吗?')) return;
+      void cloud.database.rpc('exam_reset_attempt', { p_exam_id: id, p_owner_id: owner }).then(({ error }) => {
+        if (error) { proctorMsg(`重置失败:${errorMessage(error)}`, 'error'); return; }
+        proctorMsg('已允许重做,学生刷新列表后可重新开考。');
+        void loadMonitor();
+      });
+    });
+  });
+  el('exam-proctor-list').querySelectorAll<HTMLButtonElement>('[data-mon-extend]').forEach((b) => {
+    b.addEventListener('click', () => {
+      const owner = b.dataset.monExtend as string;
+      void cloud.database.rpc('exam_extend', { p_exam_id: id, p_owner_id: owner, p_seconds: 300 }).then(({ error }) => {
+        if (error) { proctorMsg(`延长失败:${errorMessage(error)}`, 'error'); return; }
+        proctorMsg('已为该生延长 5 分钟。');
+        void loadMonitor();
+      });
+    });
+  });
+}
+
+function bindProctor(): void {
+  el<HTMLSelectElement>('exam-proctor-select').addEventListener('change', () => {
+    void loadMonitor();
+  });
+  el('exam-proctor-refresh').addEventListener('click', () => void loadMonitor());
+  el<HTMLInputElement>('exam-proctor-auto').addEventListener('change', (e) => {
+    syncMonitorTimer((e.target as HTMLInputElement).checked);
+  });
+  el('exam-broadcast-send').addEventListener('click', () => {
+    const id = Number(el<HTMLSelectElement>('exam-proctor-select').value);
+    const text = el<HTMLInputElement>('exam-broadcast-msg').value.trim();
+    if (!id || !text) { proctorMsg('请选择考试并输入广播内容。', 'error'); return; }
+    void cloud.database.rpc('exam_broadcast', { p_exam_id: id, p_message: text }).then(({ data, error }) => {
+      if (error) { proctorMsg(`广播失败:${errorMessage(error)}`, 'error'); return; }
+      const r = (Array.isArray(data) ? data[0] : data) as { affected: number } | null;
+      proctorMsg(`已向 ${r?.affected ?? 0} 名学生广播。`);
+    });
+  });
+  el('exam-extend-all').addEventListener('click', () => {
+    const id = Number(el<HTMLSelectElement>('exam-proctor-select').value);
+    if (!id) { proctorMsg('请先选择考试。', 'error'); return; }
+    void cloud.database.rpc('exam_extend', { p_exam_id: id, p_owner_id: null, p_seconds: 300 }).then(({ data, error }) => {
+      if (error) { proctorMsg(`延长失败:${errorMessage(error)}`, 'error'); return; }
+      const r = (Array.isArray(data) ? data[0] : data) as { affected: number } | null;
+      proctorMsg(`已为 ${r?.affected ?? 0} 名学生延长 5 分钟。`);
+      void loadMonitor();
+    });
+  });
+  el('exam-end-btn').addEventListener('click', () => {
+    const id = Number(el<HTMLSelectElement>('exam-proctor-select').value);
+    if (!id) { proctorMsg('请先选择考试。', 'error'); return; }
+    if (!window.confirm('结束考试后所有学生将无法继续作答,且不可恢复。确定吗?')) return;
+    void cloud.database.rpc('exam_end', { p_exam_id: id }).then(({ error }) => {
+      if (error) { proctorMsg(`结束失败:${errorMessage(error)}`, 'error'); return; }
+      proctorMsg('已结束考试。');
+      void loadMonitor();
+      void loadExams();
+    });
+  });
+}
+
+function syncMonitorTimer(on: boolean): void {
+  if (monitorTimer !== null) { window.clearInterval(monitorTimer); monitorTimer = null; }
+  if (on) monitorTimer = window.setInterval(() => void loadMonitor(), 4000);
+}
+
 function render(next: CloudSessionData): void {
   session = next;
   const allowed = Boolean(next);
@@ -288,6 +457,7 @@ function render(next: CloudSessionData): void {
 el<HTMLButtonElement>('exam-create').addEventListener('click', () => void createExam());
 el<HTMLButtonElement>('exam-grade-load').addEventListener('click', () => void loadGrades());
 el<HTMLButtonElement>('exam-grade-csv').addEventListener('click', exportCsv);
+bindProctor();
 
 onAuthChange(render);
 void currentSession().then(render);

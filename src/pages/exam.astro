@@ -86,7 +86,16 @@ import { unitOptions } from '../lib/exam-data';
           <label>题量<input id="exam-new-count" type="number" min="1" max="30" value="10" /></label>
           <label>每题分值<input id="exam-new-points" type="number" min="1" max="20" value="10" /></label>
           <label>时长(分钟)<input id="exam-new-duration" type="number" min="1" max="180" value="30" /></label>
+          <label>开放时间<input id="exam-new-opens" type="datetime-local" /></label>
+          <label>截止时间<input id="exam-new-closes" type="datetime-local" /></label>
         </div>
+        <div class="exam-anti-cheat">
+          <label class="exam-check"><input id="exam-new-shuffle-q" type="checkbox" checked /> 题目乱序(每人顺序不同)</label>
+          <label class="exam-check"><input id="exam-new-shuffle-o" type="checkbox" checked /> 选项乱序(答案自动重映射)</label>
+        </div>
+        <p class="report-hint">
+          防作弊:题目/选项乱序仅改变显示顺序,判分按题目 ID 与选项原文对应,答案不受影响。开考后学生端会锁定全屏、禁用复制粘贴;切屏与失焦会被记录,教师可在监考面板看到。
+        </p>
         <div class="btn-row">
           <button id="exam-create" type="button" class="btn sm primary">创建并发布</button>
         </div>
@@ -107,6 +116,26 @@ import { unitOptions } from '../lib/exam-data';
         </div>
         <div id="exam-grade-table" class="table-scroll"></div>
         <p id="exam-grade-msg" class="report-hint" role="status" aria-live="polite"></p>
+      </section>
+
+      <section class="report-card" id="exam-proctor-card">
+        <div class="report-card-title">实时监考</div>
+        <p class="report-hint">
+          选择一场已开始的考试,每 4 秒自动刷新在线状态。「允许重做」会清除该生旧答卷,学生返回列表即可重新开考;「强制交卷」按学生当前已答内容判分。
+        </p>
+        <div class="btn-row">
+          <select id="exam-proctor-select" aria-label="选择监考考试"></select>
+          <button id="exam-proctor-refresh" type="button" class="btn sm">立即刷新</button>
+          <label class="exam-check"><input id="exam-proctor-auto" type="checkbox" checked /> 自动刷新</label>
+        </div>
+        <div class="btn-row exam-proctor-global">
+          <input id="exam-broadcast-msg" type="text" maxlength="120" placeholder="广播提示,如:还有 10 分钟" />
+          <button id="exam-broadcast-send" type="button" class="btn sm">广播</button>
+          <button id="exam-extend-all" type="button" class="btn sm">全体 +5 分钟</button>
+          <button id="exam-end-btn" type="button" class="btn sm danger">结束考试</button>
+        </div>
+        <div id="exam-proctor-list" class="table-scroll"></div>
+        <p id="exam-proctor-msg" class="report-hint" role="status" aria-live="polite"></p>
       </section>
     </div>
   </section>
