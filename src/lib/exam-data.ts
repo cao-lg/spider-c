@@ -15,9 +15,10 @@
  */
 import { conceptQuestions } from '../data/questions.ts';
 import { examQuestions } from '../data/exam-questions.ts';
+import { examQuestionsExtra } from '../data/exam-questions-extra.ts';
 import { units } from '../data/course.ts';
 
-const ALL_QUESTIONS = [...conceptQuestions, ...examQuestions];
+const ALL_QUESTIONS = [...conceptQuestions, ...examQuestions, ...examQuestionsExtra];
 
 export type ExamQuestionType = 'choice' | 'truefalse' | 'multi' | 'fill' | 'short' | 'code';
 

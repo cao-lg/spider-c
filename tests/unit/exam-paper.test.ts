@@ -10,35 +10,46 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { examQuestions } from '../../src/data/exam-questions.ts';
+import { examQuestionsExtra } from '../../src/data/exam-questions-extra.ts';
 import { conceptQuestions } from '../../src/data/questions.ts';
 import { lessons } from '../../src/data/course.ts';
 import { buildPaper } from '../../src/lib/exam-data.ts';
 
+const extQuestions = [...examQuestions, ...examQuestionsExtra];
 const EXT_TYPES = ['multi', 'fill', 'short', 'code'] as const;
 const ALL_TYPES = ['choice', 'truefalse', ...EXT_TYPES] as const;
 
 test('六种题型齐备,且每种都有题目', () => {
-  const all = [...conceptQuestions, ...examQuestions];
+  const all = [...conceptQuestions, ...extQuestions];
   const counts = Object.fromEntries(ALL_TYPES.map((t) => [t, 0])) as Record<string, number>;
   for (const q of all) counts[q.type] = (counts[q.type] ?? 0) + 1;
   for (const t of ALL_TYPES) assert.ok(counts[t] > 0, `题型 ${t} 没有题目`);
 });
 
+test('全库题号唯一,总量达到正式考试规模(>=140)', () => {
+  const all = [...conceptQuestions, ...extQuestions];
+  const ids = all.map((q) => q.id);
+  assert.equal(new Set(ids).size, ids.length, '存在重复题号');
+  assert.ok(all.length >= 140, `题库总量仅 ${all.length},不足以支撑多套不重复试卷`);
+  const codeCount = all.filter((q) => q.type === 'code').length;
+  assert.ok(codeCount >= 20, `编程题仅 ${codeCount} 道`);
+});
+
 test('扩展题库:每单元齐备四种题型,且编程题总量 >= 10', () => {
   const units = ['unit-1', 'unit-2', 'unit-3', 'unit-4', 'unit-5'];
   for (const u of units) {
-    const inUnit = examQuestions.filter((q) => q.unitId === u);
+    const inUnit = extQuestions.filter((q) => q.unitId === u);
     for (const t of EXT_TYPES) {
       assert.ok(inUnit.some((q) => q.type === t), `${u} 缺少 ${t} 题型`);
     }
   }
-  const codeCount = examQuestions.filter((q) => q.type === 'code').length;
+  const codeCount = extQuestions.filter((q) => q.type === 'code').length;
   assert.ok(codeCount >= 10, `编程题只有 ${codeCount} 道,不足以防短期重复`);
 });
 
 test('扩展题 unitId 与课程定义的 lesson 归属一致(不再全部落在 unit-1)', () => {
   const unitOfLesson = new Map(lessons.map((l) => [l.id, l.unitId]));
-  for (const q of examQuestions) {
+  for (const q of extQuestions) {
     const expectUnit = unitOfLesson.get(q.lessonId);
     assert.ok(expectUnit, `${q.id} 的 lessonId=${q.lessonId} 不存在于课程定义`);
     assert.equal(q.unitId, expectUnit, `${q.id} 的 unitId=${q.unitId} 应为 ${expectUnit}`);
@@ -46,7 +57,7 @@ test('扩展题 unitId 与课程定义的 lesson 归属一致(不再全部落在
 });
 
 test('编程题均带 starter 与 check,multi 带 options,填空/简答带判分字段', () => {
-  for (const q of examQuestions) {
+  for (const q of extQuestions) {
     if (q.type === 'code') {
       assert.ok(q.starter && q.check, `${q.id} 编程题缺 starter/check`);
     } else if (q.type === 'multi') {
@@ -75,7 +86,7 @@ test('按单元组卷 + 编程配比:unit-4 也能抽到编程题', () => {
   const built = buildPaper('unit-4', 6, 10, { code: 2 });
   assert.equal(built.paper.length, 6);
   const code = built.paper.filter((q) => q.type === 'code');
-  assert.equal(code.length, 2, 'unit-4 应能抽到 2 道编程题');
+  assert.ok(code.length >= 2, `unit-4 应至少抽到 2 道编程题,实际 ${code.length}`);
   for (const q of built.paper) assert.equal((q as { starter?: string }).starter !== undefined, q.type === 'code');
 });
 

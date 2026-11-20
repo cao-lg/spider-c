@@ -148,32 +148,21 @@ test('报告维度与课程数据一致:44 目标 / 28 误区 / 13 课 / 5 技�
   assert.equal(r.byClass.length, 2);
 });
 
-test('无概念题覆盖的目标:只做概念卷不算达成,必须看实操通过', () => {
-  const noQuestion = designList
-    .flatMap((d) => d.objectives.map((o) => ({ id: o.id, lessonId: d.lessonId })))
-    .find((o) => conceptQuestions.filter((q) => q.objectiveId === o.id).length === 0);
-  assert.ok(noQuestion, '题库里应存在由代码实战覆盖的目标');
+test('每个课程目标都有概念题直接覆盖(题库扩容后的增强保证)', () => {
+  const allObjectives = designList.flatMap((d) => d.objectives.map((o) => o.id));
+  const uncovered = allObjectives.filter((id) => !conceptQuestions.some((q) => q.objectiveId === id));
+  assert.deepEqual(uncovered, [], `以下目标没有概念题覆盖:${uncovered.join(', ')}`);
+});
 
-  // 只写一份没有逐题明细的旧版概念卷,没有任何实操记录
-  const onlyQuiz = student('S1', '1班', (d) => {
-    d.concepts['quiz-01-environment'] = [attempt(T, 1)];
-  });
-  const r1 = buildClassReport([onlyQuiz], { now: T });
-  const o1 = r1.objectives.find((o) => o.id === noQuestion.id)!;
-  assert.equal(o1.attempted, 0, '没有实操证据就是无数据');
-  assert.equal(o1.rate, null);
-  assert.equal(o1.status, 'nodata');
-
-  // 加上该课实操且通过 → 才有间接证据
-  const withPractice = student('S1', '1班', (d) => {
-    d.concepts['quiz-01-environment'] = [attempt(T, 1)];
-    d.practice['ex-01-environment'] = [{ ...attempt(T, 0.9), passed: true, lessonId: '01-environment' }];
-  });
-  const r2 = buildClassReport([withPractice], { now: T });
-  const o2 = r2.objectives.find((o) => o.id === noQuestion.id)!;
-  assert.equal(o2.attempted, 1);
-  assert.equal(o2.achieved, 1);
-  assert.equal(o2.directCount, 0);
+test('无任何作答记录时目标状态为 nodata', () => {
+  // 学生有档案但没有任何作答 → 所有目标都应是"无数据",不臆断达成
+  const blank = student('S1', '1班', () => {});
+  const r = buildClassReport([blank], { now: T });
+  for (const o of r.objectives) {
+    assert.equal(o.attempted, 0, `${o.id}:没有作答证据就是无数据`);
+    assert.equal(o.rate, null);
+    assert.equal(o.status, 'nodata');
+  }
 });
 
 test('逐题明细优先:答错且有未消除错题时不算达成', () => {
@@ -280,7 +269,10 @@ test('CSV 带 BOM、含评价方式列,学生明细不含姓名', () => {
   const oc = objectivesCsv(r);
   assert.ok(oc.startsWith('\ufeff'));
   assert.ok(oc.includes('评价方式'));
-  assert.ok(oc.includes('代码实战'));
+  // 题库扩容后每个目标都有概念题直接覆盖,评价方式统一为"概念题";
+  // 只断言该列有有效取值,不绑定某一种具体方式。
+  const methods = oc.trim().split('\r\n').slice(1).map((l) => l.split(',')[5]);
+  assert.ok(methods.length > 0 && methods.every((m) => m && m !== 'undefined'), '每个目标都应有评价方式');
   assert.equal(oc.trim().split('\r\n').length, r.objectives.length + 1);
   const sc = studentsCsv(r);
   assert.ok(sc.includes('匿名学号'));
