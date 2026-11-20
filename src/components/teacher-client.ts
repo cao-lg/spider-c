@@ -22,6 +22,7 @@ import {
 import { demoRecords } from '../lib/demo-data';
 import { migrate } from '../lib/schema';
 import { countAttempts } from '../lib/merge';
+import { apiUrl } from '../lib/api-origin';
 import { getLessonById } from '../data/course';
 
 function el<T extends HTMLElement = HTMLElement>(id: string): T {
@@ -387,7 +388,7 @@ function teacherToken(): string {
 async function api(path: string, init: RequestInit = {}): Promise<unknown> {
   const token = teacherToken();
   if (!token) throw new Error('请先填写教师口令。');
-  const resp = await fetch(`/api${path}`, {
+  const resp = await fetch(apiUrl(path), {
     ...init,
     headers: {
       Authorization: `Bearer ${token}`,
@@ -418,8 +419,8 @@ async function api(path: string, init: RequestInit = {}): Promise<unknown> {
 function cloudUnavailable(e: unknown) {
   const reason = e instanceof Error ? e.message : String(e);
   cloudMsg(
-    `云端接口不可用(${reason})。本地静态预览没有 /api/*;` +
-      '请按 docs/TEACHER-DATA.md 部署到 Cloudflare Pages 并绑定 D1 后重试。离线模式不受影响。',
+    `云端接口不可用(${reason})。请确认 Cloudflare Pages Functions 已部署且网络可达` +
+      '(可访问 https://spider-c.pages.dev/api/health 自检);离线汇总模式不受影响。',
   );
 }
 

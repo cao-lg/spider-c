@@ -5,6 +5,7 @@
 // 令牌(token)存本机以便免重复登录,退出同步即清除。
 
 import { store } from '../lib/store';
+import { apiUrl } from '../lib/api-origin';
 
 const TOKEN_KEY = 'crawler-course:sync-token';
 const META_KEY = 'crawler-course:sync-meta';
@@ -57,7 +58,7 @@ async function call(path: string, init: RequestInit = {}, authToken = token()): 
   if (authToken) headers.Authorization = `Bearer ${authToken}`;
   let resp: Response;
   try {
-    resp = await fetch(`/api${path}`, { ...init, headers });
+    resp = await fetch(apiUrl(path), { ...init, headers });
   } catch {
     throw new Error('网络不可达。');
   }
@@ -67,7 +68,7 @@ async function call(path: string, init: RequestInit = {}, authToken = token()): 
     body = JSON.parse(text) as Record<string, unknown>;
   } catch {
     throw new Error(
-      '站点还没有部署云同步服务(Pages Functions)。离线导出备份仍可正常使用,不影响课程。',
+      '云同步服务暂不可用(Pages Functions 未部署或网络异常)。离线导出备份仍可正常使用,不影响课程。',
     );
   }
   if (!resp.ok) throw new Error(String(body.error ?? `HTTP ${resp.status}`));

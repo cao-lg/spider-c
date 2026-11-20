@@ -104,7 +104,12 @@ class PyCodeExercise extends HTMLElement {
     this.check = this.decode(attr('data-check'));
     this.hint = this.decode(attr('data-hint'));
     this.explanation = this.decode(attr('data-explanation'));
-    this.guard = this.decode(attr('data-guard') || '{}') || {};
+    try {
+      const g = JSON.parse(attr('data-guard') || '{}');
+      this.guard = g && typeof g === 'object' && !Array.isArray(g) ? g : {};
+    } catch {
+      this.guard = {};
+    }
     const stepsRaw = this.decode(attr('data-hint-steps') || '[]');
     try {
       this.hintSteps = Array.isArray(stepsRaw) ? stepsRaw.filter((s) => typeof s === 'string') : [];
