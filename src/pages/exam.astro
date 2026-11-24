@@ -135,7 +135,8 @@ import { unitOptions } from '../lib/exam-data';
         <div class="btn-row">
           <select id="exam-grade-select" aria-label="选择考试"></select>
           <button id="exam-grade-load" type="button" class="btn sm">加载成绩</button>
-          <button id="exam-grade-csv" type="button" class="btn sm">导出 CSV</button>
+          <button id="exam-grade-csv" type="button" class="btn sm">导出成绩册</button>
+          <button id="exam-grade-answers-csv" type="button" class="btn sm">导出完整答卷</button>
         </div>
         <div id="exam-grade-table" class="table-scroll"></div>
         <p id="exam-grade-msg" class="report-hint" role="status" aria-live="polite"></p>
@@ -162,6 +163,20 @@ import { unitOptions } from '../lib/exam-data';
       </section>
     </div>
   </section>
+
+  <!-- 试卷预览弹层:只读卷面,不含答案 -->
+  <div id="exam-preview-modal" class="exam-preview-modal" hidden>
+    <div class="exam-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="exam-preview-title">
+      <div class="exam-preview-head">
+        <h3 id="exam-preview-title">试卷预览</h3>
+        <div class="btn-row">
+          <span id="exam-preview-tabs" class="btn-row" hidden></span>
+          <button id="exam-preview-close" type="button" class="btn sm">关闭</button>
+        </div>
+      </div>
+      <div id="exam-preview-body" class="exam-preview-body"></div>
+    </div>
+  </div>
 </Site>
 
 <script>

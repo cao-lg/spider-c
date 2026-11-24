@@ -14,7 +14,7 @@ import { examQuestionsExtra } from '../../src/data/exam-questions-extra.ts';
 import { examQuestionsExtra2 } from '../../src/data/exam-questions-extra2.ts';
 import { conceptQuestions } from '../../src/data/questions.ts';
 import { lessons } from '../../src/data/course.ts';
-import { buildPaper, buildVariants, assignVariant, hashSeed, seededShuffle, variantLabel } from '../../src/lib/exam-data.ts';
+import { buildPaper, buildVariants, assignVariant, hashSeed, seededShuffle, variantLabel, gradeQuestion } from '../../src/lib/exam-data.ts';
 
 const extQuestions = [...examQuestions, ...examQuestionsExtra, ...examQuestionsExtra2];
 const EXT_TYPES = ['multi', 'fill', 'short', 'code'] as const;
@@ -146,4 +146,29 @@ test('ABC 平行卷:生成3套结构一致、题目跨套不重复、objective�
     }
   }
   assert.equal(built.total, 80, '每套满分应为 8×10=80');
+});
+
+// ── 教师导出逐题对错的共享判分口径(与服务端 set/any/keyword 一致) ──
+
+test('gradeQuestion:set 集合相等判分(顺序无关)', () => {
+  const rule = { mode: 'set' as const, answer: ['1', '3'], points: 5 };
+  assert.deepEqual(gradeQuestion(rule, ['1', '3']), { correct: true, earned: 5 });
+  assert.deepEqual(gradeQuestion(rule, ['3', '1']), { correct: true, earned: 5 });
+  assert.deepEqual(gradeQuestion(rule, ['1']), { correct: false, earned: 0 });
+  assert.deepEqual(gradeQuestion(rule, ['1', '2', '3']), { correct: false, earned: 0 });
+});
+
+test('gradeQuestion:any 命中任一可接受答案(大小写/空白不敏感)', () => {
+  const rule = { mode: 'any' as const, answer: ['requests', 'beautifulsoup'], points: 5 };
+  assert.equal(gradeQuestion(rule, [' Requests ']).correct, true);
+  assert.equal(gradeQuestion(rule, ['BEAUTIFULSOUP']).correct, true);
+  assert.equal(gradeQuestion(rule, ['numpy']).correct, false);
+  assert.equal(gradeQuestion(rule, []).correct, false);
+});
+
+test('gradeQuestion:keyword 包含任一关键词即得分', () => {
+  const rule = { mode: 'keyword' as const, answer: ['未找到', '不存在'], points: 5 };
+  assert.equal(gradeQuestion(rule, ['服务器返回未找到错误']).correct, true);
+  assert.equal(gradeQuestion(rule, ['资源不存在']).correct, true);
+  assert.equal(gradeQuestion(rule, ['请求超时']).correct, false);
 });

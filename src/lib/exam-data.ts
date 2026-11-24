@@ -326,3 +326,45 @@ export function answerValuesFor(type: ExamQuestionType, questionId: string, form
   // choice / truefalse / multi —— 取所有选中的 radio/checkbox 的值
   return Array.from(form.querySelectorAll<HTMLInputElement>(`input[name="${questionId}"]:checked`)).map((n) => n.value);
 }
+
+/** ─────────────────────────────────────────────────────────────
+ * 共享判分口径(教师端导出逐题对错用)
+ * 与服务端 submit_exam / exam_feedback 的 set/any/keyword 三分支完全一致。
+ * 服务端是权威;此处仅用于教师导出报表时把「学生答案」还原为「每题对错」,
+ * 输入为教师可读的 exam_keys.objective(RLS 仅教师可见)与学生答卷。
+ * ─────────────────────────────────────────────────────────────
+ */
+export interface GradeResult {
+  correct: boolean;
+  earned: number;
+}
+
+export function gradeQuestion(rule: ObjectiveRule, given: string[] | undefined): GradeResult {
+  const points = Number.isFinite(rule.points) ? rule.points : 0;
+  const correct = Array.isArray(rule.answer) ? rule.answer : [];
+  if (!Array.isArray(given) || given.length === 0) return { correct: false, earned: 0 };
+
+  if (rule.mode === 'any') {
+    const player = String(given[0] ?? '').trim().toLowerCase();
+    if (!player) return { correct: false, earned: 0 };
+    for (const a of correct) {
+      if (player === String(a).trim().toLowerCase()) return { correct: points > 0, earned: points };
+    }
+    return { correct: false, earned: 0 };
+  }
+  if (rule.mode === 'keyword') {
+    const player = String(given[0] ?? '').toLowerCase();
+    if (!player) return { correct: false, earned: 0 };
+    for (const kw of correct) {
+      const k = String(kw).toLowerCase();
+      if (k && player.includes(k)) return { correct: points > 0, earned: points };
+    }
+    return { correct: false, earned: 0 };
+  }
+  // set:集合完全相等(顺序无关,重复按集合处理)
+  const norm = (arr: string[]) => Array.from(new Set(arr.map(String))).sort();
+  const a = norm(correct);
+  const g = norm(given);
+  const eq = a.length === g.length && a.every((v, i) => v === g[i]);
+  return { correct: eq && points > 0, earned: eq ? points : 0 };
+}

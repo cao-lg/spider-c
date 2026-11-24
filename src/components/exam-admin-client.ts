@@ -6,14 +6,15 @@
  */
 import { cloud, currentSession, onAuthChange, isTeacher, errorMessage } from '../lib/cloud';
 import type { CloudSessionData } from '../lib/cloud';
-import { buildVariants, type ExamTypePlan } from '../lib/exam-data';
+import { buildVariants, gradeQuestion, type ExamTypePlan, type ObjectiveRule } from '../lib/exam-data';
+import type { ExamQuestion } from '../lib/exam-data';
 
 interface ExamAdminRow {
   id: number;
   code: string;
   title: string;
   class_id: string | null;
-  paper: { points: number }[];
+  paper: ExamQuestion[];
   duration_min: number;
   published: boolean;
   created_at: string;
@@ -51,6 +52,20 @@ interface GradeRow {
   submitted_at: string | null;
   duration_sec: number | null;
   focus_loss_count: number;
+  answers?: Record<string, string[]>;
+}
+
+/** 教师端逐题回看:从客观题规则还原出的对错明细 */
+interface GradeItem {
+  qid: string;
+  given: string;
+  correct: boolean;
+  earned: number;
+  points: number;
+}
+
+interface AnswerKey {
+  objective: Record<string, ObjectiveRule>;
 }
 
 function el<T extends HTMLElement = HTMLElement>(id: string): T {
@@ -74,6 +89,8 @@ let examRows: ExamAdminRow[] = [];
 let gradeRows: GradeRow[] = [];
 let nameByOwner = new Map<string, string>();
 let gradeExam: ExamAdminRow | null = null;
+/** 当前考试的答案规则(教师 RLS 可读),用于逐题还原对错;加载失败则导出不含对错 */
+let gradeKey: AnswerKey | null = null;
 
 async function loadExams(): Promise<void> {
   const { data, error } = await cloud.database
@@ -111,13 +128,69 @@ function renderExamList(): void {
         <td>${ac}</td>
         <td class="report-hint">${windowLabel}</td>
         <td>${row.published ? '<span class="exam-published">已发布</span>' : '草稿'}</td>
-        <td><button type="button" class="btn sm" data-exam-toggle="${row.id}">${row.published ? '停止发布' : '发布'}</button></td>
+        <td>
+          <button type="button" class="btn sm" data-exam-preview="${row.id}">预览试卷</button>
+          <button type="button" class="btn sm" data-exam-toggle="${row.id}">${row.published ? '停止发布' : '发布'}</button>
+        </td>
       </tr>`;
     })
     .join('')}</tbody></table>`;
   box.querySelectorAll<HTMLButtonElement>('[data-exam-toggle]').forEach((button) => {
     button.addEventListener('click', () => void togglePublish(Number(button.dataset.examToggle)));
   });
+  box.querySelectorAll<HTMLButtonElement>('[data-exam-preview]').forEach((button) => {
+    button.addEventListener('click', () => openPreview(Number(button.dataset.examPreview)));
+  });
+}
+
+/** 试卷预览:只读展示卷面题目/选项/分值,不含答案与判分规则;ABC 卷可切换套别 */
+function openPreview(examId: number): void {
+  const exam = examRows.find((r) => r.id === examId);
+  if (!exam) return;
+  const variants = Array.isArray(exam.variants) && exam.variants.length > 0 ? exam.variants : null;
+  const sets: { label: string; paper: ExamQuestion[] }[] = variants
+    ? (variants as { label?: string; paper: ExamQuestion[] }[]).map((v, i) => ({ label: v.label ?? String.fromCharCode(65 + i), paper: v.paper ?? [] }))
+    : [{ label: 'A', paper: (exam.paper ?? []) as ExamQuestion[] }];
+
+  const modal = el('exam-preview-modal');
+  const title = el('exam-preview-title');
+  const tabs = el('exam-preview-tabs');
+  const body = el('exam-preview-body');
+  title.textContent = `试卷预览 · ${exam.title}`;
+  tabs.innerHTML = sets.length > 1
+    ? sets.map((s, i) => `<button type="button" class="btn sm ${i === 0 ? 'primary' : ''}" data-preview-set="${i}">${escape(s.label)} 卷</button>`).join('')
+    : '';
+  tabs.hidden = sets.length <= 1;
+
+  const render = (idx: number) => {
+    const set = sets[idx];
+    const typeLabel: Record<string, string> = { choice: '单选', truefalse: '判断', multi: '多选', fill: '填空', short: '简答', code: '编程' };
+    const total = set.paper.reduce((s, q) => s + (Number(q.points) || 0), 0);
+    const parts = set.paper.map((q, i) => {
+      let opts = '';
+      if (q.type === 'choice' || q.type === 'multi') {
+        opts = `<ul class="preview-opts">${(q.options ?? []).map((o) => `<li>${o}</li>`).join('')}</ul>`;
+      } else if (q.type === 'truefalse') {
+        opts = '<ul class="preview-opts"><li>正确</li><li>错误</li></ul>';
+      } else if (q.type === 'code') {
+        opts = `<pre class="preview-code">${escape(q.starter ?? '')}</pre>`;
+      } else if (q.type === 'fill') {
+        opts = '<p class="report-hint">填空作答</p>';
+      } else {
+        opts = '<p class="report-hint">简答作答</p>';
+      }
+      return `<fieldset class="exam-question"><legend>第 ${i + 1} 题 · ${typeLabel[q.type] ?? q.type} · ${q.points} 分</legend><div class="exam-prompt">${q.prompt}</div>${opts}</fieldset>`;
+    });
+    body.innerHTML = `<p class="report-hint">${set.paper.length} 题 · 满分 ${total} 分 · ${escape(set.label)} 卷(预览仅展示卷面,不含答案)</p>${parts.join('')}`;
+    tabs.querySelectorAll<HTMLButtonElement>('[data-preview-set]').forEach((b) => {
+      b.classList.toggle('primary', Number(b.dataset.previewSet) === idx);
+    });
+  };
+  render(0);
+  tabs.querySelectorAll<HTMLButtonElement>('[data-preview-set]').forEach((b) => {
+    b.onclick = () => render(Number(b.dataset.previewSet));
+  });
+  modal.hidden = false;
 }
 
 function renderGradeSelect(): void {
@@ -260,13 +333,14 @@ async function loadGrades(): Promise<void> {
     msg('exam-grade-msg', '请先选择一场考试。', 'error');
     return;
   }
-  const [subs, profiles] = await Promise.all([
+  const [subs, profiles, keyRes] = await Promise.all([
     cloud.database
       .from('exam_submissions')
-      .select('exam_id, owner_id, class_id, student_no, score, submitted_at, duration_sec, focus_loss_count')
+      .select('exam_id, owner_id, class_id, student_no, score, submitted_at, duration_sec, focus_loss_count, answers')
       .eq('exam_id', id)
       .order('score', { ascending: false }),
     cloud.database.from('student_profiles').select('owner_id, real_name'),
+    cloud.database.from('exam_keys').select('objective').eq('exam_id', id),
   ]);
   if (subs.error || profiles.error) {
     msg('exam-grade-msg', `读取失败:${errorMessage(subs.error ?? profiles.error)}`, 'error');
@@ -274,8 +348,11 @@ async function loadGrades(): Promise<void> {
   }
   gradeRows = (subs.data ?? []) as GradeRow[];
   nameByOwner = new Map(((profiles.data ?? []) as { owner_id: string; real_name: string }[]).map((p) => [p.owner_id, p.real_name]));
+  // 答案规则仅教师可读;取不到时仍可导出答案原文,只是不含对错列
+  const keyRow = (keyRes.data ?? []) as { objective: Record<string, ObjectiveRule> }[];
+  gradeKey = keyRow.length > 0 ? { objective: keyRow[0].objective ?? {} } : null;
   renderGradeTable();
-  msg('exam-grade-msg', `共 ${gradeRows.length} 条答卷。`);
+  msg('exam-grade-msg', `共 ${gradeRows.length} 条答卷。${gradeKey ? '可导出逐题明细。' : '未取到答案规则,逐题对错列将留空。'}`);
 }
 
 function renderGradeTable(): void {
@@ -329,6 +406,60 @@ function exportCsv(): void {
   link.download = `${gradeExam.code}-成绩册.csv`;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+/** 导出完整答卷:每个学生每道题一行,含学生答案原文与对错(由教师可读的答案规则还原) */
+function exportAnswersCsv(): void {
+  if (gradeRows.length === 0 || !gradeExam) {
+    msg('exam-grade-msg', '请先加载一场有答卷的考试。', 'error');
+    return;
+  }
+  const typeByQid = new Map<string, string>();
+  for (const q of (gradeExam.paper ?? []) as ExamQuestion[]) typeByQid.set(q.id, q.type);
+  const typeLabel: Record<string, string> = {
+    choice: '单选', truefalse: '判断', multi: '多选', fill: '填空', short: '简答', code: '编程',
+  };
+  const cell = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const rows: (string | number)[][] = [
+    ['考试', gradeExam.title, '导出时间', new Date().toLocaleString('zh-CN')],
+    [],
+    ['班级', '学号', '姓名', '题号', '题型', '学生答案', '得分', '满分', '是否正确', '提交时间'],
+  ];
+  for (const r of gradeRows) {
+    const answers = r.answers ?? {};
+    const qids = Object.keys(answers);
+    // 优先按卷面题序列出,再补答卷里多出的题(如历史卷)
+    const ordered = [
+      ...(gradeExam.paper ?? []).map((q) => q.id).filter((id) => qids.includes(id)),
+      ...qids.filter((id) => !typeByQid.has(id)),
+    ];
+    for (const qid of ordered) {
+      const raw = answers[qid] ?? [];
+      let shown = '';
+      if (qid && Array.isArray(raw)) {
+        const first = String(raw[0] ?? '');
+        // 编程题存 [PASS/FAIL, code:...]:展示判分结果与代码
+        const codePart = raw.find((v) => String(v).startsWith('code:'));
+        shown = codePart ? `${first} | ${String(codePart).slice(5)}` : raw.join(' / ');
+      }
+      const rule = gradeKey?.objective?.[qid];
+      const graded = rule ? gradeQuestion(rule, Array.isArray(raw) ? raw : []) : null;
+      rows.push([
+        r.class_id, r.student_no, nameByOwner.get(r.owner_id) ?? '', qid,
+        typeLabel[typeByQid.get(qid) ?? ''] ?? '', shown,
+        graded ? String(graded.earned) : '', rule ? String(rule.points) : '',
+        graded ? (graded.correct ? '对' : '错') : '', r.submitted_at ?? '',
+      ]);
+    }
+  }
+  const csv = '\ufeff' + rows.map((r) => r.map(cell).join(',')).join('\r\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `${gradeExam.code}-完整答卷.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+  msg('exam-grade-msg', `已导出 ${gradeRows.length} 名学生的逐题答卷明细。`);
 }
 
 // ── 实时监考 ─────────────────────────────────────────────────
@@ -481,6 +612,11 @@ function render(next: CloudSessionData): void {
 el<HTMLButtonElement>('exam-create').addEventListener('click', () => void createExam());
 el<HTMLButtonElement>('exam-grade-load').addEventListener('click', () => void loadGrades());
 el<HTMLButtonElement>('exam-grade-csv').addEventListener('click', exportCsv);
+el<HTMLButtonElement>('exam-grade-answers-csv').addEventListener('click', exportAnswersCsv);
+el<HTMLButtonElement>('exam-preview-close').addEventListener('click', () => { el('exam-preview-modal').hidden = true; });
+el('exam-preview-modal').addEventListener('click', (e) => {
+  if (e.target === el('exam-preview-modal')) el('exam-preview-modal').hidden = true;
+});
 bindProctor();
 
 onAuthChange(render);

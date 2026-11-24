@@ -3743,3 +3743,64 @@ button {
 .exam-code-status[data-kind='info'] {
   color: var(--text-3);
 }
+
+/* ── 试卷预览弹层 ─────────────────────────────────────────── */
+.exam-preview-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  background: rgba(15, 23, 42, 0.55);
+}
+.exam-preview-modal[hidden] {
+  display: none;
+}
+.exam-preview-dialog {
+  width: min(880px, 100%);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-1, #fff);
+  color: var(--text, #1f2937);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+.exam-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border, #e5e7eb);
+}
+.exam-preview-head h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.exam-preview-body {
+  padding: 1rem 1.25rem 1.5rem;
+  overflow-y: auto;
+}
+.exam-preview-body .exam-question {
+  margin-bottom: 1rem;
+}
+.preview-opts {
+  margin: 0.5rem 0 0;
+  padding-left: 1.4rem;
+  color: var(--text-2, #4b5563);
+  line-height: 1.7;
+}
+.preview-code {
+  margin: 0.5rem 0 0;
+  padding: 0.75rem;
+  background: var(--bg-2, #f3f4f6);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  overflow-x: auto;
+}
