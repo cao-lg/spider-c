@@ -14,7 +14,7 @@ import { examQuestionsExtra } from '../../src/data/exam-questions-extra.ts';
 import { examQuestionsExtra2 } from '../../src/data/exam-questions-extra2.ts';
 import { conceptQuestions } from '../../src/data/questions.ts';
 import { lessons } from '../../src/data/course.ts';
-import { buildPaper } from '../../src/lib/exam-data.ts';
+import { buildPaper, buildVariants, assignVariant, hashSeed, seededShuffle, variantLabel } from '../../src/lib/exam-data.ts';
 
 const extQuestions = [...examQuestions, ...examQuestionsExtra, ...examQuestionsExtra2];
 const EXT_TYPES = ['multi', 'fill', 'short', 'code'] as const;
@@ -103,4 +103,47 @@ test('objective 判分规则与题型对齐', () => {
       assert.deepEqual(rule.answer, ['PASS'], `${q.id} 编程题答案应为 PASS`);
     } else assert.equal(rule.mode, 'set', `${q.id} 客观题应为 set`);
   }
+});
+
+// ── 正式考试:稳定分卷 + ABC 平行卷 ──────────────────────────────
+
+test('稳定分卷:同一 examId+uid 永远同一套,且分布覆盖多套', () => {
+  const examId = 42;
+  const uid = 'wu:test-user-xyz';
+  for (let i = 0; i < 20; i += 1) {
+    assert.equal(assignVariant(examId, uid, 3), assignVariant(examId, uid, 3), '分卷必须可复现');
+  }
+  // 一批 uid 应能覆盖到多套卷(不全部落在一起)
+  const seen = new Set<number>();
+  for (let i = 0; i < 200; i += 1) seen.add(assignVariant(examId, `u${i}`, 3));
+  assert.ok(seen.size >= 2, `3 套卷只覆盖到 ${seen.size} 套,分卷哈希有问题`);
+  assert.deepEqual([0, 1, 2].map(variantLabel), ['A', 'B', 'C']);
+});
+
+test('稳定洗牌:同一 seed 结果一致,不同 seed 结果不同', () => {
+  const arr = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  assert.deepEqual(seededShuffle(arr, 123), seededShuffle(arr, 123));
+  assert.notDeepEqual(seededShuffle(arr, 123), seededShuffle(arr, 456));
+  assert.equal(hashSeed('abc'), hashSeed('abc'));
+  assert.notEqual(hashSeed('abc'), hashSeed('abd'));
+});
+
+test('ABC 平行卷:生成3套结构一致、题目跨套不重复、objective合并完整', () => {
+  const plan = { choice: 2, truefalse: 1, multi: 1, fill: 1, short: 1, code: 1 };
+  const built = buildVariants('', 8, 10, plan, 3);
+  assert.equal(built.variants.length, 3, '应生成 3 套卷');
+  for (const v of built.variants) {
+    assert.equal(v.paper.length, 8, `${v.label} 题量应为 8`);
+    assert.equal(v.questionIds.length, 8);
+  }
+  // 跨套题目 ID 不重复(题库 284 题足够支撑 3×8)
+  const allIds = built.variants.flatMap((v) => v.questionIds);
+  assert.equal(new Set(allIds).size, allIds.length, '三套卷之间存在重复题目');
+  // 每套每道题都能在合并 objective 找到判分规则
+  for (const v of built.variants) {
+    for (const q of v.paper) {
+      assert.ok(built.objective[q.id], `${v.label}/${q.id} 缺判分规则`);
+    }
+  }
+  assert.equal(built.total, 80, '每套满分应为 8×10=80');
 });

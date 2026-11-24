@@ -146,6 +146,161 @@ export function buildPaper(unitId: string, count: number, pointsPerQuestion: num
   return { paper, objective, total: paper.length * pointsPerQuestion };
 }
 
+/** ─────────────────────────────────────────────────────────────
+ * 正式考试:稳定随机 + ABC 平行卷
+ * ─────────────────────────────────────────────────────────────
+ * 关键约定(务必保持):
+ * - 判分按题号 key 匹配学生提交的答案;多套卷的题目 id 互不重复,
+ *   因此把各套 objective 合并进同一张 exam_keys.objective 后,学生只提交
+ *   自己那套的题号,其余题号因无作答被服务端跳过 —— 判分/回看 RPC 无需改动。
+ * - 分卷用「考试 id + uid」的稳定哈希,同一考生重进永远拿到同一套卷,
+ *   避免刷新换卷导致心跳备份与显示错位,也保证申诉可复现。
+ */
+
+/** 32 位字符串哈希(FNV-1a),用于稳定分卷与稳定乱序种子 */
+export function hashSeed(input: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < input.length; i += 1) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+/** 由种子派生的确定性伪随机数发生器(mulberry32) */
+export function seededRandom(seed: number): () => number {
+  let s = seed >>> 0;
+  return () => {
+    s = (s + 0x6d2b79f5) >>> 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** 用给定随机源做 Fisher-Yates 洗牌(不传入则用 Math.random) */
+function shuffleWith<T>(items: T[], rand: () => number): T[] {
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(rand() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+/** 稳定洗牌:同一 seed 永远得到同一顺序 */
+export function seededShuffle<T>(items: T[], seed: number): T[] {
+  return shuffleWith(items, seededRandom(seed));
+}
+
+/** 稳定分卷:按 examId+uid 哈希,把考生分配到 0..variants-1 的某一套 */
+export function assignVariant(examId: number, uid: string, variants: number): number {
+  if (variants <= 1) return 0;
+  return hashSeed(`${examId}:${uid}`) % variants;
+}
+
+/** 变体卷标 A/B/C/... */
+export function variantLabel(index: number): string {
+  return String.fromCharCode(65 + index);
+}
+
+export interface PaperVariant {
+  label: string;
+  paper: ExamQuestion[];
+  /** 该套卷的题号集合,便于前端/监考识别 */
+  questionIds: string[];
+}
+
+/**
+ * 生成 N 套平行卷:每套都按同一题型配比独立抽题,且各套之间题目不重复。
+ * 返回各套 paper 以及合并后的 objective(直接写进 exam_keys.objective)与总分。
+ * - 抽题池足够大时才真正互不重复;池不够时允许跨套复用(不重复优先,不足则回退)。
+ * - total 取各套最大值写进 exam_keys.total_score(判分回看显示的总分)。
+ */
+export function buildVariants(
+  unitId: string,
+  count: number,
+  pointsPerQuestion: number,
+  plan: ExamTypePlan | undefined,
+  variantCount: number,
+): { variants: PaperVariant[]; objective: Record<string, ObjectiveRule>; total: number } {
+  const n = Math.max(1, Math.min(5, variantCount));
+  const variants: PaperVariant[] = [];
+  const merged: Record<string, ObjectiveRule> = {};
+  const globalUsed = new Set<string>();
+  let maxTotal = 0;
+
+  for (let v = 0; v < n; v += 1) {
+    const built = buildPaperAvoiding(unitId, count, pointsPerQuestion, plan, globalUsed);
+    variants.push({
+      label: variantLabel(v),
+      paper: built.paper,
+      questionIds: built.paper.map((q) => q.id),
+    });
+    for (const q of built.paper) globalUsed.add(q.id);
+    Object.assign(merged, built.objective);
+    maxTotal = Math.max(maxTotal, built.total);
+  }
+  return { variants, objective: merged, total: maxTotal };
+}
+
+/**
+ * 与 buildPaper 同规则抽题,但优先排除 globalUsed 里的题号(跨套不重复);
+ * 若排除后池不足,逐步放宽以凑够题量(保证每套都能开考)。
+ */
+function buildPaperAvoiding(
+  unitId: string,
+  count: number,
+  pointsPerQuestion: number,
+  plan: ExamTypePlan | undefined,
+  globalUsed: Set<string>,
+): BuiltPaper {
+  const fullPool = ALL_QUESTIONS.filter((q) => (!unitId || q.unitId === unitId));
+  const want = Math.max(1, Math.min(count, fullPool.length));
+  const pickFrom = (pool: typeof ALL_QUESTIONS): typeof ALL_QUESTIONS => {
+    const hasPlan = plan && Object.values(plan).some((n) => (n ?? 0) > 0);
+    if (hasPlan) return pickByPlan(pool, want, plan!);
+    return shuffle(pool).slice(0, want);
+  };
+  let picked = pickFrom(fullPool.filter((q) => !globalUsed.has(q.id)));
+  if (picked.length < want) {
+    // 跨套不重复优先,但池不足时放宽:先补未被本套选中的题
+    const already = new Set(picked.map((q) => q.id));
+    const rest = shuffle(fullPool.filter((q) => !already.has(q.id)));
+    for (const q of rest) {
+      if (picked.length >= want) break;
+      picked.push(q);
+    }
+  }
+
+  const paper: ExamQuestion[] = picked.map((q) => {
+    const base: ExamQuestion = { id: q.id, type: q.type as ExamQuestionType, prompt: q.prompt, points: pointsPerQuestion };
+    if (q.options) base.options = q.options;
+    if (q.accept) base.accept = [...q.accept];
+    if (q.keywords) base.keywords = [...q.keywords];
+    if (q.starter) base.starter = q.starter;
+    if (q.check) base.check = q.check;
+    return base;
+  });
+  const objective: Record<string, ObjectiveRule> = {};
+  for (const q of picked) {
+    const rule: ObjectiveRule = { mode: 'set', answer: [...(q.answer ?? [])], points: pointsPerQuestion };
+    if (q.type === 'fill') {
+      rule.mode = 'any';
+      rule.answer = [...(q.accept ?? q.answer ?? [])];
+    } else if (q.type === 'short') {
+      rule.mode = 'keyword';
+      rule.answer = [...(q.keywords ?? q.answer ?? [])];
+    } else if (q.type === 'code') {
+      rule.mode = 'set';
+      rule.answer = ['PASS'];
+    }
+    objective[q.id] = rule;
+  }
+  return { paper, objective, total: paper.length * pointsPerQuestion };
+}
+
 /** 判断题选项 */
 export function trueFalseOptions(): string[] {
   return ['正确', '错误'];

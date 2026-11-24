@@ -6,7 +6,7 @@
  */
 import { cloud, currentSession, onAuthChange, isTeacher, errorMessage } from '../lib/cloud';
 import type { CloudSessionData } from '../lib/cloud';
-import { buildPaper, type ExamTypePlan } from '../lib/exam-data';
+import { buildVariants, type ExamTypePlan } from '../lib/exam-data';
 
 interface ExamAdminRow {
   id: number;
@@ -21,6 +21,8 @@ interface ExamAdminRow {
   shuffle_options?: boolean;
   opens_at?: string | null;
   closes_at?: string | null;
+  variants?: unknown[] | null;
+  max_focus_loss?: number;
 }
 
 interface MonitorRow {
@@ -76,7 +78,7 @@ let gradeExam: ExamAdminRow | null = null;
 async function loadExams(): Promise<void> {
   const { data, error } = await cloud.database
     .from('exams')
-    .select('id, code, title, class_id, paper, duration_min, published, created_at, shuffle_questions, shuffle_options, opens_at, closes_at')
+    .select('id, code, title, class_id, paper, duration_min, published, created_at, shuffle_questions, shuffle_options, opens_at, closes_at, variants, max_focus_loss')
     .order('created_at', { ascending: false });
   if (error) {
     el('exam-admin-list').innerHTML = `<p class="report-hint">读取失败:${escape(errorMessage(error))}</p>`;
@@ -95,7 +97,9 @@ function renderExamList(): void {
   }
   box.innerHTML = `<table class="design-table"><thead><tr><th>标题 / 代号</th><th>班级</th><th>题量</th><th>时长</th><th>防作弊</th><th>开放窗口</th><th>状态</th><th>操作</th></tr></thead><tbody>${examRows
     .map((row) => {
-      const ac = [row.shuffle_questions ? '题乱序' : '', row.shuffle_options ? '选项乱序' : ''].filter(Boolean).join(' / ') || '默认';
+      const vcount = Array.isArray(row.variants) && row.variants.length > 1 ? `${row.variants.length}套ABC卷` : '单卷';
+      const focus = row.max_focus_loss && row.max_focus_loss > 0 ? `切屏>${row.max_focus_loss}强交` : '';
+      const ac = [vcount, row.shuffle_questions ? '题乱序' : '', row.shuffle_options ? '选项乱序' : '', focus].filter(Boolean).join(' / ');
       const windowLabel = row.opens_at || row.closes_at
         ? `${row.opens_at ? escape(new Date(row.opens_at).toLocaleString('zh-CN')) : '不限'} ~ ${row.closes_at ? escape(new Date(row.closes_at).toLocaleString('zh-CN')) : '不限'}`
         : '不限';
@@ -160,6 +164,9 @@ async function createExam(): Promise<void> {
   const duration = Number(el<HTMLInputElement>('exam-new-duration').value);
   const shuffleQ = el<HTMLInputElement>('exam-new-shuffle-q').checked;
   const shuffleO = el<HTMLInputElement>('exam-new-shuffle-o').checked;
+  // ABC 平行卷套数(1=单卷);切屏强交阈值(0=不限)
+  const variantCount = Math.max(1, Math.min(5, Number(el<HTMLInputElement>('exam-new-variants').value) || 1));
+  const maxFocusLoss = Math.max(0, Number(el<HTMLInputElement>('exam-new-max-focus').value) || 0);
   const opensRaw = el<HTMLInputElement>('exam-new-opens').value;
   const closesRaw = el<HTMLInputElement>('exam-new-closes').value;
   const opens = opensRaw ? new Date(opensRaw).toISOString() : null;
@@ -174,15 +181,20 @@ async function createExam(): Promise<void> {
     return;
   }
 
-  const built = buildPaper(unitId, count, points, plan);
-  if (built.paper.length === 0) {
+  // 生成 ABC 平行卷:每套独立抽题、跨套尽量不重复;objective 合并为一份(按题号,互不冲突)。
+  const built = buildVariants(unitId, count, points, plan, variantCount);
+  if (built.variants.length === 0 || built.variants[0].paper.length === 0) {
     msg('exam-create-msg', '该范围没有可用客观题,请换一个抽题范围。', 'error');
     return;
   }
+  // 单卷时保持原有结构(paper/views 全部与旧版一致)
+  const isMulti = built.variants.length > 1;
+  const primaryPaper = built.variants[0].paper;
+  const primaryTotal = primaryPaper.length * points;
 
   const button = el<HTMLButtonElement>('exam-create');
   button.disabled = true;
-  msg('exam-create-msg', '正在创建草稿…');
+  msg('exam-create-msg', isMulti ? `正在生成 ${built.variants.length} 套平行卷并创建草稿…` : '正在创建草稿…');
 
   const created = await cloud.database
     .from('exams')
@@ -191,13 +203,15 @@ async function createExam(): Promise<void> {
       title,
       kind: 'exam',
       class_id: classId || null,
-      paper: built.paper,
+      paper: primaryPaper,
       duration_min: duration,
       shuffle_questions: shuffleQ,
       shuffle_options: shuffleO,
       opens_at: opens,
       closes_at: closes,
       max_attempts: 1,
+      max_focus_loss: maxFocusLoss,
+      variants: isMulti ? built.variants : null,
       published: false,
     })
     .select('id');
@@ -214,7 +228,7 @@ async function createExam(): Promise<void> {
     exam_id: examId,
     objective: built.objective,
     code_tests: [],
-    total_score: built.total,
+    total_score: primaryTotal,
   });
 
   if (key.error) {
@@ -230,7 +244,9 @@ async function createExam(): Promise<void> {
     'exam-create-msg',
     published.error
       ? `试卷已创建但发布失败:${errorMessage(published.error)}`
-      : `已发布:${built.paper.length} 题,满分 ${built.total} 分。`,
+      : isMulti
+        ? `已发布:${built.variants.length} 套平行卷(考生按 uid 自动分配),每套 ${primaryPaper.length} 题,满分 ${primaryTotal} 分。`
+        : `已发布:${primaryPaper.length} 题,满分 ${primaryTotal} 分。`,
     published.error ? 'error' : 'info',
   );
   await loadExams();

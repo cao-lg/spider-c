@@ -101,11 +101,23 @@ import { unitOptions } from '../lib/exam-data';
           <label>截止时间<input id="exam-new-closes" type="datetime-local" /></label>
         </div>
         <div class="exam-anti-cheat">
-          <label class="exam-check"><input id="exam-new-shuffle-q" type="checkbox" checked /> 题目乱序(每人顺序不同)</label>
+          <label class="exam-check"><input id="exam-new-shuffle-q" type="checkbox" checked /> 题目乱序(每人顺序稳定不同)</label>
           <label class="exam-check"><input id="exam-new-shuffle-o" type="checkbox" checked /> 选项乱序(答案自动重映射)</label>
         </div>
+        <div class="account-form" style="margin-top:0.6rem">
+          <label>平行卷套数
+            <select id="exam-new-variants">
+              <option value="1">单卷(全体相同题目)</option>
+              <option value="2">2 套(AB 卷)</option>
+              <option value="3" selected>3 套(ABC 卷,推荐)</option>
+              <option value="4">4 套(ABCD 卷)</option>
+              <option value="5">5 套(ABCDE 卷)</option>
+            </select>
+          </label>
+          <label>切屏强交阈值<input id="exam-new-max-focus" type="number" min="0" max="50" value="5" /> <span class="report-hint">0=仅记录不强交;填 N 表示切屏达 N 次服务端自动交卷(按已答判分)</span></label>
+        </div>
         <p class="report-hint">
-          防作弊:题目/选项乱序仅改变显示顺序,判分按题目 ID 与选项原文对应,答案不受影响。开考后学生端会锁定全屏、禁用复制粘贴;切屏与失焦会被记录,教师可在监考面板看到。
+          正式考试:平行卷按考生 uid 稳定分配(A/B/C…),相邻同学拿到不同题目组合,同一考生重进仍是同一套;乱序以「考试+考生」为种子,刷新不变。判分按题目 ID 与选项原文对应,不受乱序/分卷影响。开考后学生端锁定全屏、禁用复制粘贴;切屏/失焦被记录并在达阈值时由服务端自动交卷,教师可在监考面板实时处置。
         </p>
         <div class="btn-row">
           <button id="exam-create" type="button" class="btn sm primary">创建并发布</button>

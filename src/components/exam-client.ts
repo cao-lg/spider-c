@@ -10,7 +10,7 @@ import { cloud, currentSession, onAuthChange, isTeacher, errorMessage } from '..
 import type { CloudSessionData } from '../lib/cloud';
 import { onProfileChange } from '../lib/profile';
 import type { ExamQuestion } from '../lib/exam-data';
-import { answerValuesFor, CODE_PASS, CODE_FAIL } from '../lib/exam-data';
+import { answerValuesFor, CODE_PASS, CODE_FAIL, hashSeed, seededShuffle } from '../lib/exam-data';
 import { runPython } from './runner-runtime';
 
 interface ExamRow {
@@ -25,6 +25,8 @@ interface ExamRow {
   created_at: string;
   shuffle_questions?: boolean;
   shuffle_options?: boolean;
+  /** ABC 平行卷:该场考试的套数(1=单卷,>1=多套)。实际卷由 exam_start 下发。 */
+  variantCount?: number;
 }
 
 /** exam_start / exam_heartbeat 返回的服务器权威状态 */
@@ -36,6 +38,13 @@ interface SessionState {
   attempts?: number;
   broadcastMsg?: string | null;
   broadcastAt?: string | null;
+  /** ABC 卷:服务端按 uid 分配后下发的该考生试卷 */
+  paper?: ExamQuestion[];
+  variant?: string;
+  variantIndex?: number;
+  variantCount?: number;
+  focusLoss?: number;
+  maxFocusLoss?: number;
 }
 
 interface SubmissionRow {
@@ -82,6 +91,8 @@ let profileBound = false;
 let endsAt = 0;
 let timer: number | null = null;
 let focusLoss = 0;
+/** 切屏强交阈值(0=不自动强交,仅记录),由 exam_start 下发 */
+let maxFocusLoss = 0;
 /** 监考:心跳定时器、服务器时间偏移、服务器权威结束时间、广播去重 */
 let heartbeatTimer: number | null = null;
 let statePollTimer: number | null = null;
@@ -254,8 +265,13 @@ function escapeForPrompt(value: string): string {
   return value;
 }
 
-/** Fisher-Yates 打乱,返回新数组 */
-function shuffled<T>(arr: T[]): T[] {
+/**
+ * 稳定乱序:以 examId+uid+题号 为种子,同一考生重进顺序一致。
+ * 这样心跳云端备份的题目与屏幕显示始终对应,刷新不会换序,申诉也可复现。
+ */
+function shuffled<T>(arr: T[], seed?: number): T[] {
+  if (seed !== undefined) return seededShuffle(arr, seed);
+  // 兜底:无种子时用时间随机(正常开考路径都会传种子)
   const out = [...arr];
   for (let i = out.length - 1; i > 0; i -= 1) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -310,18 +326,23 @@ function renderOptions(q: ExamQuestion, index: number): string {
   return '';
 }
 
-function renderQuestions(exam: ExamRow): void {
+function renderQuestions(exam: ExamRow, paperOverride?: ExamQuestion[]): void {
   const form = el<HTMLFormElement>('exam-form');
   codeState.clear();
-  // 题目/选项乱序:只改变显示顺序,答案按 q.id 与选项原始索引对应,判分不受影响。
-  displayPaper = exam.shuffle_questions ? shuffled(exam.paper ?? []) : [...(exam.paper ?? [])];
+  // ABC 卷:优先用 exam_start 按 uid 下发的那套卷;老考试无下发则用 exams.paper。
+  const paper = paperOverride && paperOverride.length > 0 ? paperOverride : (exam.paper ?? []);
+  const uid = session?.user?.id ?? '';
+  const baseSeed = hashSeed(`order:${exam.id}:${uid}`);
+  // 题目/选项乱序:稳定种子,同一考生重进顺序一致;只改显示顺序,判分按 q.id 与选项原文。
+  displayPaper = exam.shuffle_questions ? shuffled(paper, baseSeed) : [...paper];
   optionOrder = new Map();
   if (exam.shuffle_options) {
-    for (const q of exam.paper ?? []) {
+    for (const q of paper) {
+      const optSeed = hashSeed(`opt:${exam.id}:${uid}:${q.id}`);
       if (q.type === 'choice' || q.type === 'multi') {
-        optionOrder.set(q.id, shuffled((q.options ?? []).map((_, i) => i)));
+        optionOrder.set(q.id, shuffled((q.options ?? []).map((_, i) => i), optSeed));
       } else if (q.type === 'truefalse') {
-        optionOrder.set(q.id, shuffled([0, 1]));
+        optionOrder.set(q.id, shuffled([0, 1], optSeed));
       }
     }
   }
@@ -417,7 +438,8 @@ async function startExam(exam: ExamRow): Promise<void> {
   }
 
   active = exam;
-  focusLoss = 0;
+  focusLoss = state.focusLoss ?? 0;
+  maxFocusLoss = state.maxFocusLoss ?? 0;
   // 用服务器时间校准,避免本地改时间延长考试。
   serverOffsetMs = state.serverNow ? new Date(state.serverNow).getTime() - Date.now() : 0;
   endsAt = state.endsAt ? new Date(state.endsAt).getTime() : Date.now() + Math.max(1, exam.duration_min) * 60000;
@@ -428,13 +450,16 @@ async function startExam(exam: ExamRow): Promise<void> {
   el('exam-result').hidden = true;
   el('exam-runner').hidden = false;
   el('exam-run-title').textContent = exam.title;
-  renderQuestions(exam);
+  // ABC 卷:用服务端按 uid 下发的那套卷渲染(老卷回退 exams.paper)
+  renderQuestions(exam, state.paper);
 
   updateTimer();
   timer = window.setInterval(updateTimer, 1000);
   startHeartbeat();
   enterExamGuards();
-  msg(`答题中(第 ${state.attempts ?? 1} 次)。已锁定全屏并禁用复制;切屏/离焦会被记录,时间到自动交卷。`);
+  const variantNote = (state.variantCount ?? 1) > 1 ? ` · ${state.variant} 卷(共 ${state.variantCount} 套,按你分配)` : '';
+  const focusNote = maxFocusLoss > 0 ? `切屏达 ${maxFocusLoss} 次将自动交卷(当前 ${focusLoss})` : '切屏/离焦会被记录';
+  msg(`答题中(第 ${state.attempts ?? 1} 次)${variantNote}。已锁定全屏并禁用复制;${focusNote},时间到自动交卷。`);
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -473,6 +498,14 @@ async function beat(): Promise<void> {
     return;
   }
   if (state.endsAt) endsAt = new Date(state.endsAt).getTime();
+  if (typeof state.maxFocusLoss === 'number') maxFocusLoss = state.maxFocusLoss;
+  if (typeof state.focusLoss === 'number') {
+    focusLoss = Math.max(focusLoss, state.focusLoss);
+    // 接近阈值时明确警示(还剩 1 次),让学生知道后果
+    if (maxFocusLoss > 0 && focusLoss === maxFocusLoss - 1) {
+      msg(`警告:已切屏 ${focusLoss} 次,再切屏 ${maxFocusLoss - focusLoss} 次系统将自动交卷!`, 'error');
+    }
+  }
   if (state.broadcastAt && state.broadcastAt !== lastBroadcastAt) {
     lastBroadcastAt = state.broadcastAt;
     if (state.broadcastMsg) showBroadcast(state.broadcastMsg);
